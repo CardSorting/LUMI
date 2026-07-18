@@ -1,7 +1,10 @@
+import { StringDecoder } from "node:string_decoder"
 import { TerminalOutputFailureReason, telemetryService } from "@services/telemetry"
+import { DietCodeTempManager } from "@services/temp"
 import { EventEmitter } from "events"
+import * as fs from "fs"
 import * as vscode from "vscode"
-import { stripAnsi } from "@/hosts/vscode/terminal/ansiUtils"
+import { resolveCarriageReturns, stripAnsi } from "@/hosts/vscode/terminal/ansiUtils"
 import { getLatestTerminalOutput } from "@/hosts/vscode/terminal/get-latest-output"
 import {
 	isCompilingOutput,
@@ -13,6 +16,97 @@ import {
 } from "@/integrations/terminal/constants"
 import type { ITerminalProcess, TerminalCompletionDetails, TerminalProcessEvents } from "@/integrations/terminal/types"
 import { Logger } from "@/shared/services/Logger"
+import { getShell } from "@/utils/shell"
+
+const PROMPT_TIMEOUT_MS = 5_000
+const STREAM_DRAIN_TIMEOUT_MS = 100
+const ITERATOR_CLEANUP_TIMEOUT_MS = 250
+const FALLBACK_POLL_INTERVAL_MS = 100
+const FALLBACK_MAX_DURATION_MS = 2 * 60 * 60 * 1_000
+const FALLBACK_INTERRUPT_GRACE_MS = 5_000
+const FALLBACK_READ_CHUNK_BYTES = 64 * 1_024
+const FALLBACK_MAX_BYTES_PER_POLL = 512 * 1_024
+
+type ShellKind = "cmd" | "csh" | "fish" | "posix" | "powershell"
+
+interface TerminalShellExecutionLike {
+	read(): AsyncIterable<string>
+}
+
+interface TerminalShellExecutionEndEventLike {
+	execution: TerminalShellExecutionLike
+	exitCode?: number
+	terminal?: vscode.Terminal
+}
+
+interface WindowWithTerminalShellExecutionEnd {
+	onDidEndTerminalShellExecution?: (listener: (event: TerminalShellExecutionEndEventLike) => unknown) => vscode.Disposable
+}
+
+type StreamRaceResult =
+	| { type: "continue" }
+	| { type: "data"; result: IteratorResult<string> }
+	| { type: "drain_timeout" }
+	| { type: "execution_end"; exitCode?: number }
+	| { type: "prompt_timeout" }
+	| { type: "stream_error"; error: Error }
+
+interface FallbackPaths {
+	exitCode: string
+	output: string
+	pendingExitCode: string
+	script: string
+	supervisor?: string
+}
+
+function delay(milliseconds: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error))
+}
+
+function isMissingFileError(error: unknown): boolean {
+	return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+}
+
+function stripControlCharacters(value: string): string {
+	let result = ""
+	for (const character of value) {
+		const codePoint = character.codePointAt(0)
+		if (codePoint !== undefined && codePoint >= 0x20 && codePoint !== 0x7f) {
+			result += character
+		}
+	}
+	return result
+}
+
+function stripLeadingTerminalArtifacts(value: string): string {
+	let index = 0
+	while (index < value.length) {
+		const character = value[index]
+		const codePoint = character.codePointAt(0) ?? 0
+		if (codePoint <= 0x1f || /\s/u.test(character)) {
+			index++
+			continue
+		}
+		break
+	}
+	return value.slice(index)
+}
+
+function quotePosix(value: string): string {
+	return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function quotePowerShell(value: string): string {
+	return `'${value.replace(/'/g, "''")}'`
+}
+
+function quoteCmd(value: string): string {
+	return `"${value.replace(/%/g, "%%")}"`
+}
 
 /**
  * VscodeTerminalProcess - Manages command execution in VSCode's integrated terminal.
@@ -40,247 +134,667 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	private exitCode: number | null | undefined = undefined
 	private signal: NodeJS.Signals | null = null
 	private activeTerminal?: vscode.Terminal
+	private didEmitContinue = false
+	private didEmitCompleted = false
+	private detachedBeforeStart = false
+	private cancelledBeforeStart = false
+	private executionStarted = false
+	private didObserveShellExecution = false
+	private hasRun = false
 
-	async run(terminal: vscode.Terminal, command: string) {
-		this.activeTerminal = terminal
-		this.exitCode = undefined
-		this.signal = null
+	async run(terminal: vscode.Terminal, command: string, shellHint?: string): Promise<void> {
+		this.resetForRun(terminal)
 
-		// When command does not produce any output, we can assume the shell integration API failed and as a fallback return the current terminal contents
-		const returnCurrentTerminalContents = async () => {
-			try {
-				const terminalSnapshot = await getLatestTerminalOutput()
-				if (terminalSnapshot?.trim()) {
-					const fallbackMessage = `The command's output could not be captured due to some technical issue, however it has been executed successfully. Here's the current terminal's content to help you get the command's output:\n\n${terminalSnapshot}`
-					this.emit("line", fallbackMessage)
-				}
-			} catch (error) {
-				Logger.error("Error capturing terminal output:", error)
+		// VscodeTerminalManager returns the process immediately so orchestration can attach
+		// listeners. Yield once to make even synchronous fallbacks obey that event contract.
+		await Promise.resolve()
+
+		try {
+			if (this.cancelledBeforeStart) {
+				return
 			}
+			if (terminal.shellIntegration?.executeCommand) {
+				await this.runWithShellIntegration(terminal, command)
+				const outputMethod =
+					this.fullOutput.trim() || this.didObserveShellExecution
+						? "shell_integration"
+						: await this.captureTerminalSnapshotWhenEmpty()
+				telemetryService.captureTerminalExecution(outputMethod !== "none", "vscode", outputMethod)
+			} else {
+				telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
+				await this.runWithoutShellIntegration(terminal, command, shellHint)
+				telemetryService.captureTerminalExecution(
+					this.fullOutput.trim().length > 0,
+					"vscode",
+					this.fullOutput.trim() ? "file_redirection" : "none",
+				)
+				this.emit("no_shell_integration")
+			}
+			this.emitRemainingBufferIfListening()
+			this.emitCompleted()
+			this.emitContinue()
+		} catch (error) {
+			Logger.error("Unhandled error in VscodeTerminalProcess.run:", error)
+			this.emit("error", toError(error))
+		} finally {
+			this.clearHotState()
+			this.activeTerminal = undefined
+		}
+	}
+
+	private resetForRun(terminal: vscode.Terminal): void {
+		const isReusedProcess = this.hasRun
+		const preservePreStartCancellation = !isReusedProcess && this.cancelledBeforeStart
+		this.hasRun = true
+		this.activeTerminal = terminal
+		this.buffer = ""
+		if (isReusedProcess) {
+			this.cancelledBeforeStart = false
+			this.detachedBeforeStart = false
+			this.didEmitContinue = false
+			this.didEmitCompleted = false
+		}
+		this.executionStarted = false
+		this.didObserveShellExecution = false
+		if (!preservePreStartCancellation) {
+			this.exitCode = undefined
+			this.signal = null
+		}
+		this.fullOutput = ""
+		this.isHot = false
+		this.isListening = !this.detachedBeforeStart
+		this.lastRetrievedIndex = 0
+	}
+
+	private async captureTerminalSnapshotWhenEmpty(): Promise<"clipboard" | "none"> {
+		if (this.fullOutput.trim()) {
+			return "none"
 		}
 
-		if (terminal.shellIntegration?.executeCommand) {
-			// Track that we're using shell integration
-			const execution = terminal.shellIntegration.executeCommand(command)
-			const stream = execution.read()
-			// todo: need to handle errors
-			let isFirstChunk = true
-			let didOutputNonCommand = false
-			let didEmitEmptyLine = false
+		telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.EMPTY_OUTPUT, "vscode")
+		try {
+			const terminalSnapshot = await getLatestTerminalOutput()
+			if (terminalSnapshot?.trim()) {
+				this.emit(
+					"line",
+					`The command produced no captured shell-integration output. The current terminal contents are included as a fallback and may contain earlier commands:\n\n${terminalSnapshot}`,
+				)
+				return "clipboard"
+			}
+		} catch (error) {
+			Logger.error("Error capturing terminal output:", error)
+		}
+		return "none"
+	}
 
-			for await (let data of stream) {
-				// Parse shell integration completion markers when present.
-				// Sequence format: ]633;D;<exitCode>
-				const completionMatches = [...data.matchAll(/\]633;D(?:;(-?\d+))?/g)]
-				const latestCompletionMatch = completionMatches[completionMatches.length - 1]
-				if (latestCompletionMatch?.[1] !== undefined) {
-					const parsedExitCode = Number.parseInt(latestCompletionMatch[1], 10)
-					if (Number.isInteger(parsedExitCode)) {
-						this.exitCode = parsedExitCode
+	private async runWithShellIntegration(terminal: vscode.Terminal, command: string): Promise<void> {
+		this.executionStarted = true
+		const windowWithShellExecution = vscode.window as typeof vscode.window & WindowWithTerminalShellExecutionEnd
+		let resolveExecutionEnd!: (result: StreamRaceResult) => void
+		const executionEndPromise = new Promise<StreamRaceResult>((resolve) => {
+			resolveExecutionEnd = resolve
+		})
+		let execution: TerminalShellExecutionLike | undefined
+		let earlyExecutionEnd: TerminalShellExecutionEndEventLike | undefined
+		const shellEndDisposable = windowWithShellExecution.onDidEndTerminalShellExecution?.((event) => {
+			if (execution && event.execution === execution) {
+				this.didObserveShellExecution = true
+				resolveExecutionEnd({ type: "execution_end", exitCode: event.exitCode })
+			} else if (!execution && (!event.terminal || event.terminal === terminal)) {
+				earlyExecutionEnd = event
+			}
+		})
+
+		execution = terminal.shellIntegration?.executeCommand?.(command)
+		if (!execution) {
+			shellEndDisposable?.dispose()
+			throw new Error("VS Code shell integration disappeared before command execution")
+		}
+
+		// VS Code only captures bytes written after read() is first called, so this must
+		// remain immediately adjacent to executeCommand().
+		const iterator = execution.read()[Symbol.asyncIterator]()
+		if (earlyExecutionEnd?.execution === execution) {
+			this.didObserveShellExecution = true
+			resolveExecutionEnd({ type: "execution_end", exitCode: earlyExecutionEnd.exitCode })
+		}
+
+		let resolveContinue!: () => void
+		const continuePromise = new Promise<StreamRaceResult>((resolve) => {
+			resolveContinue = () => resolve({ type: "continue" })
+		})
+		const onContinue = () => resolveContinue()
+		this.once("continue", onContinue)
+
+		let pendingRead: Promise<StreamRaceResult> | undefined
+		const readNext = (): Promise<StreamRaceResult> => {
+			if (!pendingRead) {
+				const currentRead = iterator.next().then(
+					(result): StreamRaceResult => ({ type: "data", result }),
+					(error): StreamRaceResult => ({ type: "stream_error", error: toError(error) }),
+				)
+				pendingRead = currentRead
+				void currentRead.then(() => {
+					if (pendingRead === currentRead) {
+						pendingRead = undefined
 					}
+				})
+			}
+			return pendingRead
+		}
+
+		let didEmitEmptyLine = false
+		let didOutputNonCommand = false
+		let detached = !this.isListening
+		let executionEnded = false
+		let passedCommandStart = false
+		let rawAccumulator = ""
+
+		try {
+			while (true) {
+				const contenders: Promise<StreamRaceResult>[] = [readNext()]
+				if (!detached) {
+					contenders.push(continuePromise)
 				}
+				let timeout: NodeJS.Timeout | undefined
 
-				// 1. Process chunk and remove artifacts
-				if (isFirstChunk) {
-					/*
-					The first chunk we get from this stream needs to be processed to be more human readable, ie remove vscode's custom escape sequences and identifiers, removing duplicate first char bug, etc.
-					*/
-
-					// bug where sometimes the command output makes its way into vscode shell integration metadata
-					/*
-					]633 is a custom sequence number used by VSCode shell integration:
-					- OSC 633 ; A ST - Mark prompt start
-					- OSC 633 ; B ST - Mark prompt end
-					- OSC 633 ; C ST - Mark pre-execution (start of command output)
-					- OSC 633 ; D [; <exitcode>] ST - Mark execution finished with optional exit code
-					- OSC 633 ; E ; <commandline> [; <nonce>] ST - Explicitly set command line with optional nonce
-					*/
-					// if you print this data you might see something like "eecho hello worldo hello world;5ba85d14-e92a-40c4-b2fd-71525581eeb0]633;C" but this is actually just a bunch of escape sequences, ignore up to the first ;C
-					/* ddateb15026-6a64-40db-b21f-2a621a9830f0]633;CTue Sep 17 06:37:04 EDT 2024 % ]633;D;0]633;P;Cwd=/Users/saoud/Repositories/test */
-					// Gets output between ]633;C (command start) and ]633;D (command end)
-					const outputBetweenSequences = this.removeLastLineArtifacts(
-						data.match(/\]633;C([\s\S]*?)\]633;D/)?.[1] || "",
-					).trim()
-
-					// Once we've retrieved any potential output between sequences, we can remove everything up to end of the last sequence
-					// https://code.visualstudio.com/docs/terminal/shell-integration#_vs-code-custom-sequences-osc-633-st
-					const vscodeSequenceRegex = /\x1b\]633;.[^\x07]*\x07/g
-					const lastMatch = [...data.matchAll(vscodeSequenceRegex)].pop()
-					if (lastMatch && lastMatch.index !== undefined) {
-						data = data.slice(lastMatch.index + lastMatch[0].length)
+				if (!executionEnded) {
+					contenders.push(executionEndPromise)
+					if (this.looksLikeInteractivePrompt(this.buffer)) {
+						contenders.push(
+							new Promise<StreamRaceResult>((resolve) => {
+								timeout = setTimeout(() => resolve({ type: "prompt_timeout" }), PROMPT_TIMEOUT_MS)
+							}),
+						)
 					}
-					// Place output back after removing vscode sequences
-					if (outputBetweenSequences) {
-						data = `${outputBetweenSequences}\n${data}`
-					}
-					// remove ansi
-					data = stripAnsi(data)
-					// Split data by newlines
-					const lines = data ? data.split("\n") : []
-					// Remove non-human readable characters from the first line
-					if (lines.length > 0) {
-						lines[0] = lines[0].replace(/[^\x20-\x7E]/g, "")
-					}
-					// Check for duplicated first character that might be a terminal artifact
-					// But skip this check for known syntax characters like {, [, ", etc.
-					if (
-						lines.length > 0 &&
-						lines[0].length >= 2 &&
-						lines[0][0] === lines[0][1] &&
-						!["[", "{", '"', "'", "<", "("].includes(lines[0][0])
-					) {
-						lines[0] = lines[0].slice(1)
-					}
-					// Only remove specific terminal artifacts from line beginnings while preserving JSON syntax
-					if (lines.length > 0) {
-						// This regex only removes common terminal artifacts (%, $, >, #) and invisible control chars
-						// but preserves important syntax chars like {, [, ", etc.
-						lines[0] = lines[0].replace(/^[\x00-\x1F%$>#\s]*/, "")
-					}
-					if (lines.length > 1) {
-						lines[1] = lines[1].replace(/^[\x00-\x1F%$>#\s]*/, "")
-					}
-					// Join lines back
-					data = lines.join("\n")
-					isFirstChunk = false
 				} else {
-					data = stripAnsi(data)
+					contenders.push(
+						new Promise<StreamRaceResult>((resolve) => {
+							timeout = setTimeout(() => resolve({ type: "drain_timeout" }), STREAM_DRAIN_TIMEOUT_MS)
+						}),
+					)
 				}
 
-				// Ctrl+C detection: if user presses Ctrl+C, treat as command terminated
-				if (data.includes("^C") || data.includes("\u0003")) {
-					if (this.hotTimer) {
-						clearTimeout(this.hotTimer)
+				const raceResult = await Promise.race(contenders)
+				if (timeout) {
+					clearTimeout(timeout)
+				}
+
+				switch (raceResult.type) {
+					case "continue":
+						detached = true
+						continue
+					case "drain_timeout":
+						return
+					case "execution_end":
+						executionEnded = true
+						if (raceResult.exitCode !== undefined) {
+							this.exitCode = raceResult.exitCode
+						}
+						continue
+					case "prompt_timeout":
+						this.abortInteractivePrompt()
+						return
+					case "stream_error":
+						throw raceResult.error
+					case "data":
+						break
+				}
+
+				const { done, value } = raceResult.result
+				if (done) {
+					if (this.exitCode === undefined && shellEndDisposable && !executionEnded) {
+						const finalEvent = await Promise.race([
+							executionEndPromise,
+							delay(STREAM_DRAIN_TIMEOUT_MS).then((): StreamRaceResult => ({ type: "drain_timeout" })),
+						])
+						if (finalEvent.type === "execution_end" && finalEvent.exitCode !== undefined) {
+							this.exitCode = finalEvent.exitCode
+						}
 					}
-					this.isHot = false
+					return
+				}
+				if (!value) {
+					continue
+				}
+				this.didObserveShellExecution = true
+
+				let data = value
+				rawAccumulator += value
+				this.captureExitCodeFromShellMarkers(rawAccumulator)
+
+				let isFirstOutputChunk = false
+				if (!passedCommandStart) {
+					const hasVscodeSequence = rawAccumulator.includes("\u001b]633;")
+					const startMarkerIndex = rawAccumulator.indexOf("]633;C")
+					if (startMarkerIndex !== -1) {
+						const bellTerminator = rawAccumulator.indexOf("\u0007", startMarkerIndex)
+						const stringTerminator = rawAccumulator.indexOf("\u001b\\", startMarkerIndex)
+						const terminatorIndex =
+							bellTerminator === -1
+								? stringTerminator
+								: stringTerminator === -1
+									? bellTerminator
+									: Math.min(bellTerminator, stringTerminator)
+						if (terminatorIndex === -1) {
+							continue
+						}
+						const terminatorLength = terminatorIndex === stringTerminator ? 2 : 1
+						data = rawAccumulator.slice(terminatorIndex + terminatorLength)
+						passedCommandStart = true
+						isFirstOutputChunk = true
+					} else if (!hasVscodeSequence || rawAccumulator.length > 1_000) {
+						data = rawAccumulator
+						passedCommandStart = true
+						isFirstOutputChunk = true
+					} else {
+						continue
+					}
+				}
+
+				if (passedCommandStart && rawAccumulator.length > 1_000) {
+					rawAccumulator = rawAccumulator.slice(-1_000)
+				}
+
+				data = stripAnsi(data)
+				if (isFirstOutputChunk) {
+					data = this.cleanFirstOutputChunk(data)
+				}
+
+				if (data.includes("\u0003") || /(?:^|\r?\n)\^C(?:\r?\n|$)/.test(data)) {
+					this.signal ??= "SIGINT"
+					return
+				}
+
+				if (!didOutputNonCommand) {
+					const filtered = this.filterCommandEcho(data, command)
+					data = filtered.data
+					didOutputNonCommand = filtered.didOutputNonCommand
+				}
+
+				if (!data) {
+					continue
+				}
+				this.markHot(data)
+				if (!didEmitEmptyLine && !this.fullOutput) {
+					this.emit("line", "")
+					didEmitEmptyLine = true
+				}
+				this.appendOutput(data)
+			}
+		} finally {
+			this.removeListener("continue", onContinue)
+			shellEndDisposable?.dispose()
+			if (iterator.return) {
+				try {
+					await Promise.race([iterator.return(), delay(ITERATOR_CLEANUP_TIMEOUT_MS)])
+				} catch (error) {
+					Logger.error("Error cleaning up terminal process iterator:", error)
+				}
+			}
+		}
+	}
+
+	private captureExitCodeFromShellMarkers(rawOutput: string): void {
+		const completionMatches = [...rawOutput.matchAll(/\]633;D(?:;(-?\d+))?/g)]
+		const latestCompletionMatch = completionMatches.at(-1)
+		if (latestCompletionMatch?.[1] === undefined) {
+			return
+		}
+		const parsedExitCode = Number.parseInt(latestCompletionMatch[1], 10)
+		if (Number.isInteger(parsedExitCode)) {
+			this.exitCode = parsedExitCode
+		}
+	}
+
+	private cleanFirstOutputChunk(data: string): string {
+		const lines = data.split("\n")
+		if (lines.length === 0) {
+			return data
+		}
+		lines[0] = stripControlCharacters(lines[0])
+		lines[0] = stripLeadingTerminalArtifacts(lines[0])
+		if (lines.length > 1) {
+			lines[1] = stripLeadingTerminalArtifacts(lines[1])
+		}
+		return lines.join("\n")
+	}
+
+	private filterCommandEcho(data: string, command: string): { data: string; didOutputNonCommand: boolean } {
+		const commandLine = command.trim()
+		const lines = data.split("\n")
+		while (lines.length > 0) {
+			const candidate = lines[0].trim()
+			if (!candidate || candidate === commandLine) {
+				lines.shift()
+				continue
+			}
+			return { data: lines.join("\n"), didOutputNonCommand: true }
+		}
+		return { data: "", didOutputNonCommand: false }
+	}
+
+	private looksLikeInteractivePrompt(buffer: string): boolean {
+		const printableBuffer = stripControlCharacters(buffer).trim()
+		return /(?:password|passphrase|username for|verification code|one-time code|otp)(?: for .*)?:\s*$|\[[yY]\/[nN]\]\s*$|\([yY]\/[nN]\)\s*$|ok to proceed\?\s*\([yY]\)\s*$/i.test(
+			printableBuffer,
+		)
+	}
+
+	private abortInteractivePrompt(): void {
+		this.exitCode = -1
+		this.signal = "SIGINT"
+		this.emit("line", "\n⚠️ LUMI stopped a command that was waiting for interactive input.")
+		this.emit("line", "Use a non-interactive flag or configure credentials before retrying.")
+		this.activeTerminal?.sendText("\u0003", false)
+	}
+
+	private async runWithoutShellIntegration(terminal: vscode.Terminal, command: string, shellHint?: string): Promise<void> {
+		this.executionStarted = true
+		const { kind, shell } = this.detectShell(terminal, shellHint)
+		const paths = this.createFallbackPaths(kind)
+		const decoder = new StringDecoder("utf8")
+		let readOffset = 0
+		let promptDetectedAt: number | undefined
+		let interruptedAt: number | undefined
+
+		try {
+			const invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+			Logger.info(`[TerminalProcess] Shell integration unavailable; using ${kind} file capture fallback`)
+			terminal.sendText(invocation, true)
+
+			const startedAt = Date.now()
+			while (true) {
+				await delay(FALLBACK_POLL_INTERVAL_MS)
+				readOffset = await this.readFallbackOutput(paths.output, readOffset, decoder)
+
+				const fallbackExitCode = await this.readFallbackExitCode(paths.exitCode)
+				if (fallbackExitCode !== undefined) {
+					if (this.signal !== "SIGINT") {
+						this.exitCode = fallbackExitCode
+					}
 					break
 				}
 
-				// first few chunks could be the command being echoed back, so we must ignore
-				// note this means that 'echo' commands won't work
-				if (!didOutputNonCommand) {
-					const lines = data.split("\n")
-					for (let i = 0; i < lines.length; i++) {
-						if (command.includes(lines[i].trim())) {
-							lines.splice(i, 1)
-							i-- // Adjust index after removal
-						} else {
-							didOutputNonCommand = true
-							break
-						}
+				if (terminal.exitStatus !== undefined) {
+					this.exitCode = terminal.exitStatus.code
+					break
+				}
+
+				if (this.isListening && this.looksLikeInteractivePrompt(this.buffer)) {
+					promptDetectedAt ??= Date.now()
+					if (Date.now() - promptDetectedAt >= PROMPT_TIMEOUT_MS && interruptedAt === undefined) {
+						this.abortInteractivePrompt()
+						interruptedAt = Date.now()
 					}
-					data = lines.join("\n")
-				}
-
-				// 2. Set isHot depending on the command
-				// Set to hot to stall API requests until terminal is cool again
-				this.isHot = true
-				if (this.hotTimer) {
-					clearTimeout(this.hotTimer)
-				}
-				// these markers indicate the command is some kind of local dev server recompiling the app, which we want to wait for output of before sending request to dietcode
-				const isCompiling = isCompilingOutput(data)
-				this.hotTimer = setTimeout(
-					() => {
-						this.isHot = false
-					},
-					isCompiling ? PROCESS_HOT_TIMEOUT_COMPILING : PROCESS_HOT_TIMEOUT_NORMAL,
-				)
-
-				// For non-immediately returning commands we want to show loading spinner right away but this wouldn't happen until it emits a line break, so as soon as we get any output we emit "" to let webview know to show spinner
-				// This is only done for the sake of unblocking the UI, in case there may be some time before the command emits a full line
-				if (!didEmitEmptyLine && !this.fullOutput && data) {
-					this.emit("line", "") // empty line to indicate start of command output stream
-					didEmitEmptyLine = true
-				}
-
-				this.fullOutput += data
-
-				// Cap fullOutput at MAX_FULL_OUTPUT_SIZE to prevent memory exhaustion
-				if (this.fullOutput.length > MAX_FULL_OUTPUT_SIZE) {
-					// Keep last half of max size
-					this.fullOutput = this.fullOutput.slice(-MAX_FULL_OUTPUT_SIZE / 2)
-					// Reset lastRetrievedIndex since we truncated the beginning
-					this.lastRetrievedIndex = 0
-				}
-
-				if (this.isListening) {
-					this.emitIfEol(data)
-					this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
-				}
-			}
-
-			this.emitRemainingBufferIfListening()
-
-			// the command process is finished, let's check the output to see if we need to use the terminal capture fallback
-			if (!this.fullOutput.trim()) {
-				// No output captured via shell integration, trying fallback
-				telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.TIMEOUT, "vscode")
-				await returnCurrentTerminalContents()
-				// Check if fallback worked
-				const terminalSnapshot = await getLatestTerminalOutput()
-				if (terminalSnapshot?.trim()) {
-					telemetryService.captureTerminalExecution(true, "vscode", "clipboard")
 				} else {
-					telemetryService.captureTerminalExecution(false, "vscode", "none")
+					promptDetectedAt = undefined
 				}
-			} else {
-				// Shell integration worked
-				telemetryService.captureTerminalExecution(true, "vscode", "shell_integration")
+
+				if (interruptedAt !== undefined && Date.now() - interruptedAt >= FALLBACK_INTERRUPT_GRACE_MS) {
+					break
+				}
+
+				if (Date.now() - startedAt >= FALLBACK_MAX_DURATION_MS) {
+					this.exitCode = 124
+					this.signal = "SIGTERM"
+					this.emit("line", "LUMI stopped monitoring a command after the two-hour safety limit.")
+					terminal.sendText("\u0003", false)
+					break
+				}
 			}
 
-			// for now we don't want this delaying requests since we don't send diagnostics automatically anymore (previous: "even though the command is finished, we still want to consider it 'hot' in case so that api request stalls to let diagnostics catch up")
-			// to explain this further, before we would send workspace diagnostics automatically with each request, but now we only send new diagnostics after file edits, so there's no need to wait for a bit after commands run to let diagnostics catch up
-			if (this.hotTimer) {
-				clearTimeout(this.hotTimer)
+			await this.drainFallbackOutput(paths.output, readOffset, decoder)
+			const finalDecodedOutput = decoder.end()
+			if (finalDecodedOutput) {
+				this.appendOutput(stripAnsi(finalDecodedOutput))
 			}
-			this.isHot = false
-
-			this.emit("completed", this.getCompletionDetails())
-			this.emit("continue")
-			this.activeTerminal = undefined
-		} else {
-			// no shell integration detected, we'll fallback to running the command and capturing the terminal's output after some time
-			telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
-			terminal.sendText(command, true)
-
-			// wait 3 seconds for the command to run
-			await new Promise((resolve) => setTimeout(resolve, 3000))
-
-			// For terminals without shell integration, also try to capture terminal content
-			await returnCurrentTerminalContents()
-			// Check if clipboard fallback worked
-			const terminalSnapshot = await getLatestTerminalOutput()
-			if (terminalSnapshot?.trim()) {
-				telemetryService.captureTerminalExecution(true, "vscode", "clipboard")
-			} else {
-				telemetryService.captureTerminalExecution(false, "vscode", "none")
-			}
-			// For terminals without shell integration, we can't know when the command completes
-			// So we'll just emit the continue event after a delay
-			this.emit("completed", this.getCompletionDetails())
-			this.emit("continue")
-			this.emit("no_shell_integration")
-			this.activeTerminal = undefined
-			// setTimeout(() => {
-			// 	Logger.log(`Emitting continue after delay for terminal`)
-			// 	// can't emit completed since we don't if the command actually completed, it could still be running server
-			// }, 500) // Adjust this delay as needed
+		} finally {
+			await this.cleanupFallbackPaths(paths)
 		}
+	}
+
+	private detectShell(terminal: vscode.Terminal, shellHint?: string): { kind: ShellKind; shell: string } {
+		const terminalState = terminal.state as (vscode.TerminalState & { shell?: string }) | undefined
+		let shell = shellHint || terminalState?.shell
+		if (!shell) {
+			try {
+				shell = getShell()
+			} catch {
+				shell = process.platform === "win32" ? "powershell" : "/bin/sh"
+			}
+		}
+
+		const normalizedShell = shell.toLowerCase()
+		if (normalizedShell.includes("powershell") || normalizedShell.includes("pwsh")) {
+			return { kind: "powershell", shell }
+		}
+		if (normalizedShell.includes("cmd.exe") || normalizedShell === "cmd") {
+			return { kind: "cmd", shell }
+		}
+		if (normalizedShell.includes("fish")) {
+			return { kind: "fish", shell }
+		}
+		if (normalizedShell.includes("csh")) {
+			return { kind: "csh", shell }
+		}
+		return { kind: "posix", shell }
+	}
+
+	private createFallbackPaths(kind: ShellKind): FallbackPaths {
+		const extension = kind === "powershell" ? ".ps1" : kind === "cmd" ? ".cmd" : kind === "fish" ? ".fish" : ".sh"
+		return {
+			exitCode: DietCodeTempManager.createTempFilePath("dc-term-exit"),
+			output: DietCodeTempManager.createTempFilePath("dc-term-out"),
+			pendingExitCode: DietCodeTempManager.createTempFilePath("dc-term-exit-pending"),
+			script: `${DietCodeTempManager.createTempFilePath("dc-term-command")}${extension}`,
+			supervisor: kind === "cmd" ? `${DietCodeTempManager.createTempFilePath("dc-term-supervisor")}.cmd` : undefined,
+		}
+	}
+
+	private async prepareFallbackInvocation(
+		kind: ShellKind,
+		shell: string,
+		command: string,
+		paths: FallbackPaths,
+	): Promise<string> {
+		const script =
+			kind === "powershell"
+				? [
+						"$ErrorActionPreference = 'Continue'",
+						command,
+						"$dcSuccess = $?",
+						"if ($dcSuccess) { exit 0 }",
+						"if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+						"exit 1",
+						"",
+					].join("\n")
+				: `${kind === "cmd" ? "@echo off\r\n" : ""}${command}\n`
+		await fs.promises.writeFile(paths.script, script, {
+			encoding: "utf8",
+			mode: 0o600,
+		})
+
+		switch (kind) {
+			case "powershell": {
+				const shellPath = quotePowerShell(shell)
+				const scriptPath = quotePowerShell(paths.script)
+				const outputPath = quotePowerShell(paths.output)
+				const pendingPath = quotePowerShell(paths.pendingExitCode)
+				const exitPath = quotePowerShell(paths.exitCode)
+				return `& ${shellPath} -NoLogo -NoProfile -NonInteractive -File ${scriptPath} *> ${outputPath}; $dcStatus = $LASTEXITCODE; if (Test-Path -LiteralPath ${outputPath}) { Get-Content -LiteralPath ${outputPath} -Raw }; Set-Content -LiteralPath ${pendingPath} -Value $dcStatus; Move-Item -Force -LiteralPath ${pendingPath} -Destination ${exitPath}`
+			}
+			case "cmd": {
+				if (!paths.supervisor) {
+					throw new Error("Missing cmd fallback supervisor path")
+				}
+				const supervisor = [
+					"@echo off",
+					`call ${quoteCmd(paths.script)} > ${quoteCmd(paths.output)} 2>&1`,
+					'set "dc_status=%errorlevel%"',
+					`if exist ${quoteCmd(paths.output)} type ${quoteCmd(paths.output)}`,
+					`> ${quoteCmd(paths.pendingExitCode)} echo %dc_status%`,
+					`move /y ${quoteCmd(paths.pendingExitCode)} ${quoteCmd(paths.exitCode)} >nul`,
+					"exit /b %dc_status%",
+					"",
+				].join("\r\n")
+				await fs.promises.writeFile(paths.supervisor, supervisor, { encoding: "utf8", mode: 0o600 })
+				return `call ${quoteCmd(paths.supervisor)}`
+			}
+			case "fish": {
+				const shellPath = quotePosix(shell)
+				const scriptPath = quotePosix(paths.script)
+				const outputPath = quotePosix(paths.output)
+				const pendingPath = quotePosix(paths.pendingExitCode)
+				const exitPath = quotePosix(paths.exitCode)
+				return `command ${shellPath} ${scriptPath} > ${outputPath} 2>&1; set dc_status $status; cat ${outputPath}; printf '%s\\n' $dc_status > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
+			}
+			case "csh": {
+				const shellPath = quotePosix(shell)
+				const scriptPath = quotePosix(paths.script)
+				const outputPath = quotePosix(paths.output)
+				const pendingPath = quotePosix(paths.pendingExitCode)
+				const exitPath = quotePosix(paths.exitCode)
+				return `${shellPath} ${scriptPath} >& ${outputPath}; set dc_status = $status; cat ${outputPath}; echo $dc_status > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
+			}
+			case "posix": {
+				const shellPath = quotePosix(shell)
+				const scriptPath = quotePosix(paths.script)
+				const outputPath = quotePosix(paths.output)
+				const pendingPath = quotePosix(paths.pendingExitCode)
+				const exitPath = quotePosix(paths.exitCode)
+				return `${shellPath} ${scriptPath} > ${outputPath} 2>&1; dc_status=$?; cat ${outputPath}; printf '%s\\n' "$dc_status" > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
+			}
+		}
+	}
+
+	private async readFallbackOutput(path: string, initialOffset: number, decoder: StringDecoder): Promise<number> {
+		let offset = initialOffset
+		let handle: fs.promises.FileHandle | undefined
+		try {
+			const stats = await fs.promises.stat(path)
+			if (stats.size < offset) {
+				offset = 0
+			}
+			if (stats.size <= offset) {
+				return offset
+			}
+
+			handle = await fs.promises.open(path, "r")
+			const targetOffset = Math.min(stats.size, offset + FALLBACK_MAX_BYTES_PER_POLL)
+			while (offset < targetOffset) {
+				const bytesToRead = Math.min(FALLBACK_READ_CHUNK_BYTES, targetOffset - offset)
+				const buffer = Buffer.allocUnsafe(bytesToRead)
+				const { bytesRead } = await handle.read(buffer, 0, bytesToRead, offset)
+				if (bytesRead === 0) {
+					break
+				}
+				offset += bytesRead
+				const decodedOutput = decoder.write(buffer.subarray(0, bytesRead))
+				if (decodedOutput) {
+					this.markHot(decodedOutput)
+					this.appendOutput(stripAnsi(decodedOutput))
+				}
+			}
+		} catch (error) {
+			if (!isMissingFileError(error)) {
+				Logger.error("[TerminalProcess] Error reading fallback output file:", error)
+			}
+		} finally {
+			await handle?.close().catch((error) => {
+				Logger.error("[TerminalProcess] Error closing fallback output file:", error)
+			})
+		}
+		return offset
+	}
+
+	private async drainFallbackOutput(path: string, initialOffset: number, decoder: StringDecoder): Promise<number> {
+		let offset = initialOffset
+		while (true) {
+			const nextOffset = await this.readFallbackOutput(path, offset, decoder)
+			if (nextOffset === offset) {
+				return offset
+			}
+			offset = nextOffset
+			await Promise.resolve()
+		}
+	}
+
+	private async readFallbackExitCode(path: string): Promise<number | undefined> {
+		try {
+			const contents = (await fs.promises.readFile(path, "utf8")).trim()
+			if (!/^-?\d+$/.test(contents)) {
+				return undefined
+			}
+			const exitCode = Number.parseInt(contents, 10)
+			return Number.isSafeInteger(exitCode) ? exitCode : undefined
+		} catch (error) {
+			if (!isMissingFileError(error)) {
+				Logger.error("[TerminalProcess] Error reading fallback exit code:", error)
+			}
+			return undefined
+		}
+	}
+
+	private async cleanupFallbackPaths(paths: FallbackPaths): Promise<void> {
+		const candidates = [paths.output, paths.exitCode, paths.pendingExitCode, paths.script, paths.supervisor].filter(
+			(path): path is string => Boolean(path),
+		)
+		const cleanupResults = await Promise.allSettled(candidates.map((path) => fs.promises.unlink(path)))
+		for (const result of cleanupResults) {
+			if (result.status === "rejected" && !isMissingFileError(result.reason)) {
+				Logger.error("[TerminalProcess] Error cleaning up fallback temp file:", result.reason)
+			}
+		}
+	}
+
+	private appendOutput(data: string): void {
+		if (!data) {
+			return
+		}
+		this.fullOutput += data
+		if (this.fullOutput.length > MAX_FULL_OUTPUT_SIZE) {
+			this.fullOutput = this.fullOutput.slice(-MAX_FULL_OUTPUT_SIZE / 2)
+			this.lastRetrievedIndex = 0
+		}
+		if (this.isListening) {
+			this.emitIfEol(data)
+			this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
+		}
+	}
+
+	private markHot(data: string): void {
+		this.isHot = true
+		if (this.hotTimer) {
+			clearTimeout(this.hotTimer)
+		}
+		this.hotTimer = setTimeout(
+			() => {
+				this.isHot = false
+			},
+			isCompilingOutput(data) ? PROCESS_HOT_TIMEOUT_COMPILING : PROCESS_HOT_TIMEOUT_NORMAL,
+		)
+	}
+
+	private clearHotState(): void {
+		if (this.hotTimer) {
+			clearTimeout(this.hotTimer)
+			this.hotTimer = null
+		}
+		this.isHot = false
 	}
 
 	// Inspired by https://github.com/sindresorhus/execa/blob/main/lib/transform/split.js
 	private emitIfEol(chunk: string) {
 		this.buffer += chunk
-		let lineEndIndex: number
-		while ((lineEndIndex = this.buffer.indexOf("\n")) !== -1) {
-			const line = this.buffer.slice(0, lineEndIndex).trimEnd() // removes trailing \r
-			// Remove \r if present (for Windows-style line endings)
-			// if (line.endsWith("\r")) {
-			// 	line = line.slice(0, -1)
-			// }
+		let lineEndIndex = this.buffer.indexOf("\n")
+		while (lineEndIndex !== -1) {
+			let line = this.buffer.slice(0, lineEndIndex)
+			// Resolve carriage returns in the line
+			line = resolveCarriageReturns(line).trimEnd() // removes trailing \r
 			this.emit("line", line)
 			this.buffer = this.buffer.slice(lineEndIndex + 1)
+			lineEndIndex = this.buffer.indexOf("\n")
 		}
 	}
 
@@ -296,17 +810,43 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	}
 
 	continue() {
+		if (!this.hasRun) {
+			this.detachedBeforeStart = true
+		}
 		this.emitRemainingBufferIfListening()
 		this.isListening = false
 		this.removeAllListeners("line")
-		this.emit("continue")
+		this.emitContinue()
 	}
 
 	terminate(): void {
-		if (!this.activeTerminal) return
 		this.signal = "SIGINT"
-		this.activeTerminal.sendText("\u0003", false)
+		if (!this.executionStarted) {
+			this.cancelledBeforeStart = true
+			this.waitForShellIntegration = false
+			this.exitCode = null
+			this.emitCompleted()
+			this.continue()
+			return
+		}
+		this.activeTerminal?.sendText("\u0003", false)
 		this.continue()
+	}
+
+	private emitCompleted(): void {
+		if (this.didEmitCompleted) {
+			return
+		}
+		this.didEmitCompleted = true
+		this.emit("completed", this.getCompletionDetails())
+	}
+
+	private emitContinue(): void {
+		if (this.didEmitContinue) {
+			return
+		}
+		this.didEmitContinue = true
+		this.emit("continue")
 	}
 
 	/**
@@ -324,10 +864,12 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			const first = lines.slice(0, TRUNCATE_KEEP_LINES)
 			const last = lines.slice(-TRUNCATE_KEEP_LINES)
 			const skipped = lines.length - first.length - last.length
-			return this.removeLastLineArtifacts([...first, `\n... (${skipped} lines truncated) ...\n`, ...last].join("\n"))
+			return this.removeLastLineArtifacts(
+				resolveCarriageReturns([...first, `\n... (${skipped} lines truncated) ...\n`, ...last].join("\n")),
+			)
 		}
 
-		return this.removeLastLineArtifacts(unretrieved)
+		return this.removeLastLineArtifacts(resolveCarriageReturns(unretrieved))
 	}
 
 	getCompletionDetails(): TerminalCompletionDetails {

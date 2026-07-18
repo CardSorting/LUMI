@@ -28,7 +28,7 @@ export type TerminalType = "vscode"
 /**
  * VSCode-specific output capture methods
  */
-export type VscodeOutputMethod = "shell_integration" | "clipboard" | "none"
+export type VscodeOutputMethod = "shell_integration" | "clipboard" | "file_redirection" | "none"
 
 /**
  * Combined type for terminal output methods
@@ -42,6 +42,7 @@ export enum TerminalOutputFailureReason {
 	TIMEOUT = "timeout",
 	NO_SHELL_INTEGRATION = "no_shell_integration",
 	CLIPBOARD_FAILED = "clipboard_failed",
+	EMPTY_OUTPUT = "empty_output",
 }
 
 /**

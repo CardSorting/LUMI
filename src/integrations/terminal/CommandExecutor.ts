@@ -10,6 +10,7 @@ import { attachCommandExecutionEvidence } from "@shared/command-execution-eviden
 import { DietCodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
+import { validateCommand } from "./commandSanitizer"
 import type {
 	CommandExecutionOptions,
 	CommandExecutorCallbacks,
@@ -61,19 +62,42 @@ export class CommandExecutor {
 	): Promise<[boolean, DietCodeToolResponseContent]> {
 		// Strip leading `cd` to workspace from command
 		const workspaceCdPrefix = `cd ${this.cwd} && `
-		if (command.startsWith(workspaceCdPrefix)) {
-			command = command.substring(workspaceCdPrefix.length)
+		let sanitizedCommand = command
+		if (sanitizedCommand.startsWith(workspaceCdPrefix)) {
+			sanitizedCommand = sanitizedCommand.substring(workspaceCdPrefix.length)
+		}
+
+		// Preflight command validation to prevent terminal hangs/blockers
+		const validation = validateCommand(sanitizedCommand)
+		if (!validation.valid) {
+			const validationError = validation.error ?? "Command requires unsupported interactive input."
+			Logger.warn(`Blocked interactive command before terminal execution: ${validationError}`)
+			return [
+				false,
+				attachCommandExecutionEvidence(`Command execution did not start: ${validationError}`, {
+					command,
+					approvalStatus: "unknown",
+					started: false,
+					completed: false,
+					exitCode: undefined,
+					signal: undefined,
+					timedOut: false,
+					durationMs: 0,
+					stdoutAvailable: false,
+					stderrAvailable: false,
+				}),
+			]
 		}
 
 		const manager = this.terminalManager
-		Logger.info(`Executing command in VS Code terminal: ${command}`)
+		Logger.info("Executing approved command in VS Code terminal")
 
 		const ownerId = options?.ownerId || `command-${++this.nextOwnerSequence}`
 		const startingCancellationGeneration = this.cancellationGeneration
 		// Get terminal and run command
 		const terminalInfo = await manager.getOrCreateTerminal(this.cwd)
 		terminalInfo.terminal.show()
-		const process = manager.runCommand(terminalInfo, command)
+		const process = manager.runCommand(terminalInfo, sanitizedCommand)
 		const startedAt = Date.now()
 
 		const processState = { wasCancelledExternally: false }

@@ -1,10 +1,19 @@
+import assert from "node:assert/strict"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import { setVscodeHostProviderMock } from "@/test/host-provider-test-utils"
 import "should"
+import fs from "fs"
 import * as sinon from "sinon"
 import * as vscode from "vscode"
 import { VscodeTerminalProcess } from "./VscodeTerminalProcess"
 import { TerminalRegistry } from "./VscodeTerminalRegistry"
+
+interface VscodeTerminalProcessTestAccess {
+	buffer: string
+	emitIfEol(chunk: string): void
+	emitRemainingBufferIfListening(): void
+	isListening: boolean
+}
 
 declare module "vscode" {
 	// https://github.com/microsoft/vscode/blob/f0417069c62e20f3667506f4b7e53ca0004b4e3e/src/vscode-dts/vscode.d.ts#L7442
@@ -205,25 +214,61 @@ describe("TerminalProcess (Integration Tests)", () => {
 		// Stub the sendText method to verify it's called
 		const sendTextStub = sandbox.stub(terminal, "sendText")
 
+		sandbox.stub(fs.promises, "writeFile").resolves()
+		sandbox.stub(fs.promises, "stat").rejects(Object.assign(new Error("not found"), { code: "ENOENT" }))
+		sandbox.stub(fs.promises, "readFile").resolves("0")
+		sandbox.stub(fs.promises, "unlink").resolves()
+
 		// Spy on the emit function to verify events
 		const emitSpy = sandbox.spy(process, "emit")
 
 		// Run the command - this returns a promise
 		const runPromise = process.run(terminal, "test-command")
 
-		// Advance the fake timer by 3 seconds to trigger the setTimeout
-		await sandbox.clock.tickAsync(3000)
+		// Advance the fake timer by 100ms to trigger the first poll tick
+		await sandbox.clock.tickAsync(100)
 
 		// Now wait for the promise to resolve
 		await runPromise
 
 		// Check that the correct methods were called and events emitted
-		sendTextStub.calledWith("test-command", true).should.be.true()
+		sinon.assert.calledOnce(sendTextStub)
+		sinon.assert.match(sendTextStub.firstCall.args[0], /dc-term-command/)
 		;(emitSpy as sinon.SinonSpy).calledWith("completed").should.be.true()
 		;(emitSpy as sinon.SinonSpy).calledWith("continue").should.be.true()
 
 		// This event should be emitted for terminals without shell integration
 		;(emitSpy as sinon.SinonSpy).calledWith("no_shell_integration").should.be.true()
+	})
+
+	it("should support fish shell fallback wrapping", async () => {
+		const terminal = vscode.window.createTerminal({ name: "Fish Terminal" })
+		createdTerminals.push(terminal)
+		sandbox.stub(terminal, "shellIntegration").get(() => undefined)
+		sandbox.stub(terminal, "state").get(
+			() =>
+				({
+					isInteractedWith: false,
+					shell: "fish",
+				}) as vscode.TerminalState,
+		)
+		const sendTextStub = sandbox.stub(terminal, "sendText")
+
+		const writeFileStub = sandbox.stub(fs.promises, "writeFile").resolves()
+		sandbox.stub(fs.promises, "stat").rejects(Object.assign(new Error("not found"), { code: "ENOENT" }))
+		sandbox.stub(fs.promises, "readFile").resolves("0")
+		sandbox.stub(fs.promises, "unlink").resolves()
+
+		const runPromise = process.run(terminal, "test-fish-command")
+		await sandbox.clock.tickAsync(100)
+		await runPromise
+
+		sinon.assert.calledOnce(sendTextStub)
+		const calledArg = sendTextStub.firstCall.args[0]
+		calledArg.should.containEql("command 'fish'")
+		calledArg.should.containEql("dc-term-command")
+		calledArg.should.containEql("printf '%s\\n'")
+		assert.match(String(writeFileStub.firstCall.args[1]), /test-fish-command/)
 	})
 
 	// The following tests require shell integration and controlled terminal output
@@ -402,41 +447,218 @@ describe("TerminalProcess (Integration Tests)", () => {
 			;(emitSpy as sinon.SinonSpy).calledWith("line", "> tsc").should.be.true()
 			;(emitSpy as sinon.SinonSpy).calledWith("line", "files built successfully").should.be.true()
 		})
+
+		it("should preserve Unicode, repeated leading characters, and literal control notation", async () => {
+			const terminal = TerminalRegistry.createTerminal().terminal
+			createdTerminals.push(terminal)
+			sandbox.stub(terminal, "shellIntegration").get(() => ({
+				executeCommand: () => ({
+					read: () => createMockStream(["success", "🧪 ready", "^C is documentation"]),
+				}),
+			}))
+			const emittedLines: string[] = []
+			process.on("line", (line) => emittedLines.push(line))
+
+			await process.run(terminal, "build-command")
+
+			assert.deepEqual(emittedLines.filter(Boolean), ["success", "🧪 ready", "^C is documentation"])
+			assert.equal(process.getCompletionDetails().signal, null)
+		})
+
+		it("should treat a silent command with shell markers as a successful capture", async () => {
+			const terminal = TerminalRegistry.createTerminal().terminal
+			createdTerminals.push(terminal)
+			sandbox.stub(terminal, "shellIntegration").get(() => ({
+				executeCommand: () => ({
+					read: () => createMockStream(["\u001b]633;C\u0007\u001b]633;D;0\u0007"]),
+				}),
+			}))
+			const emittedLines: string[] = []
+			process.on("line", (line) => emittedLines.push(line))
+
+			await process.run(terminal, "true")
+
+			assert.equal(process.getCompletionDetails().exitCode, 0)
+			assert.equal(
+				emittedLines.some((line) => line.includes("current terminal contents")),
+				false,
+			)
+		})
 	})
 
 	// The following tests are shared with the unit tests to ensure consistent behavior
 	it("should emit line for remaining buffer when emitRemainingBufferIfListening is called", () => {
 		// Access private properties via type assertion
-		const processAny = process as any
-		processAny.buffer = "test buffer content"
-		processAny.isListening = true
+		const processInternals = process as unknown as VscodeTerminalProcessTestAccess
+		processInternals.buffer = "test buffer content"
+		processInternals.isListening = true
 
 		const emitSpy = sandbox.spy(process, "emit")
-		processAny.emitRemainingBufferIfListening()
+		processInternals.emitRemainingBufferIfListening()
 		;(emitSpy as sinon.SinonSpy).calledWith("line", "test buffer content").should.be.true()
-		processAny.buffer.should.equal("")
+		processInternals.buffer.should.equal("")
 	})
 
 	it("should remove prompt characters from the last line of output", () => {
-		const processAny = process as any
-
-		processAny.removeLastLineArtifacts("line 1\nline 2 %").should.equal("line 1\nline 2")
-		processAny.removeLastLineArtifacts("line 1\nline 2 $").should.equal("line 1\nline 2")
-		processAny.removeLastLineArtifacts("line 1\nline 2 #").should.equal("line 1\nline 2")
-		processAny.removeLastLineArtifacts("line 1\nline 2 >").should.equal("line 1\nline 2")
+		process.removeLastLineArtifacts("line 1\nline 2 %").should.equal("line 1\nline 2")
+		process.removeLastLineArtifacts("line 1\nline 2 $").should.equal("line 1\nline 2")
+		process.removeLastLineArtifacts("line 1\nline 2 #").should.equal("line 1\nline 2")
+		process.removeLastLineArtifacts("line 1\nline 2 >").should.equal("line 1\nline 2")
 	})
 
 	it("should process buffer and emit lines when newline characters are found", () => {
-		const processAny = process as any
+		const processInternals = process as unknown as VscodeTerminalProcessTestAccess
 		const emitSpy = sandbox.spy(process, "emit")
 
-		processAny.emitIfEol("line 1\nline 2\nline 3")
+		processInternals.emitIfEol("line 1\nline 2\nline 3")
 		;(emitSpy as sinon.SinonSpy).calledWith("line", "line 1").should.be.true()
 		;(emitSpy as sinon.SinonSpy).calledWith("line", "line 2").should.be.true()
-		processAny.buffer.should.equal("line 3")
+		processInternals.buffer.should.equal("line 3")
 
-		processAny.emitIfEol(" continued\n")
+		processInternals.emitIfEol(" continued\n")
 		;(emitSpy as sinon.SinonSpy).calledWith("line", "line 3 continued").should.be.true()
-		processAny.buffer.should.equal("")
+		processInternals.buffer.should.equal("")
+	})
+
+	it("should cancel before dispatch without starting the command", async () => {
+		const terminal = TerminalRegistry.createTerminal().terminal
+		createdTerminals.push(terminal)
+		const executeCommand = sandbox.stub().returns({
+			read: () => createMockStream(["should-not-run"]),
+		})
+		sandbox.stub(terminal, "shellIntegration").get(() => ({ executeCommand }))
+		const completedSpy = sandbox.spy()
+		process.on("completed", completedSpy)
+
+		const runPromise = process.run(terminal, "echo test")
+		process.terminate()
+		await runPromise
+
+		sinon.assert.notCalled(executeCommand)
+		sinon.assert.calledOnce(completedSpy)
+		assert.deepEqual(process.getCompletionDetails(), { exitCode: null, signal: "SIGINT" })
+	})
+
+	it("should send SIGINT after command execution has started", async () => {
+		const terminal = TerminalRegistry.createTerminal().terminal
+		createdTerminals.push(terminal)
+		let resolveRead!: (value: IteratorResult<string>) => void
+		const iterator = {
+			next: () =>
+				new Promise<IteratorResult<string>>((resolve) => {
+					resolveRead = resolve
+				}),
+			[Symbol.asyncIterator]() {
+				return this
+			},
+		}
+		sandbox.stub(terminal, "shellIntegration").get(() => ({
+			executeCommand: () => ({
+				read: () => iterator,
+			}),
+		}))
+		const sendTextSpy = sandbox.spy(terminal, "sendText")
+		const runPromise = process.run(terminal, "long-command")
+		await sandbox.clock.tickAsync(0)
+
+		process.terminate()
+		sendTextSpy.calledWith("\u0003", false).should.be.true()
+		resolveRead({ value: "", done: true })
+		await runPromise
+		assert.equal(process.getCompletionDetails().signal, "SIGINT")
+	})
+
+	it("should detach listeners without reporting completion before the real exit", async () => {
+		const terminal = TerminalRegistry.createTerminal().terminal
+		createdTerminals.push(terminal)
+		const pendingReads: Array<(value: IteratorResult<string>) => void> = []
+		let readCount = 0
+		const iterator = {
+			next: () => {
+				readCount++
+				return new Promise<IteratorResult<string>>((resolve) => {
+					pendingReads.push(resolve)
+				})
+			},
+			[Symbol.asyncIterator]() {
+				return this
+			},
+		}
+		sandbox.stub(terminal, "shellIntegration").get(() => ({
+			executeCommand: () => ({
+				read: () => iterator,
+			}),
+		}))
+		const completedSpy = sandbox.spy()
+		process.on("completed", completedSpy)
+		const runPromise = process.run(terminal, "long-command")
+		await sandbox.clock.tickAsync(0)
+		assert.equal(readCount, 1)
+
+		process.continue()
+		await sandbox.clock.tickAsync(0)
+		assert.equal(readCount, 1, "detaching must not start a concurrent iterator read")
+		sinon.assert.notCalled(completedSpy)
+
+		pendingReads.shift()?.({ value: "background output\n", done: false })
+		await sandbox.clock.tickAsync(0)
+		assert.equal(readCount, 2)
+		sinon.assert.notCalled(completedSpy)
+
+		pendingReads.shift()?.({ value: "", done: true })
+		await runPromise
+		sinon.assert.calledOnce(completedSpy)
+		assert.match(process.getUnretrievedOutput(), /background output/)
+	})
+
+	it("should abort command and emit warnings on password prompt timeout", async () => {
+		const terminal = TerminalRegistry.createTerminal().terminal
+		createdTerminals.push(terminal)
+
+		// Use a deferred pattern so we can control when the iterator yields and blocks
+		let yieldResolve: ((value: IteratorResult<string>) => void) | null = null
+		const mockIterator = {
+			yieldCount: 0,
+			next(): Promise<IteratorResult<string>> {
+				this.yieldCount++
+				if (this.yieldCount === 1) {
+					// First call: return "Password: " immediately (no newline)
+					return Promise.resolve({ value: "Password: ", done: false })
+				}
+				// Subsequent calls: block forever (simulating hung prompt)
+				return new Promise((resolve) => {
+					yieldResolve = resolve
+				})
+			},
+			[Symbol.asyncIterator]() {
+				return this
+			},
+		}
+
+		const mockExecuteCommand = sandbox.stub().returns({
+			read: () => mockIterator,
+		})
+		sandbox.stub(terminal, "shellIntegration").get(() => ({
+			executeCommand: mockExecuteCommand,
+		}))
+
+		const emitSpy = sandbox.spy(process, "emit")
+		const runPromise = process.run(terminal, "sudo apt-get update")
+
+		// Let microtasks settle so the first yield is consumed and buffer is filled
+		await sandbox.clock.tickAsync(0)
+
+		// Advance timer past 5 seconds to trigger prompt_timeout
+		await sandbox.clock.tickAsync(6000)
+
+		// If the run promise hasn't resolved, force-resolve the hung iterator
+		if (yieldResolve) {
+			;(yieldResolve as (value: IteratorResult<string>) => void)({ value: "", done: true })
+		}
+
+		await runPromise
+
+		;(emitSpy as sinon.SinonSpy).calledWith("line", sinon.match("waiting for interactive input")).should.be.true()
+		assert.equal(process.getCompletionDetails().exitCode, -1)
 	})
 })

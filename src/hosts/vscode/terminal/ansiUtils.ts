@@ -12,3 +12,20 @@ export function ansiRegex({ onlyFirst = false } = {}) {
 export function stripAnsi(string: string): string {
 	return string.replace(ansiRegex(), "")
 }
+
+export function resolveCarriageReturns(text: string): string {
+	if (!text.includes("\r")) {
+		return text
+	}
+	const lines = text.split("\n")
+	const resolvedLines = lines.map((line) => {
+		if (!line.includes("\r")) return line
+		const parts = line.split("\r")
+		let result = ""
+		for (const part of parts) {
+			result = part + result.slice(part.length)
+		}
+		return result
+	})
+	return resolvedLines.join("\n")
+}

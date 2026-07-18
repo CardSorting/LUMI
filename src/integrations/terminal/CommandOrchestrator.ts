@@ -21,6 +21,7 @@ import { findLastIndex } from "@shared/array"
 import { COMMAND_CANCEL_TOKEN } from "@shared/ExtensionMessage"
 import * as fs from "fs"
 import { Logger } from "@/shared/services/Logger"
+import { analyzeCommandFailure } from "./commandDiagnostics"
 import {
 	BUFFER_STUCK_TIMEOUT_MS,
 	CHUNK_BYTE_SIZE,
@@ -86,7 +87,12 @@ export async function orchestrateCommandExecution(
 	// Track command execution state
 	callbacks.updateBackgroundCommandState(true)
 
+	let commandStateCleared = false
 	const clearCommandState = async () => {
+		if (commandStateCleared) {
+			return
+		}
+		commandStateCleared = true
 		callbacks.updateBackgroundCommandState(false)
 
 		// Mark the command message as completed
@@ -99,10 +105,15 @@ export async function orchestrateCommandExecution(
 		}
 	}
 
-	process.once("completed", clearCommandState)
-	process.once("error", clearCommandState)
+	const requestCommandStateClear = () => {
+		void clearCommandState().catch((error) => {
+			Logger.error("Failed to clear command execution state:", error)
+		})
+	}
+	process.once("completed", requestCommandStateClear)
+	process.once("error", requestCommandStateClear)
 	process.catch(() => {
-		clearCommandState()
+		requestCommandStateClear()
 	})
 
 	let userFeedback: { text?: string; images?: string[]; files?: string[] } | undefined
@@ -170,8 +181,12 @@ export async function orchestrateCommandExecution(
 					// Send cancellation message BEFORE resuming the process
 					// This ensures the message appears before any new output lines
 					await say("command_output", "Command cancelled")
-					// Now resume the process
-					process.continue()
+					// Now terminate the process
+					if (process.terminate) {
+						await process.terminate()
+					} else {
+						process.continue()
+					}
 				} else {
 					userFeedback = { text, images, files }
 					didContinue = true
@@ -200,7 +215,11 @@ export async function orchestrateCommandExecution(
 		if (chunkTimer) {
 			clearTimeout(chunkTimer)
 		}
-		chunkTimer = setTimeout(async () => await flushBuffer(), CHUNK_DEBOUNCE_MS)
+		chunkTimer = setTimeout(() => {
+			void flushBuffer().catch((error) => {
+				Logger.error("Failed to flush buffered terminal output:", error)
+			})
+		}, CHUNK_DEBOUNCE_MS)
 	}
 
 	// Large output file-based logging state
@@ -241,6 +260,9 @@ export async function orchestrateCommandExecution(
 		// Set up file logging using DietCodeTempManager for proper cleanup
 		largeOutputLogPath = DietCodeTempManager.createTempFilePath("large-output")
 		largeOutputLogStream = fs.createWriteStream(largeOutputLogPath, { flags: "a" })
+		largeOutputLogStream.on("error", (error) => {
+			Logger.error("Failed to write large terminal output:", error)
+		})
 
 		// Write all existing lines to file in a single batch to reduce I/O overhead
 		if (outputLines.length > 0) {
@@ -263,15 +285,18 @@ export async function orchestrateCommandExecution(
 	/**
 	 * Clean up file-based logging resources.
 	 */
-	const cleanupFileBased = () => {
-		if (largeOutputLogStream) {
-			largeOutputLogStream.end()
-			largeOutputLogStream = null
+	const cleanupFileBased = async () => {
+		const stream = largeOutputLogStream
+		largeOutputLogStream = null
+		if (stream) {
+			await new Promise<void>((resolve) => {
+				stream.end(resolve)
+			})
 		}
 	}
 
 	const outputLines: string[] = []
-	process.on("line", async (line: string) => {
+	const processLine = async (line: string) => {
 		if (didCancelViaUi) {
 			return
 		}
@@ -321,11 +346,35 @@ export async function orchestrateCommandExecution(
 				await say("command_output", line)
 			}
 		}
+	}
+	let lineProcessingPromise: Promise<void> = Promise.resolve()
+	process.on("line", (line: string) => {
+		lineProcessingPromise = lineProcessingPromise
+			.then(() => processLine(line))
+			.catch((error) => {
+				Logger.error("Failed to process terminal output:", error)
+			})
 	})
+	const buildCapturedOutput = (): { outputLines: string[]; result: string } => {
+		if (!isWritingToFile) {
+			return {
+				outputLines,
+				result: terminalManager.processOutput(outputLines),
+			}
+		}
+
+		const skippedLines = Math.max(0, totalLineCount - firstLines.length - lastLines.length)
+		const summaryLines = [...firstLines, `\n... (${skippedLines} lines written to ${largeOutputLogPath}) ...\n`, ...lastLines]
+		return {
+			outputLines: summaryLines,
+			result: terminalManager.processOutput(summaryLines),
+		}
+	}
 
 	let completed = false
 	let completionDetails: TerminalCompletionDetails | undefined
 	let completionTimer: NodeJS.Timeout | null = null
+	let completionFlushPromise: Promise<void> = Promise.resolve()
 
 	// Start timer to detect if waiting for completion takes too long
 	completionTimer = setTimeout(() => {
@@ -335,7 +384,7 @@ export async function orchestrateCommandExecution(
 		}
 	}, COMPLETION_TIMEOUT_MS)
 
-	process.once("completed", async (details?: TerminalCompletionDetails) => {
+	process.once("completed", (details?: TerminalCompletionDetails) => {
 		completed = true
 		completionDetails = details
 		// Clear the completion timer
@@ -343,14 +392,17 @@ export async function orchestrateCommandExecution(
 			clearTimeout(completionTimer)
 			completionTimer = null
 		}
-		// Flush any remaining buffered output
-		if (!didContinue && outputBuffer.length > 0) {
-			if (chunkTimer) {
-				clearTimeout(chunkTimer)
-				chunkTimer = null
+		completionFlushPromise = (async () => {
+			await lineProcessingPromise
+			// Flush any remaining buffered output before command result assembly.
+			if (!didContinue && outputBuffer.length > 0) {
+				if (chunkTimer) {
+					clearTimeout(chunkTimer)
+					chunkTimer = null
+				}
+				await flushBuffer(true)
 			}
-			await flushBuffer(true)
-		}
+		})()
 	})
 
 	process.once("no_shell_integration", async () => {
@@ -364,16 +416,17 @@ export async function orchestrateCommandExecution(
 	// Handle timeout if specified, or wait for process to complete
 	if (!didCancelViaUi) {
 		if (timeoutSeconds) {
+			let timeoutHandle: NodeJS.Timeout | undefined
 			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(() => {
+				timeoutHandle = setTimeout(() => {
 					reject(new Error("COMMAND_TIMEOUT"))
 				}, timeoutSeconds * 1000)
 			})
 
 			try {
 				await Promise.race([process, timeoutPromise])
-			} catch (error: any) {
-				if (error.message === "COMMAND_TIMEOUT") {
+			} catch (error: unknown) {
+				if (error instanceof Error && error.message === "COMMAND_TIMEOUT") {
 					// Timeout triggers "Proceed While Running" behavior
 					didContinue = true
 
@@ -391,25 +444,35 @@ export async function orchestrateCommandExecution(
 
 					// Process any output we captured before timeout
 					await setTimeoutPromise(50)
-					const result = terminalManager.processOutput(outputLines)
+					await cleanupFileBased()
+					const capturedOutput = buildCapturedOutput()
 
 					return {
 						userRejected: false,
-						result: `Command execution timed out after ${timeoutSeconds} seconds. ${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
+						result: `Command execution timed out after ${timeoutSeconds} seconds. ${
+							capturedOutput.result.length > 0 ? `\nOutput so far:\n${capturedOutput.result}` : ""
+						}`,
 						completed: false,
 						timedOut: true,
-						outputLines,
+						outputLines: capturedOutput.outputLines,
+						logFilePath: largeOutputLogPath || undefined,
 					}
 				}
 
 				// Re-throw other errors
 				throw error
+			} finally {
+				if (timeoutHandle) {
+					clearTimeout(timeoutHandle)
+				}
 			}
 		} else {
 			// No timeout - wait for process to complete
 			await process
 		}
 	}
+	await lineProcessingPromise
+	await completionFlushPromise
 
 	// Clear timer if process completes normally
 	if (completionTimer) {
@@ -421,22 +484,11 @@ export async function orchestrateCommandExecution(
 	await setTimeoutPromise(50)
 
 	// Clean up file-based logging if active
-	cleanupFileBased()
+	await cleanupFileBased()
 
 	// Build result based on whether we used file-based logging
-	let result: string
-	let resultOutputLines: string[]
-
-	if (isWritingToFile) {
-		// Build summary from first and last lines
-		const skippedLines = totalLineCount - firstLines.length - lastLines.length
-		const summaryLines = [...firstLines, `\n... (${skippedLines} lines written to ${largeOutputLogPath}) ...\n`, ...lastLines]
-		result = terminalManager.processOutput(summaryLines)
-		resultOutputLines = summaryLines
-	} else {
-		result = terminalManager.processOutput(outputLines)
-		resultOutputLines = outputLines
-	}
+	const capturedOutput = buildCapturedOutput()
+	const { result, outputLines: resultOutputLines } = capturedOutput
 
 	if (didCancelViaUi) {
 		return {
@@ -482,13 +534,20 @@ export async function orchestrateCommandExecution(
 		const signal = completionDetails?.signal
 		const hasExitCode = typeof exitCode === "number"
 		const logFileMsg = largeOutputLogPath ? `\nFull output saved to: ${largeOutputLogPath}` : ""
-		const statusMessage = hasExitCode
+		let statusMessage = hasExitCode
 			? exitCode === 0
 				? "Command executed successfully (exit code 0)."
 				: `Command failed with exit code ${exitCode}.`
 			: signal
 				? `Command terminated by signal ${signal}.`
 				: "Command executed."
+
+		if (hasExitCode && exitCode !== 0) {
+			const diagnostic = analyzeCommandFailure(options.command, exitCode, result)
+			if (diagnostic.suggestion) {
+				statusMessage += `\n\n${diagnostic.suggestion}`
+			}
+		}
 
 		return {
 			userRejected: false,

@@ -53,7 +53,7 @@ const integrationTestHostBridge = {
 } as unknown as HostBridgeClientProvider
 
 function defaultHostBridgeClient(): HostBridgeClientProvider {
-	return process.env.INTEGRATION_TEST ? integrationTestHostBridge : vscodeHostBridgeClient
+	return process.env.INTEGRATION_TEST ? vscodeHostBridgeClient : integrationTestHostBridge
 }
 
 function defaultMockPaths(): { extensionFsPath: string; globalStorageFsPath: string } {

@@ -1,5 +1,5 @@
 import { arePathsEqual } from "@utils/path"
-import { getShellForProfile } from "@utils/shell"
+import { getShell, getShellForProfile } from "@utils/shell"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 import {
@@ -89,11 +89,35 @@ declare module "vscode" {
 	// https://github.com/microsoft/vscode/blob/f0417069c62e20f3667506f4b7e53ca0004b4e3e/src/vscode-dts/vscode.d.ts#L10794
 	interface Window {
 		onDidStartTerminalShellExecution?: (
-			listener: (e: any) => any,
-			thisArgs?: any,
+			listener: (event: {
+				execution: {
+					read: () => AsyncIterable<string>
+				}
+				terminal: vscode.Terminal
+			}) => unknown,
+			thisArgs?: unknown,
 			disposables?: vscode.Disposable[],
 		) => vscode.Disposable
 	}
+}
+
+function quotePosix(value: string): string {
+	return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function quotePowerShell(value: string): string {
+	return `'${value.replace(/'/g, "''")}'`
+}
+
+function buildChangeDirectoryCommand(cwd: string, shellPath: string): string {
+	const normalizedShell = shellPath.toLowerCase()
+	if (normalizedShell.includes("powershell") || normalizedShell.includes("pwsh")) {
+		return `Set-Location -LiteralPath ${quotePowerShell(cwd)}`
+	}
+	if (normalizedShell.includes("cmd.exe") || normalizedShell === "cmd") {
+		return `cd /d "${cwd}"`
+	}
+	return `cd ${quotePosix(cwd)}`
 }
 
 export class VscodeTerminalManager implements ITerminalManager {
@@ -109,6 +133,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 		let disposable: vscode.Disposable | undefined
 		try {
 			disposable = (vscode.window as vscode.Window).onDidStartTerminalShellExecution?.(async (e) => {
+				// If the terminal is managed by us, our own VscodeTerminalProcess will read the stream.
+				// We should not call read() here to avoid double-reading conflicts.
+				if (e?.terminal && this.findTerminalInfoByTerminal(e.terminal)) {
+					return
+				}
 				// Creating a read stream here results in a more consistent output. This is most obvious when running the `date` command.
 				e?.execution?.read()
 			})
@@ -165,7 +194,7 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// Cast to VSCode-specific TerminalInfo for internal use
 		// Using unknown as intermediate cast due to structural differences between ITerminal and vscode.Terminal
 		const vscodeTerminalInfo = terminalInfo as unknown as TerminalInfo
-		Logger.log(`[TerminalManager] Running command on terminal ${vscodeTerminalInfo.id}: "${command}"`)
+		Logger.log(`[TerminalManager] Running approved command on terminal ${vscodeTerminalInfo.id}`)
 		Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} busy state before: ${vscodeTerminalInfo.busy}`)
 
 		vscodeTerminalInfo.busy = true
@@ -173,10 +202,14 @@ export class VscodeTerminalManager implements ITerminalManager {
 		const process = new VscodeTerminalProcess()
 		this.processes.set(vscodeTerminalInfo.id, process)
 
-		process.once("completed", () => {
-			Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} completed, setting busy to false`)
+		const clearBusy = () => {
+			Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} completed or failed, setting busy to false`)
 			vscodeTerminalInfo.busy = false
-		})
+			process.removeListener("completed", clearBusy)
+			process.removeListener("error", clearBusy)
+		}
+		process.once("completed", clearBusy)
+		process.once("error", clearBusy)
 
 		// if shell integration is not available, remove terminal so it does not get reused as it may be running a long-running process
 		process.once("no_shell_integration", () => {
@@ -200,7 +233,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// if shell integration is already active, run the command immediately
 		if (vscodeTerminalInfo.terminal.shellIntegration) {
 			process.waitForShellIntegration = false
-			process.run(vscodeTerminalInfo.terminal, command)
+			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
+		} else if (vscodeTerminalInfo.shellIntegrationFailed) {
+			// Shell integration previously failed/timed out on this terminal. Skip waiting to prevent delays.
+			process.waitForShellIntegration = false
+			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
 		} else {
 			// docs recommend waiting 3s for shell integration to activate
 			Logger.log(
@@ -218,13 +255,14 @@ export class VscodeTerminalManager implements ITerminalManager {
 					Logger.warn(
 						`[TerminalManager Test] Shell integration timed out or failed for terminal ${vscodeTerminalInfo.id}: ${err.message}`,
 					)
+					vscodeTerminalInfo.shellIntegrationFailed = true
 				})
 				.finally(() => {
 					Logger.log(`[TerminalManager Test] Proceeding with command execution for terminal ${vscodeTerminalInfo.id}.`)
 					const existingProcess = this.processes.get(vscodeTerminalInfo.id)
 					if (existingProcess?.waitForShellIntegration) {
 						existingProcess.waitForShellIntegration = false
-						existingProcess.run(vscodeTerminalInfo.terminal, command)
+						void existingProcess.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
 					}
 				})
 		}
@@ -250,13 +288,13 @@ export class VscodeTerminalManager implements ITerminalManager {
 			if (t.shellPath !== expectedShellPath) {
 				return false
 			}
-			const terminalCwd = t.terminal.shellIntegration?.cwd // one of dietcode's commands could have changed the cwd of the terminal
+			const terminalCwd = t.terminal.shellIntegration?.cwd?.fsPath || t.cwd // fall back to manually tracked cwd if shell integration not available
 			if (!terminalCwd) {
 				Logger.log(`[TerminalManager] Terminal ${t.id} has no cwd, skipping`)
 				return false
 			}
-			const matches = arePathsEqual(vscode.Uri.file(cwd).fsPath, terminalCwd.fsPath)
-			Logger.log(`[TerminalManager] Terminal ${t.id} cwd: ${terminalCwd.fsPath}, matches: ${matches}`)
+			const matches = arePathsEqual(vscode.Uri.file(cwd).fsPath, terminalCwd)
+			Logger.log(`[TerminalManager] Terminal ${t.id} cwd: ${terminalCwd}, matches: ${matches}`)
 			return matches
 		})
 		if (matchingTerminal) {
@@ -268,49 +306,60 @@ export class VscodeTerminalManager implements ITerminalManager {
 
 		// If no non-busy terminal in the current working dir exists and terminal reuse is enabled, try to find any non-busy terminal regardless of CWD
 		if (this.terminalReuseEnabled) {
-			const availableTerminal = terminals.find((t) => !t.busy && t.shellPath === expectedShellPath)
+			const availableTerminal = terminals.find(
+				(t) =>
+					!t.busy &&
+					t.shellPath === expectedShellPath &&
+					typeof t.terminal.shellIntegration?.executeCommand === "function",
+			)
 			if (availableTerminal) {
-				// Set up promise and tracking for CWD change
-				const cwdPromise = new Promise<void>((resolve, reject) => {
-					availableTerminal.pendingCwdChange = cwd
-					availableTerminal.cwdResolved = { resolve, reject }
-				})
+				try {
+					// Set up promise and tracking for CWD change
+					const cwdPromise = new Promise<void>((resolve, reject) => {
+						availableTerminal.pendingCwdChange = cwd
+						availableTerminal.cwdResolved = { resolve, reject }
+					})
 
-				// Navigate back to the desired directory
-				// Cast to ITerminalInfo for interface compatibility
-				const cdProcess = this.runCommand(availableTerminal as unknown as ITerminalInfo, `cd "${cwd}"`)
+					// Navigate back to the desired directory
+					// Cast to ITerminalInfo for interface compatibility
+					const shellPath = availableTerminal.shellPath ?? getShell()
+					const cdProcess = this.runCommand(
+						availableTerminal as unknown as ITerminalInfo,
+						buildChangeDirectoryCommand(cwd, shellPath),
+					)
 
-				// Wait for the cd command to complete before proceeding
-				await cdProcess
-
-				// Add a small delay to ensure terminal is ready after cd
-				await new Promise((resolve) => setTimeout(resolve, 100))
-
-				// Either resolve immediately if CWD already updated or wait for event/timeout
-				if (this.isCwdMatchingExpected(availableTerminal)) {
-					if (availableTerminal.cwdResolved) {
-						availableTerminal.cwdResolved.resolve()
+					// Wait for the cd command to complete before proceeding
+					await cdProcess
+					const exitCode = cdProcess.getCompletionDetails?.().exitCode
+					if (typeof exitCode === "number" && exitCode !== 0) {
+						throw new Error(`Failed to change terminal directory to ${cwd} (exit code ${exitCode})`)
 					}
-					availableTerminal.pendingCwdChange = undefined
-					availableTerminal.cwdResolved = undefined
-				} else {
-					try {
-						// Wait with a timeout for state change event to resolve
+
+					if (!this.isCwdMatchingExpected(availableTerminal)) {
 						await Promise.race([
 							cwdPromise,
-							new Promise<void>((_, reject) =>
-								setTimeout(() => reject(new Error(`CWD timeout: Failed to update to ${cwd}`)), 1000),
-							),
+							pWaitFor(() => this.isCwdMatchingExpected(availableTerminal), { timeout: 1_000 }),
 						])
-					} catch (_err) {
-						// Clear pending state on timeout
-						availableTerminal.pendingCwdChange = undefined
-						availableTerminal.cwdResolved = undefined
 					}
+					if (!this.isCwdMatchingExpected(availableTerminal)) {
+						throw new Error(`Terminal did not report the requested working directory: ${cwd}`)
+					}
+
+					availableTerminal.cwd = cwd
+					availableTerminal.pendingCwdChange = undefined
+					availableTerminal.cwdResolved = undefined
+					this.terminalIds.add(availableTerminal.id)
+					// Cast to ITerminalInfo for interface compatibility
+					return availableTerminal as unknown as ITerminalInfo
+				} catch (err) {
+					Logger.error(
+						`[TerminalManager] Failed to reuse terminal ${availableTerminal.id}, falling back to creating new terminal:`,
+						err,
+					)
+					availableTerminal.pendingCwdChange = undefined
+					availableTerminal.cwdResolved = undefined
+					// Fall through to creating a new terminal
 				}
-				this.terminalIds.add(availableTerminal.id)
-				// Cast to ITerminalInfo for interface compatibility
-				return availableTerminal as unknown as ITerminalInfo
 			}
 		}
 
@@ -347,7 +396,9 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// }
 		this.terminalIds.clear()
 		this.processes.clear()
-		this.disposables.forEach((disposable) => disposable.dispose())
+		for (const disposable of this.disposables) {
+			disposable.dispose()
+		}
 		this.disposables = []
 	}
 

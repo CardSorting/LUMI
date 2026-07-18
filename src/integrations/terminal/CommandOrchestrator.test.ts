@@ -119,6 +119,26 @@ describe("CommandOrchestrator exit status messaging", () => {
 		assert.equal(result.exitCode, 0)
 		assert.match(result.result as string, /^Command executed successfully \(exit code 0\)\./)
 	})
+
+	it("serializes final output before assembling the completion result", async () => {
+		const process = new FakeTerminalProcess()
+		const callbacks = createCallbacks()
+		callbacks.ask = async () => {
+			await new Promise((resolve) => setImmediate(resolve))
+			return { response: "yesButtonClicked" }
+		}
+		const orchestrationPromise = orchestrateCommandExecution(process.asResultPromise(), createTerminalManager(), callbacks, {
+			command: "printf output",
+		})
+
+		process.emit("line", "first")
+		process.emit("line", "second")
+		process.complete({ exitCode: 0, signal: null })
+		const result = await orchestrationPromise
+
+		assert.deepEqual(result.outputLines, ["first", "second"])
+		assert.match(result.result as string, /Output:\nfirst\nsecond$/)
+	})
 })
 
 describe("CommandExecutor structured evidence", () => {
@@ -149,6 +169,27 @@ describe("CommandExecutor structured evidence", () => {
 		assert.equal(evidence?.exitCode, 0)
 		assert.equal(evidence?.started, true)
 		assert.equal(evidence?.timedOut, false)
+	})
+
+	it("rejects known interactive blockers before allocating a terminal", async () => {
+		let allocatedTerminal = false
+		const manager = {
+			...createTerminalManager(),
+			getOrCreateTerminal: async () => {
+				allocatedTerminal = true
+				return terminalInfo
+			},
+		} as unknown as ITerminalManager
+		const executor = new CommandExecutor(executorConfig(manager), createCallbacks())
+
+		const [rejected, response] = await executor.execute("vim package.json", undefined)
+		const evidence = readCommandExecutionEvidence(response)
+
+		assert.equal(rejected, false)
+		assert.equal(allocatedTerminal, false)
+		assert.equal(evidence?.started, false)
+		assert.equal(evidence?.completed, false)
+		assert.match(String(response), /requires interactive terminal input/)
 	})
 
 	it("preserves signal termination and managed timeout distinctly", async () => {
