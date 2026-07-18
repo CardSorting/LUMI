@@ -43,4 +43,29 @@ describe("API configuration protobuf conversion", () => {
 			embeddingOpenAiBaseUrl: "https://example.test/v1",
 		})
 	})
+
+	it("round-trips the Cerebras provider and API key", () => {
+		const proto = convertApiConfigurationToProto({
+			planModeApiProvider: "cerebras",
+			actModeApiProvider: "cerebras",
+			planModeApiModelId: "zai-glm-4.7",
+			actModeApiModelId: "gpt-oss-120b",
+			cerebrasApiKey: "csk-test",
+		})
+
+		expect(proto.planModeApiProvider).to.equal(ProtoApiProvider.CEREBRAS)
+		expect(proto.actModeApiProvider).to.equal(ProtoApiProvider.CEREBRAS)
+		expect(proto.cerebrasApiKey).to.equal("csk-test")
+
+		const wireRoundTrip = ModelsApiConfiguration.fromJSON(ModelsApiConfiguration.toJSON(proto))
+		const restored = convertProtoToApiConfiguration(wireRoundTrip)
+
+		expect(restored).to.include({
+			planModeApiProvider: "cerebras",
+			actModeApiProvider: "cerebras",
+			planModeApiModelId: "zai-glm-4.7",
+			actModeApiModelId: "gpt-oss-120b",
+			cerebrasApiKey: "csk-test",
+		})
+	})
 })

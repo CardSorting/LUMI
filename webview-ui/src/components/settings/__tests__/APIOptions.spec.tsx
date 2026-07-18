@@ -69,4 +69,22 @@ describe("ApiOptions Component", () => {
 		const modelIdInput = screen.getByPlaceholderText("Search and select a model...")
 		expect(modelIdInput).toBeInTheDocument()
 	})
+
+	it("renders Cerebras credentials and model options", () => {
+		mockExtensionState({
+			planModeApiProvider: "cerebras",
+			actModeApiProvider: "cerebras",
+			cerebrasApiKey: "",
+		})
+
+		render(
+			<ExtensionStateContextProvider>
+				<ApiOptions currentMode="plan" showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+
+		expect(screen.getByText("Cerebras API Key")).toBeInTheDocument()
+		expect(screen.getByText("gemma-4-31b")).toBeInTheDocument()
+		expect(screen.getByText("zai-glm-4.7")).toBeInTheDocument()
+	})
 })

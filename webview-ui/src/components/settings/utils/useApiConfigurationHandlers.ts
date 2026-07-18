@@ -2,20 +2,28 @@ import { ApiConfiguration } from "@shared/api"
 import { UpdateApiConfigurationPartialRequest } from "@shared/proto/dietcode/models"
 import { convertApiConfigurationToProto } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Mode } from "@shared/storage/types"
+import { useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
 
+interface ApiConfigurationUpdateOptions {
+	flushImmediately?: boolean
+}
+
 export const useApiConfigurationHandlers = () => {
 	const { planActSeparateModelsSetting } = useExtensionState()
+	const persistenceQueueRef = useRef<Promise<unknown>>(Promise.resolve())
 
-	const persistUpdates = async (updates: Partial<ApiConfiguration>) => {
+	const persistUpdates = (updates: Partial<ApiConfiguration>, options: ApiConfigurationUpdateOptions = {}): Promise<void> => {
 		const protoConfig = convertApiConfigurationToProto(updates as ApiConfiguration)
-		await ModelsServiceClient.updateApiConfigurationPartial(
-			UpdateApiConfigurationPartialRequest.create({
-				apiConfiguration: protoConfig,
-				updateMask: Object.keys(updates),
-			}),
-		)
+		const request = UpdateApiConfigurationPartialRequest.create({
+			apiConfiguration: protoConfig,
+			updateMask: Object.keys(updates),
+			flushImmediately: options.flushImmediately,
+		})
+		const operation = persistenceQueueRef.current.then(() => ModelsServiceClient.updateApiConfigurationPartial(request))
+		persistenceQueueRef.current = operation.catch(() => undefined)
+		return operation.then(() => undefined)
 	}
 
 	/**
@@ -26,8 +34,12 @@ export const useApiConfigurationHandlers = () => {
 	 * @param field - The field key to update
 	 * @param value - The new value for the field
 	 */
-	const handleFieldChange = async <K extends keyof ApiConfiguration>(field: K, value: ApiConfiguration[K]) => {
-		await persistUpdates({ [field]: value } as Partial<ApiConfiguration>)
+	const handleFieldChange = async <K extends keyof ApiConfiguration>(
+		field: K,
+		value: ApiConfiguration[K],
+		options?: ApiConfigurationUpdateOptions,
+	) => {
+		await persistUpdates({ [field]: value } as Partial<ApiConfiguration>, options)
 	}
 
 	/**
@@ -36,23 +48,27 @@ export const useApiConfigurationHandlers = () => {
 	 *
 	 * @param updates - An object containing the fields to update and their new values
 	 */
-	const handleFieldsChange = async (updates: Partial<ApiConfiguration>) => {
-		await persistUpdates(updates)
+	const handleFieldsChange = async (updates: Partial<ApiConfiguration>, options?: ApiConfigurationUpdateOptions) => {
+		await persistUpdates(updates, options)
 	}
 
 	const handleModeFieldChange = async <PlanK extends keyof ApiConfiguration, ActK extends keyof ApiConfiguration>(
 		fieldPair: { plan: PlanK; act: ActK },
 		value: ApiConfiguration[PlanK] & ApiConfiguration[ActK], // Intersection ensures value is compatible with both field types
 		currentMode: Mode,
+		options?: ApiConfigurationUpdateOptions,
 	) => {
 		if (planActSeparateModelsSetting) {
 			const targetField = fieldPair[currentMode]
-			await handleFieldChange(targetField, value)
+			await handleFieldChange(targetField, value, options)
 		} else {
-			await handleFieldsChange({
-				[fieldPair.plan]: value,
-				[fieldPair.act]: value,
-			})
+			await handleFieldsChange(
+				{
+					[fieldPair.plan]: value,
+					[fieldPair.act]: value,
+				},
+				options,
+			)
 		}
 	}
 

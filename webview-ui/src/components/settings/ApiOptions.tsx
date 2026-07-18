@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "./constants"
+import { CerebrasProvider } from "./providers/CerebrasProvider"
 import { ClinePassProvider } from "./providers/ClinePassProvider"
 import { CloudflareProvider } from "./providers/CloudflareProvider"
 import { NousResearchProvider } from "./providers/NousresearchProvider"
@@ -262,6 +263,10 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 
 			{apiConfiguration && selectedProvider === "cloudflare" && (
 				<CloudflareProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+
+			{apiConfiguration && selectedProvider === "cerebras" && (
+				<CerebrasProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiConfiguration && selectedProvider === "openai-codex" && (

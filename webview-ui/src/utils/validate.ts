@@ -24,6 +24,11 @@ export function validateApiConfiguration(currentMode: Mode, apiConfiguration?: A
 				return "You must provide a valid API key or choose a different provider."
 			}
 			break
+		case "cerebras":
+			if (!apiConfiguration.cerebrasApiKey) {
+				return "You must provide a valid Cerebras API key."
+			}
+			break
 		case "nousResearch":
 			if (!apiConfiguration.nousResearchApiKey) {
 				return "You must provide a valid API key or choose a different provider."

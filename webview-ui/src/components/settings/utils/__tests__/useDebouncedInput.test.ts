@@ -45,4 +45,14 @@ describe("useDebouncedInput", () => {
 		await act(() => vi.advanceTimersByTimeAsync(100))
 		expect(onChange).not.toHaveBeenCalled()
 	})
+
+	it("persists immediately when debounce is disabled", () => {
+		const onChange = vi.fn()
+		const { result } = renderHook(() => useDebouncedInput("", onChange, 0))
+
+		act(() => result.current[1]("csk-test"))
+
+		expect(onChange).toHaveBeenCalledOnce()
+		expect(onChange).toHaveBeenCalledWith("csk-test")
+	})
 })

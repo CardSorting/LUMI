@@ -373,6 +373,10 @@ message UpdateApiConfigurationPartialRequest {
   // Field names should use camelCase (e.g., "apiKey", "planModeApiProvider").
   // If a field is in the mask but not set in api_configuration, it will be cleared (set to undefined).
   google.protobuf.FieldMask update_mask = 3;
+
+  // Persist this update before returning instead of waiting for the backend storage debounce.
+  // Credential inputs and other settings that must survive an immediate shutdown should set this.
+  optional bool flush_immediately = 4;
 }
 
 // Model info for OCA (OpenAI-compatible) models exposed by the OCA provider

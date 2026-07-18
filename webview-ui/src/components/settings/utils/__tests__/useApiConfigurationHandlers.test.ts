@@ -54,6 +54,24 @@ describe("useApiConfigurationHandlers", () => {
 		)
 	})
 
+	it("marks Cerebras credentials for immediate backend persistence", async () => {
+		const { result } = renderHook(() => useApiConfigurationHandlers())
+
+		await act(() =>
+			result.current.handleFieldChange("cerebrasApiKey", "csk-test", {
+				flushImmediately: true,
+			}),
+		)
+
+		expect(ModelsServiceClient.updateApiConfigurationPartial).toHaveBeenCalledWith(
+			expect.objectContaining({
+				updateMask: ["cerebrasApiKey"],
+				flushImmediately: true,
+				apiConfiguration: expect.objectContaining({ cerebrasApiKey: "csk-test" }),
+			}),
+		)
+	})
+
 	it("updates both provider fields atomically when Plan and Act are linked", async () => {
 		vi.mocked(useExtensionState).mockReturnValue({
 			planActSeparateModelsSetting: false,

@@ -2,6 +2,7 @@ import { ApiConfiguration } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { isE2ETestMode } from "@/shared/e2e-mode"
 import { Logger } from "@/shared/services/Logger"
+import { CerebrasHandler } from "./providers/cerebras"
 import { ClinePassHandler } from "./providers/clinepass"
 import { CloudflareHandler } from "./providers/cloudflare"
 import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
@@ -51,6 +52,12 @@ function createHandlerForProvider(
 				onRetryAttempt: options.onRetryAttempt,
 				cloudflareAccountId: options.cloudflareAccountId,
 				cloudflareApiToken: options.cloudflareApiToken,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+			})
+		case "cerebras":
+			return new CerebrasHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				cerebrasApiKey: options.cerebrasApiKey,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 			})
 		case "nousResearch":

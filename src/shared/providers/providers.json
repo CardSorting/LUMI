@@ -17,6 +17,10 @@
 			"label": "Cloudflare Workers AI"
 		},
 		{
+			"value": "cerebras",
+			"label": "Cerebras"
+		},
+		{
 			"value": "cline-pass",
 			"label": "ClinePass"
 		},

@@ -1,10 +1,14 @@
 import Cerebras from "@cerebras/cerebras_cloud_sdk"
 import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels, ModelInfo } from "@shared/api"
+import type OpenAI from "openai"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
-import { withRetry } from "../retry"
+import { DietCodeTool } from "@/shared/tools"
+import { RetriableError, withRetry } from "../retry"
+import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { ToolCallProcessor } from "../transform/tool-call-processor"
 import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface CerebrasHandlerOptions extends CommonApiHandlerOptions {
@@ -12,11 +16,118 @@ interface CerebrasHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
 }
 
-// Conservative max_tokens for Cerebras to avoid premature rate limiting.
-// Cerebras rate limiter estimates token consumption using max_completion_tokens upfront,
-// so requesting the model maximum (e.g., 64K) reserves that quota even if actual usage is low.
-// 16K is sufficient for most agentic tool use while preserving rate limit headroom.
+type OpenAIMessageWithReasoning = OpenAI.Chat.ChatCompletionMessageParam & {
+	reasoning?: unknown
+	reasoning_content?: unknown
+	reasoning_details?: unknown
+}
+
+type CerebrasMessages = NonNullable<Cerebras.ChatCompletionCreateParams["messages"]>
+type CerebrasTools = NonNullable<Cerebras.ChatCompletionCreateParams["tools"]>
+
+interface CerebrasApiError {
+	status?: number
+	code?: string
+	message?: string
+}
+
+interface CerebrasStreamChunk {
+	choices?: Array<{
+		delta?: {
+			content?: string | null
+			reasoning?: string | null
+			tool_calls?: unknown
+		} | null
+	}>
+	usage?: {
+		prompt_tokens?: number
+		completion_tokens?: number
+		prompt_tokens_details?: {
+			cached_tokens?: number
+		} | null
+	}
+}
+
+// Cerebras accounts for max_completion_tokens when enforcing token rate limits.
+// A conservative default leaves headroom for successive agent tool turns.
 const CEREBRAS_DEFAULT_MAX_TOKENS = 16_384
+
+function stripThinkingTags(content: string): string {
+	return content
+		.replace(/<think>[\s\S]*?<\/think>/gi, "")
+		.replace(/<think>[\s\S]*$/gi, "")
+		.trim()
+}
+
+/**
+ * Cerebras rejects reasoning history on follow-up requests. Convert the stored
+ * conversation to OpenAI-compatible messages, remove private reasoning fields,
+ * and omit assistant messages that contained reasoning only.
+ */
+export function prepareCerebrasMessages(messages: DietCodeStorageMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+	const prepared: OpenAI.Chat.ChatCompletionMessageParam[] = []
+
+	for (const message of convertToOpenAiMessages(messages, "cerebras")) {
+		const sanitized = { ...message } as OpenAIMessageWithReasoning
+		delete sanitized.reasoning
+		delete sanitized.reasoning_content
+		delete sanitized.reasoning_details
+
+		if (sanitized.role !== "assistant") {
+			prepared.push(sanitized)
+			continue
+		}
+
+		if (typeof sanitized.content === "string") {
+			sanitized.content = stripThinkingTags(sanitized.content)
+		}
+
+		const hasContent =
+			(typeof sanitized.content === "string" && sanitized.content.trim().length > 0) ||
+			(Array.isArray(sanitized.content) && sanitized.content.length > 0)
+		const hasToolCalls = Array.isArray(sanitized.tool_calls) && sanitized.tool_calls.length > 0
+
+		if (hasContent || hasToolCalls) {
+			prepared.push(sanitized)
+		}
+	}
+
+	return prepared
+}
+
+function splitLegacyThinkingChunk(
+	content: string,
+	startedInReasoning: boolean,
+): { reasoning: string; text: string; inReasoning: boolean } {
+	let rest = content
+	let inReasoning = startedInReasoning
+	let reasoning = ""
+	let text = ""
+
+	while (rest.length > 0) {
+		if (inReasoning) {
+			const closeIndex = rest.indexOf("</think>")
+			if (closeIndex === -1) {
+				reasoning += rest
+				break
+			}
+			reasoning += rest.slice(0, closeIndex)
+			rest = rest.slice(closeIndex + "</think>".length)
+			inReasoning = false
+		} else {
+			const openIndex = rest.indexOf("<think>")
+			if (openIndex === -1) {
+				text += rest
+				break
+			}
+			text += rest.slice(0, openIndex)
+			rest = rest.slice(openIndex + "<think>".length)
+			inReasoning = true
+		}
+	}
+
+	return { reasoning, text, inReasoning }
+}
 
 export class CerebrasHandler implements ApiHandler {
 	private options: CerebrasHandlerOptions
@@ -28,205 +139,134 @@ export class CerebrasHandler implements ApiHandler {
 
 	private ensureClient(): Cerebras {
 		if (!this.client) {
-			// Clean and validate the API key
 			const cleanApiKey = this.options.cerebrasApiKey?.trim()
-
 			if (!cleanApiKey) {
 				throw new Error("Cerebras API key is required")
 			}
 
 			try {
-				const externalHeaders = buildExternalBasicHeaders()
 				this.client = new Cerebras({
 					apiKey: cleanApiKey,
-					timeout: 30000, // 30 second timeout
-					fetch, // Use configured fetch with proxy support
+					timeout: 30_000,
+					maxRetries: 0,
+					warmTCPConnection: false,
+					fetch,
 					defaultHeaders: {
-						...externalHeaders,
+						...buildExternalBasicHeaders(),
 						"X-Cerebras-3rd-Party-Integration": "dietcode",
 					},
 				})
 			} catch (error) {
-				throw new Error(`Error creating Cerebras client: ${error.message}`)
+				throw new Error(`Error creating Cerebras client: ${error instanceof Error ? error.message : String(error)}`)
 			}
 		}
 		return this.client
 	}
 
 	@withRetry({
-		maxRetries: 6, // More retries to be patient with rate limits
-		baseDelay: 5000, // Start with 5 second delay
-		maxDelay: 60000, // Allow up to 60 second delays to respect rate limits
+		maxRetries: 6,
+		baseDelay: 5_000,
+		maxDelay: 60_000,
 	})
-	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const client = this.ensureClient()
-
-		// Convert Anthropic messages to Cerebras format
-		const cerebrasMessages: Array<{
-			role: "system" | "user" | "assistant"
-			content: string
-		}> = [{ role: "system", content: systemPrompt }]
-
-		// Helper function to strip thinking tags from content
-		const stripThinkingTags = (content: string): string => {
-			return content.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
-		}
-
-		// Check if this is a reasoning model that uses thinking tags
-		const modelId = this.getModel().id
-		const isReasoningModel = modelId.includes("qwen")
-
-		// Convert Anthropic messages to Cerebras format
-		for (const message of messages) {
-			if (message.role === "user") {
-				const content = Array.isArray(message.content)
-					? message.content
-							.map((block) => {
-								if (block.type === "text") {
-									return block.text
-								}
-								if (block.type === "image") {
-									return "[Image content not supported in Cerebras]"
-								}
-								return ""
-							})
-							.join("\n")
-					: message.content
-				cerebrasMessages.push({ role: "user", content })
-			} else if (message.role === "assistant") {
-				let content = Array.isArray(message.content)
-					? message.content
-							.map((block) => {
-								if (block.type === "text") {
-									return block.text
-								}
-								return ""
-							})
-							.join("\n")
-					: message.content || ""
-
-				// Strip thinking tags from assistant messages for reasoning models
-				// so the model doesn't see its own thinking in the conversation history
-				if (isReasoningModel) {
-					content = stripThinkingTags(content)
-				}
-
-				cerebrasMessages.push({ role: "assistant", content })
-			}
-		}
+		const model = this.getModel()
+		const cerebrasMessages = [{ role: "system" as const, content: systemPrompt }, ...prepareCerebrasMessages(messages)]
 
 		try {
-			const model = this.getModel()
 			const stream = await client.chat.completions.create({
 				model: model.id,
-				messages: cerebrasMessages,
+				messages: cerebrasMessages as unknown as CerebrasMessages,
 				temperature: model.info.temperature ?? 0,
 				stream: true,
-				max_tokens: CEREBRAS_DEFAULT_MAX_TOKENS,
+				stream_options: { include_usage: true },
+				max_completion_tokens: CEREBRAS_DEFAULT_MAX_TOKENS,
+				tools: tools?.length ? (tools as unknown as CerebrasTools) : undefined,
+				tool_choice: tools?.length ? "auto" : undefined,
+				parallel_tool_calls: false,
 			})
 
-			// Handle streaming response
-			let reasoning: string | null = null // Track reasoning content for models that support thinking
+			const toolCallProcessor = new ToolCallProcessor()
+			let inLegacyReasoning = false
 
-			for await (const chunk of stream as any) {
-				// Type assertion for the streaming chunk
-				const streamChunk = chunk as any
+			for await (const chunk of stream) {
+				const streamChunk = chunk as unknown as CerebrasStreamChunk
+				const delta = streamChunk.choices?.[0]?.delta
+				if (delta?.reasoning) {
+					yield {
+						type: "reasoning",
+						reasoning: delta.reasoning,
+					}
+				}
 
-				if (streamChunk.choices?.[0]?.delta?.content) {
-					const content = streamChunk.choices[0].delta.content
+				if (delta?.content) {
+					const parsed = splitLegacyThinkingChunk(delta.content, inLegacyReasoning)
+					inLegacyReasoning = parsed.inReasoning
 
-					// Handle reasoning models (Qwen and DeepSeek R1 Distill) that use <think> tags
-					if (isReasoningModel) {
-						// Check if we're entering or continuing reasoning mode
-						if (reasoning || content.includes("<think>")) {
-							reasoning = (reasoning || "") + content
-
-							// Clean the content by removing think tags for display
-							const cleanContent = content.replace(/<think>/g, "").replace(/<\/think>/g, "")
-
-							// Only yield reasoning content if there's actual content after cleaning
-							if (cleanContent.trim()) {
-								yield {
-									type: "reasoning",
-									reasoning: cleanContent,
-								}
-							}
-
-							// Check if reasoning is complete
-							if (reasoning.includes("</think>")) {
-								reasoning = null
-							}
-						} else {
-							// Regular content outside of thinking tags
-							yield {
-								type: "text",
-								text: content,
-							}
+					if (parsed.reasoning) {
+						yield {
+							type: "reasoning",
+							reasoning: parsed.reasoning,
 						}
-					} else {
-						// Non-reasoning models - just yield text content
+					}
+					if (parsed.text) {
 						yield {
 							type: "text",
-							text: content,
+							text: parsed.text,
 						}
 					}
 				}
 
-				// Handle usage information from Cerebras API
-				// Usage is typically only available in the final chunk
+				if (delta?.tool_calls) {
+					yield* toolCallProcessor.processToolCallDeltas(
+						delta.tool_calls as unknown as OpenAI.Chat.ChatCompletionChunk.Choice.Delta.ToolCall[],
+					)
+				}
+
 				if (streamChunk.usage) {
-					const totalCost = this.calculateCost({
-						inputTokens: streamChunk.usage.prompt_tokens || 0,
-						outputTokens: streamChunk.usage.completion_tokens || 0,
-					})
+					const cacheReadTokens = streamChunk.usage.prompt_tokens_details?.cached_tokens || 0
+					const inputTokens = Math.max(0, (streamChunk.usage.prompt_tokens || 0) - cacheReadTokens)
+					const outputTokens = streamChunk.usage.completion_tokens || 0
 
 					yield {
 						type: "usage",
-						inputTokens: streamChunk.usage.prompt_tokens || 0,
-						outputTokens: streamChunk.usage.completion_tokens || 0,
-						cacheReadTokens: 0,
+						inputTokens,
+						outputTokens,
+						cacheReadTokens,
 						cacheWriteTokens: 0,
-						totalCost,
+						totalCost: this.calculateCost({ inputTokens, outputTokens, cacheReadTokens }),
 					}
 				}
 			}
-		} catch (error: any) {
-			// Enhanced error handling for Cerebras API
-			if (error?.status === 429 || error?.code === "rate_limit_exceeded") {
-				// Rate limit error - will be handled by retry decorator with patient backoff
-				const _limits = this.getRateLimits()
-				throw new Error(`Cerebras API rate limit exceeded.`)
+		} catch (error) {
+			const apiError = (typeof error === "object" && error !== null ? error : {}) as CerebrasApiError
+			if (apiError.status === 429 || apiError.code === "rate_limit_exceeded") {
+				throw new RetriableError("Cerebras API rate limit exceeded.", undefined, { cause: error })
 			}
-			if (error?.status === 401) {
-				throw new Error("Cerebras API authentication failed. Please check your API key.")
+			if (apiError.status === 401) {
+				throw new Error("Cerebras API authentication failed. Please check your API key.", { cause: error })
 			}
-			if (error?.status === 403) {
-				throw new Error("Cerebras API access denied. Please check your API key permissions.")
+			if (apiError.status === 403) {
+				throw new Error("Cerebras API access denied. Please check your API key permissions.", { cause: error })
 			}
-			if (error?.status >= 500) {
-				// Server errors - retryable
-				throw new Error(`Cerebras API server error (${error.status}): ${error.message || "Unknown server error"}`)
+			if (apiError.status !== undefined && apiError.status >= 500) {
+				throw new Error(`Cerebras API server error (${apiError.status}): ${apiError.message || "Unknown server error"}`, {
+					cause: error,
+				})
 			}
-			if (error?.status === 400) {
-				// Client errors - not retryable
-				throw new Error(`Cerebras API bad request: ${error.message || "Invalid request parameters"}`)
+			if (apiError.status === 400) {
+				throw new Error(`Cerebras API bad request: ${apiError.message || "Invalid request parameters"}`, {
+					cause: error,
+				})
 			}
-
-			// Re-throw original error for other cases
 			throw error
 		}
 	}
 
-	getModel(): { id: string; info: ModelInfo } {
-		const originalModelId = this.options.apiModelId
-		let apiModelId = originalModelId
-		if (originalModelId === "qwen-3-coder-480b-free") {
-			apiModelId = "qwen-3-coder-480b"
-			return { id: apiModelId, info: cerebrasModels[originalModelId as CerebrasModelId] }
-		}
-
-		if (originalModelId && originalModelId in cerebrasModels) {
-			const id = originalModelId as CerebrasModelId
+	getModel(): { id: CerebrasModelId; info: ModelInfo } {
+		const modelId = this.options.apiModelId
+		if (modelId && modelId in cerebrasModels) {
+			const id = modelId as CerebrasModelId
 			return { id, info: cerebrasModels[id] }
 		}
 		return {
@@ -235,41 +275,19 @@ export class CerebrasHandler implements ApiHandler {
 		}
 	}
 
-	/**
-	 * Get rate limit information for the current model
-	 *
-	 * These limits are used for informational purposes and to calculate appropriate
-	 * retry delays. Since Cerebras inference is extremely fast, users hit these limits
-	 * quickly, so we need to be patient with retries to maximize usage efficiency.
-	 *
-	 * @returns Rate limit configuration for the model
-	 */
-	private getRateLimits(): { requestsPerMinute: number; tokensPerMinute: number } {
-		const modelId = this.getModel().id
-
-		switch (modelId) {
-			case "qwen-3-coder-480b":
-			case "qwen-3-coder-480b-free":
-				return { requestsPerMinute: 10, tokensPerMinute: 150_000 }
-			case "qwen-3-235b-a22b-instruct-2507":
-			case "qwen-3-235b-a22b-thinking-2507":
-				return { requestsPerMinute: 30, tokensPerMinute: 60_000 }
-			case "gpt-oss-120b":
-				return { requestsPerMinute: 30, tokensPerMinute: 64_000 }
-			default:
-				// Default rate limits for unknown models
-				return { requestsPerMinute: 30, tokensPerMinute: 60_000 }
-		}
-	}
-
-	private calculateCost({ inputTokens, outputTokens }: { inputTokens: number; outputTokens: number }): number {
-		const model = this.getModel()
-		const inputPrice = model.info.inputPrice || 0
-		const outputPrice = model.info.outputPrice || 0
-
-		const inputCost = (inputPrice / 1_000_000) * inputTokens
-		const outputCost = (outputPrice / 1_000_000) * outputTokens
-
-		return inputCost + outputCost
+	private calculateCost({
+		inputTokens,
+		outputTokens,
+		cacheReadTokens,
+	}: {
+		inputTokens: number
+		outputTokens: number
+		cacheReadTokens: number
+	}): number {
+		const info = this.getModel().info
+		const inputCost = ((info.inputPrice || 0) / 1_000_000) * inputTokens
+		const outputCost = ((info.outputPrice || 0) / 1_000_000) * outputTokens
+		const cacheReadCost = ((info.cacheReadsPrice ?? info.inputPrice ?? 0) / 1_000_000) * cacheReadTokens
+		return inputCost + outputCost + cacheReadCost
 	}
 }

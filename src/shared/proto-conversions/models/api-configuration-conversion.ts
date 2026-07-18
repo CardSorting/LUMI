@@ -91,6 +91,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.OPENAI_CODEX
 		case "cloudflare":
 			return ProtoApiProvider.CLOUDFLARE
+		case "cerebras":
+			return ProtoApiProvider.CEREBRAS
 		case "cline-pass":
 			return ProtoApiProvider.CLINE_PASS
 		case "xai-oauth":
@@ -115,6 +117,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "openai-codex"
 		case ProtoApiProvider.CLOUDFLARE:
 			return "cloudflare"
+		case ProtoApiProvider.CEREBRAS:
+			return "cerebras"
 		case ProtoApiProvider.CLINE_PASS:
 			return "cline-pass"
 		case ProtoApiProvider.XAI_OAUTH:
@@ -138,6 +142,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		nousResearchApiKey: config.nousResearchApiKey,
 		cloudflareAccountId: config.cloudflareAccountId,
 		cloudflareApiToken: config.cloudflareApiToken,
+		cerebrasApiKey: config.cerebrasApiKey,
 		clineApiKey: config.clineApiKey,
 		embeddingProvider: config.embeddingProvider ? convertApiProviderToProto(config.embeddingProvider) : undefined,
 		embeddingModelId: config.embeddingModelId,
@@ -182,6 +187,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		cloudflareAccountId: protoConfig.cloudflareAccountId,
 		cloudflareApiToken: protoConfig.cloudflareApiToken,
+		cerebrasApiKey: protoConfig.cerebrasApiKey,
 		clineApiKey: protoConfig.clineApiKey,
 		embeddingProvider:
 			protoConfig.embeddingProvider !== undefined ? convertProtoToApiProvider(protoConfig.embeddingProvider) : undefined,

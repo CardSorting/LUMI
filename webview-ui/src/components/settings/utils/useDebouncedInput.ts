@@ -7,30 +7,51 @@ import { useDebounceEffect } from "@/utils/useDebounceEffect"
  *
  * @param initialValue - The initial value for the input
  * @param onChange - Callback function to save the value (e.g., to backend)
- * @param debounceMs - Debounce delay in milliseconds (default: 500ms)
+ * @param debounceMs - Debounce delay in milliseconds (default: 100ms); use 0 for immediate persistence
  * @returns A tuple of [currentValue, setValue] similar to useState
  */
-export function useDebouncedInput<T>(initialValue: T, onChange: (value: T) => void, debounceMs = 100): [T, (value: T) => void] {
+export function useDebouncedInput<T>(
+	initialValue: T,
+	onChange: (value: T) => void | Promise<void>,
+	debounceMs = 100,
+): [T, (value: T) => void] {
 	// Local state to prevent jumpy input - initialize once
 	const [localValue, setLocalValue] = useState(initialValue)
 
 	// Track previous initialValue to detect external changes
 	const prevInitialValueRef = useRef<T>(initialValue)
 	const hasPendingUserChangeRef = useRef(false)
+	const immediateChangeSequenceRef = useRef(0)
 
 	// Sync local state when initialValue changes externally (e.g., when switching Plan/Act tabs)
 	useEffect(() => {
 		if (prevInitialValueRef.current !== initialValue) {
-			hasPendingUserChangeRef.current = false
-			setLocalValue(initialValue)
 			prevInitialValueRef.current = initialValue
+			if (!hasPendingUserChangeRef.current) {
+				setLocalValue(initialValue)
+			}
 		}
 	}, [initialValue])
 
-	const setUserValue = useCallback((value: T) => {
-		hasPendingUserChangeRef.current = true
-		setLocalValue(value)
-	}, [])
+	const setUserValue = useCallback(
+		(value: T) => {
+			setLocalValue(value)
+			if (debounceMs <= 0) {
+				hasPendingUserChangeRef.current = true
+				const sequence = ++immediateChangeSequenceRef.current
+				void Promise.resolve(onChange(value))
+					.catch(() => undefined)
+					.finally(() => {
+						if (sequence === immediateChangeSequenceRef.current) {
+							hasPendingUserChangeRef.current = false
+						}
+					})
+				return
+			}
+			hasPendingUserChangeRef.current = true
+		},
+		[debounceMs, onChange],
+	)
 
 	// Debounced backend save - saves after user stops changing value
 	useDebounceEffect(

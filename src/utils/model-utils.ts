@@ -218,6 +218,10 @@ export function isNativeToolCallingConfig(providerInfo: ApiProviderInfo, enableN
 	if (!enableNativeToolCalls) {
 		return false
 	}
+	// All models in the current Cerebras catalog expose OpenAI-compatible tools.
+	if (normalize(providerInfo.providerId) === "cerebras") {
+		return true
+	}
 	if (!isNextGenModelProvider(providerInfo)) {
 		return false
 	}

@@ -6,11 +6,12 @@ import { useDebouncedInput } from "../utils/useDebouncedInput"
  */
 interface ApiKeyFieldProps {
 	initialValue: string
-	onChange: (value: string) => void
+	onChange: (value: string) => void | Promise<void>
 	providerName: string
 	signupUrl?: string
 	placeholder?: string
 	helpText?: string
+	debounceMs?: number
 }
 
 /**
@@ -23,13 +24,14 @@ export const ApiKeyField = ({
 	signupUrl,
 	placeholder = "Enter API Key...",
 	helpText,
+	debounceMs,
 }: ApiKeyFieldProps) => {
-	const [localValue, setLocalValue] = useDebouncedInput(initialValue, onChange)
+	const [localValue, setLocalValue] = useDebouncedInput(initialValue, onChange, debounceMs)
 
 	return (
 		<div>
 			<VSCodeTextField
-				onInput={(e: any) => setLocalValue(e.target.value)}
+				onInput={(event) => setLocalValue((event.target as HTMLInputElement).value)}
 				placeholder={placeholder}
 				required={true}
 				style={{ width: "100%" }}

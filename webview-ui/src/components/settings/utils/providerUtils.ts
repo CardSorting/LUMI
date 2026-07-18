@@ -1,6 +1,8 @@
 import {
 	ApiConfiguration,
 	ApiProvider,
+	cerebrasDefaultModelId,
+	cerebrasModels,
 	clinePassDefaultModelId,
 	clinePassModels,
 	cloudflareDefaultModelId,
@@ -34,6 +36,8 @@ export function getModelsForProvider(
 	switch (provider) {
 		case "cloudflare":
 			return cloudflareModels
+		case "cerebras":
+			return cerebrasModels
 		case "openai-codex":
 			return openAiCodexModels
 		case "nousResearch":
@@ -88,6 +92,8 @@ export function normalizeApiConfiguration(
 	switch (provider) {
 		case "cloudflare":
 			return getProviderData(cloudflareModels, cloudflareDefaultModelId)
+		case "cerebras":
+			return getProviderData(cerebrasModels, cerebrasDefaultModelId)
 		case "cline-pass":
 			return getProviderData(clinePassModels, clinePassDefaultModelId)
 		case "openai-codex":

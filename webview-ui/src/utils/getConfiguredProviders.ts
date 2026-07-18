@@ -22,6 +22,10 @@ export function getConfiguredProviders(
 			configured.push("openrouter")
 		}
 
+		if (apiConfiguration.cerebrasApiKey) {
+			configured.push("cerebras")
+		}
+
 		if (apiConfiguration.nousResearchApiKey) {
 			configured.push("nousResearch")
 		}
