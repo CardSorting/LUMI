@@ -10,7 +10,7 @@ Last audited: 2026-07-18
 
 | Area | State | Evidence |
 |---|---|---|
-| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `5.8.0` |
+| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `6.0.0` |
 | Workspaces | Root package plus `broccolidb` | `package.json` workspaces: `.`, `broccolidb` |
 | UI | React/Vite webview | `webview-ui/package.json` |
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
