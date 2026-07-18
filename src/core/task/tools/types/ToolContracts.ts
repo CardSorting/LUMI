@@ -23,7 +23,7 @@ export interface IToolHandler {
 	readonly name: DietCodeDefaultTool
 	/** Pure consent declaration. ExecutionFunnel is the only decision-maker. */
 	getApprovalIntent(block: ToolUse): ApprovalIntent
-	execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse>
+	execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse | { kind: "continuation"; continuation: any }>
 	getDescription(block: ToolUse): string
 }
 
@@ -105,7 +105,7 @@ export class SharedToolHandler implements IToolHandler, IPartialBlockHandler {
 		return this.baseHandler.getDescription(block)
 	}
 
-	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse | { kind: "continuation"; continuation: any }> {
 		return this.baseHandler.execute(config, block)
 	}
 

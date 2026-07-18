@@ -1399,6 +1399,12 @@ export class Task {
 				"Interrupted task suspension",
 			).record
 		}
+		// Reconcile and resume unfinished completion sagas during recovery
+		try {
+			await this.toolExecutor.reconcileCompletionSagas()
+		} catch (error) {
+			Logger.warn("[prepareResumeLifecycle] Failed to reconcile completion sagas:", error)
+		}
 		return record
 	}
 

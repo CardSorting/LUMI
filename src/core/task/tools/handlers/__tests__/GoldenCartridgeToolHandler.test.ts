@@ -78,8 +78,9 @@ describe("GoldenCartridgeToolHandler", () => {
 	beforeEach(() => {
 		sinon
 			.stub(executionFunnel, "dispatchAuthorizedDelegatedOperation")
-			.callsFake(async (config, _parentBlock, delegatedBlock, delegatedHandler) =>
-				delegatedHandler.execute(config, delegatedBlock),
+			.callsFake(
+				async (config, _parentBlock, delegatedBlock, delegatedHandler) =>
+					delegatedHandler.execute(config, delegatedBlock) as Promise<ToolResponse>,
 			)
 	})
 

@@ -373,6 +373,28 @@ export interface ExecutionFunnelInput {
 	handler?: IToolHandler
 	/** Non-authoritative result enrichment that must settle before terminal classification. */
 	postProcess?: (result: ToolResponse) => Promise<ToolResponse>
+	correlation?: {
+		completionAttemptId: string
+		evidenceRequestId: string
+	}
+	intent?: {
+		operation: "shell"
+		evidenceRequestId: string
+		completionAttemptId: string
+		taskId: string
+		generationId: string
+		command: string
+		commandDigest: string
+	}
+}
+
+export interface CompletionSagaContinuation {
+	type: "completion_saga"
+	completionAttemptId: string
+	taskId: string
+	generationId: string
+	originatingInvocationId: string
+	phase: "prepared"
 }
 
 export interface ExecutionFunnelOutcome {
@@ -380,6 +402,7 @@ export interface ExecutionFunnelOutcome {
 	result?: ToolResponse
 	warning?: string
 	error?: unknown
+	continuation?: CompletionSagaContinuation
 }
 
 interface MutableDecision {
@@ -396,6 +419,19 @@ interface MutableDecision {
 	lane: "parent" | "sibling" | "subagent"
 	stages: ExecutionFunnelStage[]
 	startedAt: number
+	correlation?: {
+		completionAttemptId: string
+		evidenceRequestId: string
+	}
+	intent?: {
+		operation: "shell"
+		evidenceRequestId: string
+		completionAttemptId: string
+		taskId: string
+		generationId: string
+		command: string
+		commandDigest: string
+	}
 }
 
 function pass(stage: string, reason: string, details?: ExecutionAuditValue): ExecutionFunnelStage {
@@ -448,7 +484,11 @@ export class ExecutionFunnel {
 	}
 
 	/** The only dispatch primitive. It validates the complete causal permit link. */
-	dispatchAuthorizedOperation(config: TaskConfig, block: ToolUse, handler: IToolHandler): Promise<ToolResponse> {
+	dispatchAuthorizedOperation(
+		config: TaskConfig,
+		block: ToolUse,
+		handler: IToolHandler,
+	): Promise<ToolResponse | { kind: "continuation"; continuation: any }> {
 		const invocationId = block.call_id?.trim()
 		if (!invocationId) throw new Error("Tool dispatch rejected: invocation identity is missing.")
 		this.reliability.assertActivePermit(config.taskId, config.taskState.executionGeneration, invocationId)
@@ -495,7 +535,7 @@ export class ExecutionFunnel {
 				intent: this.auditClone(delegatedIntent) as unknown as ExecutionAuditValue,
 			}),
 		)
-		return handler.execute(config, delegatedBlock)
+		return handler.execute(config, delegatedBlock) as Promise<ToolResponse>
 	}
 
 	getCurrentEvent(config: TaskConfig): ExecutionFunnelEvent | undefined {
@@ -511,6 +551,11 @@ export class ExecutionFunnel {
 		} catch {
 			return undefined
 		}
+	}
+
+	isInvocationActive(taskId: string, generationId: string, invocationId: string): boolean {
+		const invocationKey = `${taskId}:${generationId}:${invocationId}`
+		return this.activeInvocations.has(invocationKey)
 	}
 
 	/** Records failures that occur while a transport adapter is preparing the canonical TaskConfig. */
@@ -600,6 +645,8 @@ export class ExecutionFunnel {
 			lane,
 			stages: [],
 			startedAt: Date.now(),
+			correlation: input.correlation,
+			intent: input.intent,
 		}
 		decision.stages.push(
 			pass("invocation.register", "Invocation identity and task generation were registered", {
@@ -888,11 +935,25 @@ export class ExecutionFunnel {
 							{ timeoutMs: 0, maxRetries: 1, concurrencyGroup: "dispatch" },
 						),
 				)
-				const rawResult = this.enrichApprovalEvidence(block, handlerResult, decision.approvalDecision)
+				let rawResult: ToolResponse
+				let continuation: CompletionSagaContinuation | undefined
+				const isContinuation =
+					handlerResult &&
+					typeof handlerResult === "object" &&
+					"kind" in handlerResult &&
+					(handlerResult as any).kind === "continuation"
+				if (isContinuation) {
+					continuation = (handlerResult as any).continuation
+					rawResult = ""
+				} else {
+					rawResult = handlerResult as ToolResponse
+				}
+				const enrichedRawResult = this.enrichApprovalEvidence(block, rawResult, decision.approvalDecision)
 				decision.stages.push(pass("dispatch", "Authorized handler returned exactly one result"))
-				const rawDenied = resultContains(rawResult, USER_DENIAL_RESULT_PATTERN)
-				const rawFailed = isAuthoritativeToolFailure(rawResult)
-				const result = input.postProcess && !rawDenied && !rawFailed ? await input.postProcess(rawResult) : rawResult
+				const rawDenied = resultContains(enrichedRawResult, USER_DENIAL_RESULT_PATTERN)
+				const rawFailed = isAuthoritativeToolFailure(enrichedRawResult)
+				const result =
+					input.postProcess && !rawDenied && !rawFailed ? await input.postProcess(enrichedRawResult) : enrichedRawResult
 				decision.stages.push(
 					input.postProcess && !rawDenied && !rawFailed
 						? pass("result.post_process", "Authorized result enrichment completed")
@@ -966,6 +1027,7 @@ export class ExecutionFunnel {
 				}
 				return {
 					result,
+					continuation,
 					event: this.publish(
 						decision,
 						"succeeded",
@@ -1553,6 +1615,8 @@ export class ExecutionFunnel {
 			workspaceRevision: decision.config.taskState.workspaceContentVersion,
 			evaluatedAt: now,
 			completedAt: terminal ? now : undefined,
+			correlation: decision.correlation,
+			intentDigest: decision.intent?.commandDigest,
 		})
 		decision.config.taskState.executionFunnelEventJson = JSON.stringify(event)
 		const invocationContext = getToolInvocationContext()
@@ -1564,6 +1628,37 @@ export class ExecutionFunnel {
 			}
 			const history = decision.config.taskState.executionFunnelHistory ?? []
 			decision.config.taskState.executionFunnelHistory = [...history.slice(-24), event]
+
+			try {
+				const activeLockClaim = decision.config.taskState.activeLockClaim
+				const mode =
+					activeLockClaim && typeof activeLockClaim === "object" && "authorityMode" in activeLockClaim
+						? (activeLockClaim as any).authorityMode
+						: "sqlite"
+				if (mode === "sqlite") {
+					void (async () => {
+						try {
+							const { getCoordinationRawDb } = require("../../../../infrastructure/db/Config")
+							const dbInstance = await getCoordinationRawDb()
+							dbInstance
+								.prepare(
+									`INSERT OR REPLACE INTO audit_events (id, userId, agentId, type, data, createdAt)
+									 VALUES (?, ?, ?, ?, ?, ?)`,
+								)
+								.run(
+									event.invocationId,
+									decision.config.ulid,
+									null,
+									"execution_event",
+									JSON.stringify(event),
+									Date.now(),
+								)
+						} catch (dbError) {
+							Logger.warn("[ExecutionFunnel] Failed to write event to audit_events:", dbError)
+						}
+					})()
+				}
+			} catch (err) {}
 		}
 		return event
 	}

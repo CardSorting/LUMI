@@ -154,6 +154,11 @@ export interface ExecutionFunnelEvent {
 	workspaceRevision: number
 	evaluatedAt: number
 	completedAt?: number
+	correlation?: {
+		completionAttemptId: string
+		evidenceRequestId: string
+	}
+	intentDigest?: string
 }
 
 export function isTerminalExecutionFunnelEvent(

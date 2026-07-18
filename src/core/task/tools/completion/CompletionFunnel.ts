@@ -39,6 +39,7 @@ import {
 	type CompletionFunnelStage,
 } from "@shared/completion/completionFunnelEvent"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import type { LockClaim } from "@shared/governance/lockTypes"
 import { isTaskLifecycleRecord } from "@shared/lifecycle/taskLifecycleEvent"
@@ -1133,32 +1134,130 @@ async function evaluateCompletionDecision(
 	}
 }
 
-export type CompletionFunnelAttemptResult =
-	| {
-			kind: "terminal"
-			decision: CompletionDecision
-			record?: TaskCompletionRecord
-			event: CompletionFunnelEvent
-			commandResult?: ToolResponse
-	  }
-	| { kind: "blocked"; decision: CompletionDecision; event: CompletionFunnelEvent }
-	| {
-			kind: "rejected"
-			decision: CompletionDecision
-			feedback: string
-			files?: string[]
-			images?: string[]
-			event: CompletionFunnelEvent
-	  }
-	| { kind: "settlement_failed"; decision: CompletionDecision; event: CompletionFunnelEvent }
+export interface CompletionAttemptRecord {
+	completionAttemptId: string
+	taskId: string
+	generationId: string
+	originatingInvocationId: string
+	phase:
+		| "prepared"
+		| "evidence_pending"
+		| "evidence_dispatching"
+		| "evidence_succeeded"
+		| "evidence_failed"
+		| "proposal_pending"
+		| "decision_accepted"
+		| "decision_rejected"
+		| "settling"
+		| "completed"
+		| "settlement_failed"
+		| "stale"
+	evidenceRequestId: string | null
+	evidenceInvocationId: string | null
+	evidenceExecutionEventId: string | null
+	commandIntentJson: string | null
+	commandDigest: string | null
+	expectedLifecycleRevision: number
+	proposalEventId: string | null
+	decisionId: string | null
+	version: number
+	createdAt: number
+	updatedAt: number
+}
 
-export async function runCompletionFunnelAttempt(
+export async function getCompletionAttempt(completionAttemptId: string): Promise<CompletionAttemptRecord | undefined> {
+	try {
+		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+		return rawDb.prepare("SELECT * FROM completion_attempts WHERE completionAttemptId = ?").get(completionAttemptId) as
+			| CompletionAttemptRecord
+			| undefined
+	} catch (error) {
+		Logger.error(`[CompletionFunnel] Failed to get completion attempt ${completionAttemptId}:`, error)
+		return undefined
+	}
+}
+
+export async function insertCompletionAttempt(record: CompletionAttemptRecord): Promise<void> {
+	try {
+		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+		rawDb
+			.prepare(
+				`INSERT INTO completion_attempts (
+					completionAttemptId, taskId, generationId, originatingInvocationId,
+					phase, evidenceRequestId, evidenceInvocationId, evidenceExecutionEventId,
+					commandIntentJson, commandDigest, expectedLifecycleRevision,
+					proposalEventId, decisionId, version, createdAt, updatedAt
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			)
+			.run(
+				record.completionAttemptId,
+				record.taskId,
+				record.generationId,
+				record.originatingInvocationId,
+				record.phase,
+				record.evidenceRequestId,
+				record.evidenceInvocationId,
+				record.evidenceExecutionEventId,
+				record.commandIntentJson,
+				record.commandDigest,
+				record.expectedLifecycleRevision,
+				record.proposalEventId,
+				record.decisionId,
+				record.version,
+				record.createdAt,
+				record.updatedAt,
+			)
+	} catch (error) {
+		Logger.error(`[CompletionFunnel] Failed to insert completion attempt:`, error)
+		throw error
+	}
+}
+
+export async function updateCompletionAttemptCAS(
+	expectedVersion: number,
+	record: Partial<CompletionAttemptRecord> & { completionAttemptId: string },
+): Promise<boolean> {
+	try {
+		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+		const keys = Object.keys(record).filter((k) => k !== "completionAttemptId")
+		const setClause = keys.map((k) => `${k} = ?`).join(", ")
+		const values = keys.map((k) => (record as any)[k])
+		const query = `UPDATE completion_attempts SET ${setClause}, version = version + 1, updatedAt = ? WHERE completionAttemptId = ? AND version = ?`
+		const result = rawDb.prepare(query).run(...values, Date.now(), record.completionAttemptId, expectedVersion)
+		return result.changes > 0
+	} catch (error) {
+		Logger.error(`[CompletionFunnel] Failed to update completion attempt CAS:`, error)
+		throw error
+	}
+}
+
+export interface PreparedCompletionAttempt {
+	kind: "evidence_required" | "proposal_ready" | "blocked" | "rejected" | "terminal"
+	completionAttemptId: string
+	taskId: string
+	generationId: string
+	originatingInvocationId: string
+	expectedLifecycleRevision: number
+	executionIntent?: {
+		command: string
+	}
+	decision?: CompletionDecision
+	feedback?: string
+	files?: any
+	images?: any
+	event?: CompletionFunnelEvent
+	record?: TaskCompletionRecord
+}
+
+export async function prepareCompletionAttempt(
 	config: TaskConfig,
-	input: { result: string; taskDescription: string; command?: string; commandResult?: ToolResponse },
-	options?: {
-		auditMetadata?: TaskAuditMetadata
+	input: {
+		result: string
+		taskDescription: string
+		command?: string
+		originatingInvocationId: string
 	},
-): Promise<CompletionFunnelAttemptResult> {
+): Promise<PreparedCompletionAttempt> {
 	const activeLockContainer = config.taskState.activeLockClaim as LockClaim | { lockClaim?: LockClaim } | undefined
 	const activeLockClaim =
 		activeLockContainer && "lockClaim" in activeLockContainer
@@ -1177,6 +1276,16 @@ export async function runCompletionFunnelAttempt(
 			)
 		}
 	}
+	const stateIdentifier = await resolveAuditStateIdentifier(config)
+	const evaluatedStateVersion = config.taskState.workspaceStateVersion || 0
+	const proposedDecisionId = canonicalDecisionId({
+		taskId: config.taskId,
+		evaluatedStateVersion,
+		checkpoint: stateIdentifier,
+		outcome: "succeeded",
+		decisionSchemaVersion: COMPLETION_DECISION_SCHEMA_VERSION,
+	})
+
 	if (existingCompletion) {
 		const decision: CompletionDecision = {
 			status: "approved",
@@ -1204,20 +1313,20 @@ export async function runCompletionFunnelAttempt(
 		})
 		await commitCompletionLifecycleFact(config, existingCompletion.decisionId, existingCompletion.committedAt)
 		await publishCompletionFunnelEvent(config, event)
-		return { kind: "terminal", decision, record: existingCompletion, event }
+		return {
+			kind: "terminal",
+			completionAttemptId: randomUUID(),
+			taskId: config.taskId,
+			generationId: existingCompletion.leaseEpoch,
+			originatingInvocationId: input.originatingInvocationId,
+			expectedLifecycleRevision: 0,
+			decision,
+			record: existingCompletion,
+			event,
+		}
 	}
 
-	const stateIdentifier = await resolveAuditStateIdentifier(config)
-	const evaluatedStateVersion = config.taskState.workspaceStateVersion || 0
-	const proposedDecisionId = canonicalDecisionId({
-		taskId: config.taskId,
-		evaluatedStateVersion,
-		checkpoint: stateIdentifier,
-		outcome: "succeeded",
-		decisionSchemaVersion: COMPLETION_DECISION_SCHEMA_VERSION,
-	})
-
-	// Check if a rejection record already exists for this decisionId (idempotent rejection check)
+	// Check if a rejection record already exists for this decisionId
 	if (authorityMode === "sqlite") {
 		try {
 			const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
@@ -1250,8 +1359,13 @@ export async function runCompletionFunnelAttempt(
 				}
 				return {
 					kind: "rejected",
+					completionAttemptId: (existingRejection.completionAttemptId as string) || randomUUID(),
+					taskId: config.taskId,
+					generationId: (existingRejection.generationId as string) || "",
+					originatingInvocationId: input.originatingInvocationId,
+					expectedLifecycleRevision: (existingRejection.lifecycleRevision as number) || 0,
 					decision,
-					feedback: existingRejection.feedback as string,
+					feedback,
 					event,
 				}
 			}
@@ -1269,14 +1383,18 @@ export async function runCompletionFunnelAttempt(
 	if (decision.status !== "approved") {
 		const event = decisionToCompletionFunnelEvent(config, evaluation.funnelDecision)
 		await publishCompletionFunnelEvent(config, event)
-		return { kind: "blocked", decision, event }
+		return {
+			kind: "blocked",
+			completionAttemptId: randomUUID(),
+			taskId: config.taskId,
+			generationId: "",
+			originatingInvocationId: input.originatingInvocationId,
+			expectedLifecycleRevision: 0,
+			decision,
+			event,
+		}
 	}
 
-	// Generate proposal and attempt IDs
-	const completionAttemptId = randomUUID()
-	const proposalEventId = randomUUID()
-
-	// 1. Submit SuspendGeneration
 	const authority = getTaskLifecycleAuthority(config.taskState)
 	const currentLifecycle =
 		authority.readProjection(config.taskState) ?? (await authority.restore(config.taskState, config.taskId))
@@ -1284,22 +1402,217 @@ export async function runCompletionFunnelAttempt(
 		throw new Error("Cannot propose completion without an active lifecycle record.")
 	}
 
+	const completionAttemptId = randomUUID()
+	const expectedLifecycleRevision = currentLifecycle.lifecycleRevision
+
+	// If command is present, it is evidence_required, otherwise it is proposal_ready.
+	const hasCommand = !!input.command?.trim()
+	const phase = hasCommand ? "evidence_pending" : "prepared"
+
+	if (authorityMode === "sqlite") {
+		const commandDigest = input.command ? createHash("sha256").update(input.command).digest("hex") : null
+		await insertCompletionAttempt({
+			completionAttemptId,
+			taskId: config.taskId,
+			generationId: currentLifecycle.generationId,
+			originatingInvocationId: input.originatingInvocationId,
+			phase,
+			evidenceRequestId: hasCommand ? randomUUID() : null,
+			evidenceInvocationId: null,
+			evidenceExecutionEventId: null,
+			commandIntentJson: input.command ? JSON.stringify({ command: input.command }) : null,
+			commandDigest,
+			expectedLifecycleRevision,
+			proposalEventId: null,
+			decisionId: proposedDecisionId,
+			version: 1,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+		})
+	}
+
+	if (hasCommand) {
+		return {
+			kind: "evidence_required",
+			completionAttemptId,
+			taskId: config.taskId,
+			generationId: currentLifecycle.generationId,
+			originatingInvocationId: input.originatingInvocationId,
+			expectedLifecycleRevision,
+			executionIntent: {
+				command: input.command!,
+			},
+		}
+	}
+	return {
+		kind: "proposal_ready",
+		completionAttemptId,
+		taskId: config.taskId,
+		generationId: currentLifecycle.generationId,
+		originatingInvocationId: input.originatingInvocationId,
+		expectedLifecycleRevision,
+	}
+}
+
+export async function continueCompletionAttempt(
+	config: TaskConfig,
+	input: {
+		completionAttemptId: string
+		evidenceExecutionEventId?: string
+		resultText: string
+		taskDescription: string
+	},
+): Promise<CompletionFunnelAttemptResult> {
+	const activeLockContainer = config.taskState.activeLockClaim as LockClaim | { lockClaim?: LockClaim } | undefined
+	const activeLockClaim =
+		activeLockContainer && "lockClaim" in activeLockContainer
+			? activeLockContainer.lockClaim
+			: (activeLockContainer as LockClaim | undefined)
+	const authorityMode = activeLockClaim?.authorityMode ?? configuredCoordinationAuthorityMode()
+
+	let attempt = await getCompletionAttempt(input.completionAttemptId)
+	if (!attempt) {
+		throw new Error(`Completion attempt ${input.completionAttemptId} not found.`)
+	}
+
+	// 1. Verify and process evidence if requested
+	if (attempt.commandIntentJson) {
+		if (!input.evidenceExecutionEventId) {
+			await updateCompletionAttemptCAS(attempt.version, {
+				completionAttemptId: attempt.completionAttemptId,
+				phase: "evidence_failed",
+			})
+			const rejectedEvent: CompletionFunnelEvent = {
+				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+				taskId: config.taskId,
+				phase: "decision_rejected",
+				kind: "soft_block",
+				terminal: false,
+				nextAllowedAction: "continue_execution",
+				forbiddenActions: ["attempt_completion"],
+				canonicalInstruction: "Completion rejected. Continue execution.",
+				reason: "Validation command execution failed or was denied.",
+				stages: [],
+				graphRevision: getCompletionGraphRevision(config),
+				evaluatedAt: Date.now(),
+				decisionId: attempt.decisionId || "",
+			}
+			await publishCompletionFunnelEvent(config, rejectedEvent)
+			return {
+				kind: "rejected",
+				decision: {
+					status: "blocked_recoverable",
+					code: "AUDIT_REQUIRED",
+					nextTransition: "RETURN_TO_EXECUTION",
+					stateVersion: attempt.expectedLifecycleRevision,
+					decisionId: attempt.decisionId || "",
+				},
+				feedback: "Validation command execution failed or was denied.",
+				event: rejectedEvent,
+			}
+		}
+
+		// Load execution terminal-event from immutable database to prevent fabricated evidence!
+		const eventObj = await loadTerminalExecutionEvent(input.evidenceExecutionEventId)
+		if (!eventObj) {
+			throw new Error(`Immutable execution event ${input.evidenceExecutionEventId} not found or not terminal.`)
+		}
+		// Validate event integrity
+		if (
+			eventObj.taskId !== attempt.taskId ||
+			eventObj.taskGeneration !== attempt.generationId ||
+			eventObj.invocationId !== attempt.evidenceInvocationId ||
+			eventObj.correlation?.completionAttemptId !== attempt.completionAttemptId ||
+			eventObj.phase !== "succeeded"
+		) {
+			await updateCompletionAttemptCAS(attempt.version, {
+				completionAttemptId: attempt.completionAttemptId,
+				phase: "evidence_failed",
+				evidenceExecutionEventId: input.evidenceExecutionEventId,
+			})
+			const reasonText = `Validation command rejected or failed integrity check. Reason: ${eventObj.reason || "Integrity validation mismatch."}`
+			const rejectedEvent: CompletionFunnelEvent = {
+				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+				taskId: config.taskId,
+				phase: "decision_rejected",
+				kind: "soft_block",
+				terminal: false,
+				nextAllowedAction: "continue_execution",
+				forbiddenActions: ["attempt_completion"],
+				canonicalInstruction: "Completion rejected. Continue execution.",
+				reason: reasonText,
+				stages: [],
+				graphRevision: getCompletionGraphRevision(config),
+				evaluatedAt: Date.now(),
+				decisionId: attempt.decisionId || "",
+			}
+			await publishCompletionFunnelEvent(config, rejectedEvent)
+			return {
+				kind: "rejected",
+				decision: {
+					status: "blocked_recoverable",
+					code: "AUDIT_REQUIRED",
+					nextTransition: "RETURN_TO_EXECUTION",
+					stateVersion: attempt.expectedLifecycleRevision,
+					decisionId: attempt.decisionId || "",
+				},
+				feedback: reasonText,
+				event: rejectedEvent,
+			}
+		}
+
+		const updated = await updateCompletionAttemptCAS(attempt.version, {
+			completionAttemptId: attempt.completionAttemptId,
+			phase: "evidence_succeeded",
+			evidenceExecutionEventId: input.evidenceExecutionEventId,
+		})
+		if (updated) {
+			attempt = (await getCompletionAttempt(attempt.completionAttemptId))!
+		}
+	}
+
+	// 2. Perform the lifecycle suspension and proposal
+	const authority = getTaskLifecycleAuthority(config.taskState)
+	const currentLifecycle =
+		authority.readProjection(config.taskState) ?? (await authority.restore(config.taskState, config.taskId))
+	if (!currentLifecycle || currentLifecycle.lifecycleRevision !== attempt.expectedLifecycleRevision) {
+		throw new Error("Lifecycle generation has changed or revision mismatch.")
+	}
+
+	const proposalEventId = randomUUID()
+
+	const updated = await updateCompletionAttemptCAS(attempt.version, {
+		completionAttemptId: attempt.completionAttemptId,
+		phase: "proposal_pending",
+		proposalEventId,
+	})
+	if (updated) {
+		attempt = (await getCompletionAttempt(attempt.completionAttemptId))!
+	}
+
 	const suspendResult = await authority.submit(config.taskState, {
 		type: "SuspendGeneration",
 		intentId: createTaskLifecycleIntentId(),
 		taskId: config.taskId,
-		generationId: currentLifecycle.generationId,
+		generationId: attempt.generationId,
 		cause: {
 			source: "completion_funnel",
-			reason: `awaiting_completion_decision:${completionAttemptId}`,
-			originatingOperationId: proposedDecisionId,
+			reason: `awaiting_completion_decision:${attempt.completionAttemptId}`,
+			originatingOperationId: attempt.decisionId || "",
 		},
 	})
 	if (suspendResult.kind === "rejected") {
 		throw new Error(`Lifecycle suspension rejected (${suspendResult.code}): ${suspendResult.reason}`)
 	}
 
-	// 2. Publish Proposed event
+	const evaluation = await evaluateCompletionDecision(
+		config,
+		input.resultText,
+		input.taskDescription,
+		attempt.decisionId || "",
+		attempt.expectedLifecycleRevision,
+	)
+
 	const proposedEvent: CompletionFunnelEvent = {
 		schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
 		taskId: config.taskId,
@@ -1313,22 +1626,22 @@ export async function runCompletionFunnelAttempt(
 		stages: evaluation.funnelDecision.stages,
 		graphRevision: getCompletionGraphRevision(config),
 		evaluatedAt: Date.now(),
-		decisionId: proposedDecisionId,
+		decisionId: attempt.decisionId || "",
 	}
 	await publishCompletionFunnelEvent(config, proposedEvent)
 
-	// 3. Ask User (blocks on the yes/no/feedback modal)
+	// 3. Ask User
 	const { response, text, images, files } = await config.callbacks.ask("completion_result", "", false)
 
-	// Case 1: Accepted
+	// Case A: Accepted
 	if (response === "yesButtonClicked") {
 		const completionMessageTs = await config.callbacks.say(
 			"completion_result",
-			input.result,
+			input.resultText,
 			undefined,
 			undefined,
 			false,
-			options?.auditMetadata,
+			config.taskState.lastCompletionAudit,
 		)
 		await config.callbacks.saveCheckpoint(true, completionMessageTs)
 
@@ -1352,7 +1665,7 @@ export async function runCompletionFunnelAttempt(
 							60_000,
 						)
 						commitClaim = {
-							claimId: `completion:${proposedDecisionId}`,
+							claimId: `completion:${attempt.decisionId}`,
 							resourceKey: lease.resource,
 							ownerId: lease.ownerId,
 							fencingToken: lease.fencingToken,
@@ -1371,11 +1684,13 @@ export async function runCompletionFunnelAttempt(
 					}
 					const record: TaskCompletionRecord = {
 						taskId: config.taskId,
-						decisionId: proposedDecisionId,
+						decisionId: attempt.decisionId || "",
 						status: "succeeded",
-						evaluatedStateVersion,
-						evaluatedCheckpointJson: canonicalCompletionJson({ checkpoint: stateIdentifier }),
-						decisionJson: canonicalCompletionJson({ decision, result: input.result }),
+						evaluatedStateVersion: attempt.expectedLifecycleRevision,
+						evaluatedCheckpointJson: canonicalCompletionJson({
+							checkpoint: await resolveAuditStateIdentifier(config),
+						}),
+						decisionJson: canonicalCompletionJson({ decision: evaluation.decision, result: input.resultText }),
 						ownerId: commitClaim.ownerId,
 						leaseEpoch: commitClaim.leaseEpoch,
 						fencingToken: commitClaim.fencingToken,
@@ -1399,19 +1714,18 @@ export async function runCompletionFunnelAttempt(
 				}
 			}
 
-			const decisionId = committedRecord?.decisionId ?? proposedDecisionId
+			const finalDecisionId = committedRecord?.decisionId ?? attempt.decisionId ?? ""
 			const committedAt = committedRecord?.committedAt ?? Date.now()
 
-			// Submit SettleCompletion
 			const settleResult = await authority.submit(config.taskState, {
 				type: "SettleCompletion",
 				intentId: createTaskLifecycleIntentId(),
 				taskId: config.taskId,
-				generationId: currentLifecycle.generationId,
+				generationId: attempt.generationId,
 				cause: {
 					source: "completion_funnel",
 					reason: "CompletionFunnel durably committed the semantic completion fact.",
-					originatingOperationId: decisionId,
+					originatingOperationId: finalDecisionId,
 					authoritativeAt: committedAt,
 				},
 			})
@@ -1419,7 +1733,11 @@ export async function runCompletionFunnelAttempt(
 				throw new Error(`Lifecycle settlement rejected (${settleResult.code}): ${settleResult.reason}`)
 			}
 
-			// Publish completed event
+			await updateCompletionAttemptCAS(attempt.version, {
+				completionAttemptId: attempt.completionAttemptId,
+				phase: "completed",
+			})
+
 			const acceptedEvent: CompletionFunnelEvent = {
 				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
 				taskId: config.taskId,
@@ -1433,19 +1751,22 @@ export async function runCompletionFunnelAttempt(
 				stages: [...evaluation.funnelDecision.stages, pass("terminal_commit", "Durable completion committed", true)],
 				graphRevision: getCompletionGraphRevision(config),
 				evaluatedAt: Date.now(),
-				decisionId,
+				decisionId: finalDecisionId,
 				committedAt,
 			}
 			await publishCompletionFunnelEvent(config, acceptedEvent)
 			return {
 				kind: "terminal",
-				decision: { ...decision, decisionId },
+				decision: { ...evaluation.decision, decisionId: finalDecisionId },
 				record: committedRecord,
 				event: acceptedEvent,
-				commandResult: input.commandResult,
 			}
 		} catch (error) {
 			Logger.error("[CompletionFunnel] Acceptance settlement failed:", error)
+			await updateCompletionAttemptCAS(attempt.version, {
+				completionAttemptId: attempt.completionAttemptId,
+				phase: "settlement_failed",
+			})
 			const failedEvent: CompletionFunnelEvent = {
 				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
 				taskId: config.taskId,
@@ -1459,14 +1780,14 @@ export async function runCompletionFunnelAttempt(
 				stages: evaluation.funnelDecision.stages,
 				graphRevision: getCompletionGraphRevision(config),
 				evaluatedAt: Date.now(),
-				decisionId: proposedDecisionId,
+				decisionId: attempt.decisionId || "",
 			}
 			await publishCompletionFunnelEvent(config, failedEvent)
-			return { kind: "settlement_failed", decision, event: failedEvent }
+			return { kind: "settlement_failed", decision: evaluation.decision, event: failedEvent }
 		}
 	}
 
-	// Case 2: Rejected
+	// Case B: Rejected
 	const feedbackText = text ?? ""
 	try {
 		if (authorityMode === "sqlite") {
@@ -1479,10 +1800,10 @@ export async function runCompletionFunnelAttempt(
 					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				)
 				.run(
-					proposedDecisionId,
+					attempt.decisionId || "",
 					config.taskId,
-					currentLifecycle.generationId,
-					completionAttemptId,
+					attempt.generationId,
+					attempt.completionAttemptId,
 					proposalEventId,
 					suspendResult.record.lifecycleRevision,
 					feedbackText,
@@ -1492,24 +1813,28 @@ export async function runCompletionFunnelAttempt(
 				)
 		}
 
-		// Submit ReactivateAfterCompletionRejection to reactivate
 		const activateResult = await authority.submit(config.taskState, {
 			type: "ReactivateAfterCompletionRejection",
 			intentId: createTaskLifecycleIntentId(),
 			taskId: config.taskId,
-			generationId: currentLifecycle.generationId,
+			generationId: attempt.generationId,
 			expectedRevision: suspendResult.record.lifecycleRevision,
-			completionAttemptId,
-			decisionId: proposedDecisionId,
+			completionAttemptId: attempt.completionAttemptId,
+			decisionId: attempt.decisionId || "",
 			cause: {
 				source: "completion_funnel",
 				reason: "The user rejected the completion attempt and provided feedback.",
-				originatingOperationId: proposedDecisionId,
+				originatingOperationId: attempt.decisionId || "",
 			},
 		})
 		if (activateResult.kind === "rejected") {
 			throw new Error(`Lifecycle reactivation rejected (${activateResult.code}): ${activateResult.reason}`)
 		}
+
+		await updateCompletionAttemptCAS(attempt.version, {
+			completionAttemptId: attempt.completionAttemptId,
+			phase: "decision_rejected",
+		})
 
 		const rejectedEvent: CompletionFunnelEvent = {
 			schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
@@ -1524,12 +1849,44 @@ export async function runCompletionFunnelAttempt(
 			stages: evaluation.funnelDecision.stages,
 			graphRevision: getCompletionGraphRevision(config),
 			evaluatedAt: Date.now(),
-			decisionId: proposedDecisionId,
+			decisionId: attempt.decisionId || "",
 		}
 		await publishCompletionFunnelEvent(config, rejectedEvent)
-		return { kind: "rejected", decision, feedback: feedbackText, files, images, event: rejectedEvent }
+		return { kind: "rejected", decision: evaluation.decision, feedback: feedbackText, files, images, event: rejectedEvent }
 	} catch (error) {
 		Logger.error("[CompletionFunnel] Rejection processing failed:", error)
 		throw error
+	}
+}
+
+export type CompletionFunnelAttemptResult =
+	| {
+			kind: "terminal"
+			decision: CompletionDecision
+			record?: TaskCompletionRecord
+			event: CompletionFunnelEvent
+	  }
+	| { kind: "blocked"; decision: CompletionDecision; event: CompletionFunnelEvent }
+	| {
+			kind: "rejected"
+			decision: CompletionDecision
+			feedback: string
+			files?: string[]
+			images?: string[]
+			event: CompletionFunnelEvent
+	  }
+	| { kind: "settlement_failed"; decision: CompletionDecision; event: CompletionFunnelEvent }
+
+export async function loadTerminalExecutionEvent(eventId: string): Promise<ExecutionFunnelEvent | undefined> {
+	try {
+		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+		const eventRow = rawDb.prepare("SELECT data FROM audit_events WHERE id = ?").get(eventId) as { data: string } | undefined
+		if (!eventRow) return undefined
+		const eventObj = JSON.parse(eventRow.data) as ExecutionFunnelEvent
+		if (eventObj.terminal) return eventObj
+		return undefined
+	} catch (error) {
+		Logger.error(`[CompletionFunnel] Failed to load terminal event ${eventId}:`, error)
+		return undefined
 	}
 }

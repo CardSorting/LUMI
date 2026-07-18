@@ -596,6 +596,20 @@ export class ToolExecutor {
 			postProcess: (result) => this.postProcessSuccessfulResult(block, config, result),
 		})
 		if (outcome.warning) void this.say("text", outcome.warning).catch(() => undefined)
+		if (outcome.continuation) {
+			const { CompletionSagaCoordinator } = await import("./tools/completion/CompletionSagaCoordinator")
+			try {
+				const finalResult = await CompletionSagaCoordinator.consume(config, outcome.event, this.getTaskSignal())
+				this.pushToolResult(finalResult, block)
+			} catch (error) {
+				const structuredError = (await import("@core/prompts/responses")).formatResponse.toolError(
+					`Completion saga failed: ${error instanceof Error ? error.message : String(error)}`,
+				)
+				this.pushToolResult(structuredError, block)
+			}
+			this.latencyTracker?.markIoStage("envelope_completed", invocationDetail)
+			return
+		}
 		if (outcome.result === undefined) {
 			const message = outcome.event.reason
 			if (outcome.event.phase !== "cancelled") {
@@ -701,5 +715,11 @@ export class ToolExecutor {
 		}
 
 		return toolResult
+	}
+
+	public async reconcileCompletionSagas(): Promise<void> {
+		const config = await this.asToolConfig()
+		const { CompletionSagaCoordinator } = await import("./tools/completion/CompletionSagaCoordinator")
+		await CompletionSagaCoordinator.reconcileForTask(config)
 	}
 }

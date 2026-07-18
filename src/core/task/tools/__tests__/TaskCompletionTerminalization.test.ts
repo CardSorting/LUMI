@@ -73,6 +73,25 @@ async function createTestDb(dbPath: string): Promise<{ db: Kysely<Schema>; rawDb
 		UNIQUE(taskId, generationId, completionAttemptId)
 	)`)
 
+	await execute(`CREATE TABLE IF NOT EXISTS completion_attempts (
+		completionAttemptId TEXT PRIMARY KEY,
+		taskId TEXT NOT NULL,
+		generationId TEXT NOT NULL,
+		originatingInvocationId TEXT NOT NULL,
+		phase TEXT NOT NULL,
+		evidenceRequestId TEXT,
+		evidenceInvocationId TEXT,
+		evidenceExecutionEventId TEXT,
+		commandIntentJson TEXT,
+		commandDigest TEXT,
+		expectedLifecycleRevision INTEGER NOT NULL,
+		proposalEventId TEXT,
+		decisionId TEXT,
+		version INTEGER NOT NULL,
+		createdAt BIGINT NOT NULL,
+		updatedAt BIGINT NOT NULL
+	)`)
+
 	return { db, rawDb }
 }
 
@@ -639,6 +658,161 @@ describe("TaskCompletionTerminalization", () => {
 				throw new Error("reactivateResult was not rejected")
 			}
 			reactivateResult.code.should.equal("cancellation_fenced")
+		})
+	})
+
+	describe("Split-transaction completion attempts & recovery", () => {
+		beforeEach(async () => {
+			const { setDbPath } = await import("@/infrastructure/db/Config")
+			setDbPath(dbPath)
+		})
+
+		afterEach(async () => {
+			const { destroyDb } = await import("@/infrastructure/db/Config")
+			await destroyDb()
+		})
+
+		it("can durably insert and update completion attempts with version CAS", async () => {
+			const { insertCompletionAttempt, getCompletionAttempt, updateCompletionAttemptCAS } = await import(
+				"../completion/CompletionFunnel"
+			)
+
+			const record = {
+				completionAttemptId: "attempt-99",
+				taskId: "task-99",
+				generationId: "gen-1",
+				originatingInvocationId: "inv-1",
+				phase: "prepared" as const,
+				evidenceRequestId: null,
+				evidenceInvocationId: null,
+				evidenceExecutionEventId: null,
+				commandIntentJson: null,
+				commandDigest: null,
+				expectedLifecycleRevision: 1,
+				proposalEventId: null,
+				decisionId: "dec-99",
+				version: 1,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			}
+
+			await insertCompletionAttempt(record)
+
+			const fetched = await getCompletionAttempt("attempt-99")
+			fetched!.should.not.be.undefined()
+			fetched!.taskId.should.equal("task-99")
+			fetched!.phase.should.equal("prepared")
+			fetched!.version.should.equal(1)
+
+			// CAS update succeeds on matching version
+			const success = await updateCompletionAttemptCAS(1, {
+				completionAttemptId: "attempt-99",
+				phase: "evidence_pending",
+			})
+			success.should.be.true()
+
+			const updated = await getCompletionAttempt("attempt-99")
+			updated!.phase.should.equal("evidence_pending")
+			updated!.version.should.equal(2)
+
+			// CAS update fails on mismatched version
+			const fail = await updateCompletionAttemptCAS(1, {
+				completionAttemptId: "attempt-99",
+				phase: "completed",
+			})
+			fail.should.be.false()
+		})
+
+		it("enforces transaction-split permit release boundary and coordinator consume validation", async () => {
+			const { CompletionSagaCoordinator } = await import("../completion/CompletionSagaCoordinator")
+			const { insertCompletionAttempt } = await import("../completion/CompletionFunnel")
+			const { EXECUTION_FUNNEL_SCHEMA_VERSION } = await import("@shared/execution/executionFunnelEvent")
+
+			// 1. Refuse raw handler continuation without committed terminal event
+			const dummyEvent = {
+				schemaVersion: EXECUTION_FUNNEL_SCHEMA_VERSION,
+				taskId: "task-1",
+				taskGeneration: "gen-1",
+				invocationId: "inv-1",
+				toolName: "attempt_completion",
+				lane: "parent" as const,
+				phase: "executing" as const,
+				kind: "allow" as const,
+				reasonCode: "authorized" as const,
+				terminal: false, // NOT terminal!
+				reason: "",
+				stages: [],
+				workspaceRevision: 1,
+				evaluatedAt: Date.now(),
+			}
+
+			let errorThrown = false
+			try {
+				await CompletionSagaCoordinator.consume({} as any, dummyEvent)
+			} catch (err: any) {
+				errorThrown = true
+				err.message.should.containEql("only consume committed terminal execution events")
+			}
+			errorThrown.should.be.true()
+
+			// 2. Refuse to consume if terminal event is committed but no matching completion attempt is stored
+			const terminalEvent = {
+				...dummyEvent,
+				phase: "succeeded" as const,
+				terminal: true,
+			}
+
+			errorThrown = false
+			try {
+				await CompletionSagaCoordinator.consume({} as any, terminalEvent)
+			} catch (err: any) {
+				errorThrown = true
+				err.message.should.containEql("No completion attempt found matching committed event")
+			}
+			errorThrown.should.be.true()
+		})
+
+		it("loadTerminalExecutionEvent repository method loads only terminal execution events", async () => {
+			const { loadTerminalExecutionEvent } = await import("../completion/CompletionFunnel")
+			const { getCoordinationRawDb } = await import("@/infrastructure/db/Config")
+
+			const rawDb = await getCoordinationRawDb()
+
+			// Insert user-1 to satisfy foreign key constraint!
+			rawDb.prepare("INSERT OR REPLACE INTO users (id, createdAt) VALUES (?, ?)").run("user-1", Date.now())
+
+			// Non-terminal event
+			const nonTerminalData = JSON.stringify({
+				taskId: "task-test",
+				taskGeneration: "gen-1",
+				invocationId: "inv-non-term",
+				terminal: false,
+			})
+			rawDb
+				.prepare(
+					"INSERT OR REPLACE INTO audit_events (id, userId, agentId, type, data, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+				)
+				.run("inv-non-term", "user-1", null, "execution_event", nonTerminalData, Date.now())
+
+			const loadedNonTerm = await loadTerminalExecutionEvent("inv-non-term")
+			;(loadedNonTerm === undefined).should.be.true()
+
+			// Terminal event
+			const terminalData = JSON.stringify({
+				taskId: "task-test",
+				taskGeneration: "gen-1",
+				invocationId: "inv-term",
+				terminal: true,
+			})
+			rawDb
+				.prepare(
+					"INSERT OR REPLACE INTO audit_events (id, userId, agentId, type, data, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+				)
+				.run("inv-term", "user-1", null, "execution_event", terminalData, Date.now())
+
+			const loadedTerm = await loadTerminalExecutionEvent("inv-term")
+			loadedTerm!.should.not.be.undefined()
+			loadedTerm!.invocationId.should.equal("inv-term")
 		})
 	})
 })

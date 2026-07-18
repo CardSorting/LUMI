@@ -1,23 +1,17 @@
-import { randomUUID } from "node:crypto"
-import type Anthropic from "@anthropic-ai/sdk"
 import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { formatResponse } from "@core/prompts/responses"
-import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { telemetryService } from "@services/telemetry"
 import { type GatePolicyProvenance, resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
 import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
 import { buildAuditHookMetadata } from "@shared/audit/completionAudit"
-import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import { markCompletionAttemptFinished } from "../attemptCompletionUtils"
-import { runCompletionFunnelAttempt } from "../completion/CompletionFunnel"
+import { prepareCompletionAttempt } from "../completion/CompletionFunnel"
 import { type CompletionAuditGateResult, evaluateCompletionAuditGate } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
 import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
@@ -105,7 +99,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// We will handle command in the final execution step
 	}
 
-	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse | { kind: "continuation"; continuation: any }> {
 		const result: string | undefined = block.params.result
 		const command: string | undefined = block.params.command
 
@@ -119,48 +113,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			toolName: block.name,
 			scope: "attempt-completion",
 		})
-
-		// Run completion command if provided under normal permit governance
-		let commandResult: ToolResponse | undefined
-		if (command) {
-			const commandHandler = config.coordinator.getHandler(DietCodeDefaultTool.BASH)
-			if (!commandHandler) {
-				throw new Error("Command execution handler is not registered.")
-			}
-			const delegatedBlock: ToolUse = {
-				type: "tool_use",
-				name: DietCodeDefaultTool.BASH,
-				call_id: `delegated:${randomUUID()}`,
-				params: {
-					command,
-					requires_approval: "true",
-				},
-				partial: false,
-			}
-			const executionFunnel = (await import("@core/task/tools/execution/ExecutionFunnel")).executionFunnel
-			commandResult = await executionFunnel.dispatchAuthorizedDelegatedOperation(
-				config,
-				block,
-				delegatedBlock,
-				commandHandler,
-			)
-
-			const isAuthoritativeToolFailure = (await import("@core/task/tools/execution/ExecutionFunnel"))
-				.isAuthoritativeToolFailure
-			const isUserDeniedResponse = (res: ToolResponse): boolean => {
-				if (typeof res === "string") {
-					return res.includes("The user denied this operation")
-				}
-				if (Array.isArray(res)) {
-					return res.some((blk) => blk.type === "text" && blk.text.includes("The user denied this operation"))
-				}
-				return false
-			}
-
-			if (isAuthoritativeToolFailure(commandResult) || isUserDeniedResponse(commandResult)) {
-				return commandResult
-			}
-		}
 
 		const taskDescription = getInitialTaskPreview(config) || ""
 		let auditMetadata: TaskAuditMetadata | undefined
@@ -205,18 +157,14 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			config.taskState.lastCompletionAudit = auditMetadata
 		}
 
-		let funnelResult: Awaited<ReturnType<typeof runCompletionFunnelAttempt>>
+		let prepResult: Awaited<ReturnType<typeof prepareCompletionAttempt>>
 		try {
-			funnelResult = await runCompletionFunnelAttempt(
-				config,
-				{
-					result,
-					taskDescription,
-					command,
-					commandResult,
-				},
-				{ auditMetadata },
-			)
+			prepResult = await prepareCompletionAttempt(config, {
+				result,
+				taskDescription,
+				command,
+				originatingInvocationId: block.call_id!,
+			})
 		} catch (error) {
 			const coordination =
 				error instanceof CoordinationError
@@ -234,117 +182,36 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		const prefix = "[attempt_completion] Result: Done"
-		switch (funnelResult.kind) {
-			case "blocked": {
-				const structuredError = JSON.stringify(funnelResult.decision, null, 2)
-				config.taskState.lastCompletionDecisionId = funnelResult.decision.decisionId
-				config.taskState.lastCompletionDecisionResult = JSON.stringify(formatResponse.toolError(structuredError))
-				return formatResponse.toolError(structuredError)
-			}
-			case "settlement_failed": {
-				const structuredError = JSON.stringify(funnelResult.decision, null, 2)
-				return formatResponse.toolError(structuredError)
-			}
-			case "rejected": {
-				await config.callbacks.say("user_feedback", funnelResult.feedback, funnelResult.images, funnelResult.files)
+		if (prepResult.kind === "terminal" && prepResult.record && prepResult.event) {
+			config.taskState.lastCompletionDecisionId = prepResult.record.decisionId
+			config.taskState.lastCompletionDecisionResult = JSON.stringify([{ type: "text" as const, text: prefix }])
 
-				await maybeTransitionToReplanMode({
-					feedback: funnelResult.feedback,
-					currentMode: config.mode,
-					yoloModeToggled: config.yoloModeToggled,
-					switchToPlanMode: config.callbacks.switchToPlanMode,
-					sayInfo: async (message) => {
-						await config.callbacks.say("info", message)
-					},
-				})
+			markCompletionAttemptFinished(config)
+			await this.runTaskCompleteHook(config, block)
+			return prefix
+		}
 
-				// Run UserPromptSubmit hook when user provides post-completion feedback
-				let hookContextModification: string | undefined
-				if (
-					funnelResult.feedback ||
-					(funnelResult.images && funnelResult.images.length > 0) ||
-					(funnelResult.files && funnelResult.files.length > 0)
-				) {
-					const userContentForHook = await buildUserFeedbackContent(
-						funnelResult.feedback,
-						funnelResult.images,
-						funnelResult.files,
-					)
+		if (prepResult.kind === "rejected" && prepResult.event) {
+			return formatResponse.toolError(JSON.stringify(prepResult.decision, null, 2))
+		}
 
-					const hookResult = await config.callbacks.runUserPromptSubmitHook(userContentForHook, "feedback")
+		if (prepResult.kind === "blocked" && prepResult.event) {
+			const structuredError = JSON.stringify(prepResult.decision, null, 2)
+			config.taskState.lastCompletionDecisionId = prepResult.decision!.decisionId
+			config.taskState.lastCompletionDecisionResult = JSON.stringify(formatResponse.toolError(structuredError))
+			return formatResponse.toolError(structuredError)
+		}
 
-					if (hookResult.cancel === true) {
-						return formatResponse.toolDenied()
-					}
-
-					// Capture hook context modification to add to tool results
-					hookContextModification = hookResult.contextModification
-				}
-
-				const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
-				const replanRequested = detectReplanIntent(funnelResult.feedback)
-				toolResults.push(
-					{
-						type: "text",
-						text: replanRequested
-							? "The user has provided feedback requesting a scope pivot. Return to PLAN MODE workflow — explore the updated requirements and present a revised plan via plan_mode_respond before implementing."
-							: "The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.",
-					},
-					{
-						type: "text",
-						text: `<feedback>\n${funnelResult.feedback}\n</feedback>`,
-					},
-				)
-
-				// Add hook context modification if provided
-				if (hookContextModification) {
-					toolResults.push({
-						type: "text" as const,
-						text: `<hook_context source="UserPromptSubmit">\n${hookContextModification}\n</hook_context>`,
-					})
-				}
-
-				const fileContentString = funnelResult.files?.length ? await processFilesIntoText(funnelResult.files) : ""
-				if (fileContentString) {
-					toolResults.push({
-						type: "text" as const,
-						text: fileContentString,
-					})
-				}
-
-				if (funnelResult.images && funnelResult.images.length > 0) {
-					toolResults.push(...formatResponse.imageBlocks(funnelResult.images))
-				}
-
-				return [
-					{
-						type: "text" as const,
-						text: prefix,
-					},
-					...toolResults,
-				]
-			}
-			case "terminal": {
-				config.taskState.lastCompletionDecisionId = funnelResult.decision.decisionId
-				config.taskState.lastCompletionDecisionResult = JSON.stringify([{ type: "text" as const, text: prefix }])
-
-				markCompletionAttemptFinished(config)
-				await this.runTaskCompleteHook(config, block)
-
-				const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
-				if (funnelResult.commandResult) {
-					if (typeof funnelResult.commandResult === "string") {
-						toolResults.push({
-							type: "text",
-							text: funnelResult.commandResult,
-						})
-					} else if (Array.isArray(funnelResult.commandResult)) {
-						toolResults.push(...funnelResult.commandResult)
-					}
-				}
-
-				return toolResults.length > 0 ? toolResults : prefix
-			}
+		return {
+			kind: "continuation",
+			continuation: {
+				type: "completion_saga",
+				completionAttemptId: prepResult.completionAttemptId,
+				taskId: config.taskId,
+				generationId: prepResult.generationId,
+				originatingInvocationId: block.call_id!,
+				phase: "prepared",
+			},
 		}
 	}
 

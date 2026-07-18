@@ -287,6 +287,35 @@ export interface Schema {
 		imagesJson: string | null
 		committedAt: number
 	}
+	completion_attempts: {
+		completionAttemptId: string
+		taskId: string
+		generationId: string
+		originatingInvocationId: string
+		phase:
+			| "prepared"
+			| "evidence_pending"
+			| "evidence_succeeded"
+			| "evidence_failed"
+			| "proposal_pending"
+			| "decision_accepted"
+			| "decision_rejected"
+			| "settling"
+			| "completed"
+			| "settlement_failed"
+			| "stale"
+		evidenceRequestId: string | null
+		evidenceInvocationId: string | null
+		evidenceExecutionEventId: string | null
+		commandIntentJson: string | null
+		commandDigest: string | null
+		expectedLifecycleRevision: number
+		proposalEventId: string | null
+		decisionId: string | null
+		version: number
+		createdAt: number
+		updatedAt: number
+	}
 	task_lifecycle_records: {
 		taskId: string
 		generationId: string
@@ -825,6 +854,27 @@ export async function getDb(): Promise<Kysely<Schema>> {
 					UNIQUE(taskId, generationId, completionAttemptId)
 				)`,
 			)
+			await execute(
+				`CREATE TABLE IF NOT EXISTS completion_attempts (
+					completionAttemptId TEXT PRIMARY KEY,
+					taskId TEXT NOT NULL,
+					generationId TEXT NOT NULL,
+					originatingInvocationId TEXT NOT NULL,
+					phase TEXT NOT NULL,
+					evidenceRequestId TEXT,
+					evidenceInvocationId TEXT,
+					evidenceExecutionEventId TEXT,
+					commandIntentJson TEXT,
+					commandDigest TEXT,
+					expectedLifecycleRevision INTEGER NOT NULL,
+					proposalEventId TEXT,
+					decisionId TEXT,
+					version INTEGER NOT NULL,
+					createdAt BIGINT NOT NULL,
+					updatedAt BIGINT NOT NULL
+				)`,
+			)
+			await execute(`CREATE INDEX IF NOT EXISTS idx_completion_attempts_task ON completion_attempts(taskId)`)
 			await execute(
 				`CREATE TABLE IF NOT EXISTS task_lifecycle_records (
 					taskId TEXT PRIMARY KEY,

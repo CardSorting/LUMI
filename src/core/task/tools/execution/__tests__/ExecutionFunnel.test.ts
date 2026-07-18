@@ -564,7 +564,7 @@ describe("ExecutionFunnel approval authority", () => {
 		const gate = new Promise<void>((resolve) => {
 			release = resolve
 		})
-		let staleAttempt!: Promise<ToolResponse>
+		let staleAttempt!: Promise<ToolResponse | { kind: "continuation"; continuation: any }>
 		const toolBlock = block(DietCodeDefaultTool.ATTEMPT, "stale-permit")
 		const toolHandler = handler(DietCodeDefaultTool.ATTEMPT, async () => {
 			staleAttempt = (async () => {
