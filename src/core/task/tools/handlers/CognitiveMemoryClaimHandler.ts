@@ -2,13 +2,18 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { createGovernedLockAuthority, registerMemClaim } from "../../../governance/governLock"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryClaimHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_CLAIM
 	private readonly lockAuthority = createGovernedLockAuthority({
 		inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false,
 	})
+
+	getApprovalIntent(block: ToolUse) {
+		const resource = (block.params as unknown as { resource?: string }).resource
+		return declareInternalStateIntent(block, `Acquire a durable resource claim for ${resource ?? "a resource"}`)
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "Claim exclusive access to a resource (file or concept) to prevent swarm conflicts."

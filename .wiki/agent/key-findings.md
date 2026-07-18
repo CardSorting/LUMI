@@ -2,20 +2,22 @@
 
 ## 2026-07-18 Central Execution Funnel Migration
 
-- `src/core/task/tools/execution/ExecutionFunnel.ts` is the sole agent tool-execution authority. One auditable monolith owns registration, invocation idempotency, task and lane admission, cancellation, layer and plan-mode policy, mutation fencing, collision checks, roadmap preflight, UniversalGuard, lifecycle hooks, permit issuance, handler dispatch, task-scoped reliability, result enrichment, post-policy observation, workspace revisioning, and terminal classification.
-- Parent `ToolExecutor`, sibling scheduling, and governed subagent runners now enter the same funnel. `ToolExecutorCoordinator` fails closed without the current in-process permit; no caller can dispatch a handler merely by importing it.
-- The shared `ExecutionFunnelEvent` is the one modern execution projection. It carries stable task/invocation identity, lane, phase, decision kind, reason code, ordered stage trace, terminal marker, timestamps, and workspace revision. Task state keeps the current event plus a bounded terminal history; sibling contexts, subagent transcripts, and envelopes carry the same event.
-- Concurrent and sequential invocation replays are rejected before a second dispatch. Every owned invocation terminalizes even when admission infrastructure throws, and adapter preparation failures are published without demoting a terminal result that already exists.
+- `src/core/task/tools/execution/ExecutionFunnel.ts` is the sole approval and tool-execution authority. One auditable monolith owns invocation registration, pure intent preparation, task/lane/policy admission, approval settings, command safety, automatic approval, explicit prompting, the one immutable decision, decision-linked permit issuance, dispatch, reliability, and terminal classification.
+- Parent `ToolExecutor`, sibling scheduling, and governed subagent runners now enter the same funnel. `ToolExecutorCoordinator` is a registry only. Direct dispatch fails without the current permit matching task, generation, invocation, and approval decision.
+- The shared schema-v2 `ExecutionFunnelEvent` is the one modern execution projection. It freezes the approval intent, applicable policy/settings inputs, prompt fact, actor/mechanism decision, permit relationship, task generation, lane, outcome, and ordered stage trace. Task state keeps the current event plus a bounded terminal history; sibling contexts, subagent transcripts, and envelopes carry the same event.
+- Concurrent and sequential invocation replays are rejected before a second dispatch. A resumed task starts a new execution generation and clears stale per-turn projections; decisions, permits, and asynchronous child work cannot cross generations.
 - Successful-result enrichment settles before terminal success. Handler prose is evidence rather than status, and governed subagent tool-step records now require a terminal execution event instead of accepting legacy-shaped artifacts.
-- Turn stream control consumes the current event first. Compatibility booleans are mutated only by the funnel and reset at the turn boundary, so a stale rejection flag cannot overrule a modern successful event. Subagent tool budgets remain governed by their lane limit rather than inheriting the parent's single-tool presentation budget.
-- The agent-layer `ActionExecutor`, standalone `executionAuthority`, and `ToolHookUtils` gates and their legacy tests were deleted. Operation-specific approval prompts remain in handlers, but handlers report consent to the funnel and cannot acquire execution authority.
+- Turn stream control consumes only the current-generation event. The legacy `didRejectTool` and `didAlreadyUseTool` booleans and unused `autoApproveAllToggled` setting were deleted, so no fallback state can compete with the modern event. Subagent tool budgets remain governed by their lane limit rather than inheriting the parent's single-tool presentation budget.
+- The former `autoApprove.ts` unconditional authority, `ToolExecutor` approval helpers, coordinator dispatch wrapper, handler-local settings/prompts/decision recording, `ToolResultUtils` approval helper, subagent shortcuts, reliability approval recorder, and legacy settings fields were removed. Every registered handler must implement a synchronous, configuration-free `getApprovalIntent()`; there is no missing-intent fallback.
+- Composite Golden Cartridge operations dispatch through the funnel under the parent permit. Each delegated intent must be covered by the frozen parent intent, and commands must be declared exactly before approval; discovery cannot silently expand side effects after admission.
+- Conditional mutation collision paths are derived from the frozen intent inside the funnel. The handler boundary check now rejects approval-setting reads, approval helpers/decisions, permit ownership, approval UI, and non-semantic handler prompts.
 - Reliability is subordinate to an active permit. Circuit state is task scoped, shell process timeout/cancellation remains in `CommandExecutor`, and the funnel cannot retry a live shell process. A tool's `operation_succeeded` event never means the task is complete; `CompletionFunnel.ts` remains the separate sole task-completion authority.
 
 ### Verification evidence
 
-- Execution-focused parent/sibling/subagent regression matrix: 94 passing.
-- Broad unit suite: 2,178 passing, 4 expected pending.
-- `npm run check-types`, `npm run lint`, `npm run ci:build`, agent-document link/branding checks, and `git diff --check`: passed.
+- Expanded execution-focused parent/sibling/subagent/storage/registration regression matrix: 154 passing.
+- Broad unit suite: 2,180 passing, 4 expected pending, 0 failures.
+- `npm run check-types`, `npm run lint`, `npm run check:handler-imports`, `npm run ci:build`, `npm run vscode:prepublish`, and agent-document link/branding checks passed. `git diff --check` is part of the final handoff audit.
 - The repository-wide Mintlify link checker still reports its pre-existing corpus of 145 broken links across unrelated documentation; none are reported in the rewritten central execution funnel reference.
 
 ## 2026-07-18 Central Completion Funnel Migration

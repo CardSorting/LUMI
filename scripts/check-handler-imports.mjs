@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Guard against runtime ReferenceErrors from missing imports in tool handlers.
+ * Guard the handler adapter boundary and catch missing runtime imports.
  *
  * Catches patterns that esbuild production builds do not typecheck:
  * - DietCodeDefaultTool enum value use without a value import
  * - Handler classes instantiated in ToolExecutorCoordinator without import
  * - telemetryService use in handlers without import
+ * - approval settings, approval decisions, permits, and consent prompts leaking into handlers
  */
 import assert from "node:assert/strict"
 import fs from "node:fs"
@@ -35,6 +36,25 @@ function auditFile(file, checks) {
 	if (checks.telemetry && /telemetryService\./.test(src) && !hasImport(src, "telemetryService")) {
 		issues.push(`${rel}: uses telemetryService without import`)
 	}
+
+	if (checks.approvalBoundary) {
+		const forbiddenApprovalAuthority = [
+			[/\bautoApprovalSettings\b/, "reads approval settings"],
+			[/\b(?:autoApprover|shouldAutoApproveTool|recordApprovalDecision|recordUserDecision)\b/, "owns an approval decision"],
+			[/\bshowNotificationForApproval\b/, "runs approval UI independently"],
+			[/\b(?:issue|reinterpret|validate)Permit\b/i, "owns or reinterprets an execution permit"],
+		]
+		for (const [pattern, message] of forbiddenApprovalAuthority) {
+			if (pattern.test(src)) issues.push(`${rel}: ${message}; declare ApprovalIntent and defer to ExecutionFunnel`)
+		}
+
+		const semanticPromptAdapters = new Set(["AskFollowupQuestionToolHandler.ts", "AttemptCompletionHandler.ts"])
+		if (/callbacks\.ask\s*\(/.test(src) && !semanticPromptAdapters.has(path.basename(file))) {
+			issues.push(
+				`${rel}: prompts the user outside a semantic input adapter; approval prompting belongs to ExecutionFunnel`,
+			)
+		}
+	}
 }
 
 // All handler modules
@@ -42,7 +62,7 @@ for (const name of fs.readdirSync(handlersDir)) {
 	if (!name.endsWith(".ts") || name.includes(".test.")) {
 		continue
 	}
-	auditFile(path.join(handlersDir, name), { dietCodeTool: true, telemetry: true })
+	auditFile(path.join(handlersDir, name), { dietCodeTool: true, telemetry: true, approvalBoundary: true })
 }
 
 // Coordinator must import every handler it instantiates

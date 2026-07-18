@@ -13,7 +13,7 @@ import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler {
@@ -23,6 +23,29 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const context = block.params.context ?? ""
+		const match = context.match(/9\.\s*(?:Optional\s+)?Required Files:\s*((?:\n\s*-\s*.+)+)/m)
+		const paths = (match?.[1] ?? "")
+			.split("\n")
+			.map((line) => line.match(/^\s*-\s*(.+)$/)?.[1]?.trim())
+			.filter((filePath): filePath is string => !!filePath)
+			.slice(0, 10)
+		return declareApprovalIntent(block, {
+			description: paths.length
+				? `Summarize the task and load ${paths.length} required file${paths.length === 1 ? "" : "s"}`
+				: "Summarize the task",
+			requirements: paths.map((filePath) => ({
+				capability: "workspace_read" as const,
+				path: filePath,
+				risk: "low" as const,
+				requestedSideEffects: ["read file into continuation context"],
+				autoApprovalEligible: true,
+			})),
+			notification: paths.length ? `DietCode wants to load ${paths.length} files while summarizing` : undefined,
+		})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -138,8 +161,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 				// Prevents duplicate file reads, if occurs
 				const loadedFiles = new Set<string>()
 
-				// Read each file only if auto-approved
-				// We consider the list of files still good context for task continuation even if user doesn't have auto approval on
+				// ExecutionFunnel admitted the complete required-files set before this handler ran.
 				for (const relPath of filePaths) {
 					// Validate that we have not loaded this file previously
 					const normalizedPath = relPath.toLowerCase()
@@ -159,42 +181,38 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 						continue
 					}
 
-					// Only process if auto-approved (respects workspace/outside-workspace settings)
-					if (await config.callbacks.shouldAutoApproveToolWithPath(DietCodeDefaultTool.FILE_READ, relPath)) {
-						try {
-							// Resolve path (handles multi-root workspaces)
-							const pathResult = resolveWorkspacePath(config, relPath, "SummarizeTaskHandler")
-							const { absolutePath, displayPath } =
-								typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath } : pathResult
+					try {
+						// Resolve path (handles multi-root workspaces)
+						const pathResult = resolveWorkspacePath(config, relPath, "SummarizeTaskHandler")
+						const { absolutePath, displayPath } =
+							typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath } : pathResult
 
-							// Read file content, we dont allow images to be read here
-							// This throws if an image or if we can't read the file, implicitly skipping
-							const fileContent = await extractFileContent(absolutePath, false)
+						// Read file content, we dont allow images to be read here
+						// This throws if an image or if we can't read the file, implicitly skipping
+						const fileContent = await extractFileContent(absolutePath, false)
 
-							// Check if adding this file would exceed character limit
-							if (totalChars + fileContent.text.length > MAX_CHARS) {
-								break // exceed our character alotment
-							}
-
-							// Track the file read
-							await config.services.fileContextTracker.trackFileContext(relPath, "file_mentioned")
-
-							// Append file content in the same format as file mentions
-							fileContents += `\n\n<file_content path="${displayPath}">\n${fileContent.text}\n</file_content>`
-							loadedFilePaths.push(displayPath)
-
-							totalChars += fileContent.text.length
-							filesLoaded++
-
-							if (filesLoaded >= MAX_FILES_LOADED) {
-								break
-							}
-						} catch (error) {
-							// File read failed - log but continue with other files
-							Logger.error(`Failed to read ${relPath} during summarization:`, error)
+						// Check if adding this file would exceed character limit
+						if (totalChars + fileContent.text.length > MAX_CHARS) {
+							break // exceed our character alotment
 						}
+
+						// Track the file read
+						await config.services.fileContextTracker.trackFileContext(relPath, "file_mentioned")
+
+						// Append file content in the same format as file mentions
+						fileContents += `\n\n<file_content path="${displayPath}">\n${fileContent.text}\n</file_content>`
+						loadedFilePaths.push(displayPath)
+
+						totalChars += fileContent.text.length
+						filesLoaded++
+
+						if (filesLoaded >= MAX_FILES_LOADED) {
+							break
+						}
+					} catch (error) {
+						// File read failed - log but continue with other files
+						Logger.error(`Failed to read ${relPath} during summarization:`, error)
 					}
-					// If not auto-approved, skip silently
 				}
 			}
 

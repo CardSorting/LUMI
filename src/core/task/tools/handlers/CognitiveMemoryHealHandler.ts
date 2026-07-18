@@ -2,10 +2,14 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareNoConsentIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 export class CognitiveMemoryHealHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_HEAL
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, `Read a historical recovery candidate for ${block.params.path ?? "a path"}`)
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`

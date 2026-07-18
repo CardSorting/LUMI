@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryGetSharedHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_GET_SHARED
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Read the shared cognitive memory layer")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[get shared memory layer]"

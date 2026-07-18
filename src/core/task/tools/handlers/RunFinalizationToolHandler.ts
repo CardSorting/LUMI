@@ -3,10 +3,32 @@ import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { FinalizationRunner } from "../finalization/FinalizationRunner"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, declareNoConsentIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 export class RunFinalizationToolHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.RUN_FINALIZATION
+
+	getApprovalIntent(block: ToolUse) {
+		if (block.params.seal === "true") return declareNoConsentIntent(block, "Read the existing completion seal")
+		return declareApprovalIntent(block, {
+			description: "Run post-completion documentation maintenance",
+			requirements: [
+				{
+					capability: "workspace_write",
+					path: ".wiki",
+					risk: "high",
+					requestedSideEffects: ["update Agent Playbook documentation"],
+					autoApprovalEligible: true,
+				},
+				{
+					capability: "subagent",
+					risk: "elevated",
+					requestedSideEffects: ["delegate post-completion documentation maintenance"],
+					autoApprovalEligible: false,
+				},
+			],
+		})
+	}
 
 	getDescription(_block: ToolUse): string {
 		return `[${this.name}]`

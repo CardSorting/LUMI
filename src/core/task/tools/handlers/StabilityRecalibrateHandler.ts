@@ -5,7 +5,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { orchestrator } from "../../../../infrastructure/ai/Orchestrator"
 import { StabilityMonitor } from "../../../integrity/StabilityMonitor"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareInternalStateIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilityRecalibrateHandler: Handles the 'recalibrate_stability' tool.
@@ -13,6 +13,10 @@ import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
  */
 export class StabilityRecalibrateHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_RECALIBRATE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Reset and persist task stability pressure")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return `[Stability Recalibration: Cognitive Recovery]`

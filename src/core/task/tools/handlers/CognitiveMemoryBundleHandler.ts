@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryBundleHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_BUNDLE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Read the task cognitive intelligence bundle")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[fetch cognitive intelligence bundle]"

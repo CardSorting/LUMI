@@ -7,13 +7,18 @@ import {
 	unregisterMemClaim,
 } from "../../../governance/governLock"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryReleaseHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_RELEASE
 	private readonly lockAuthority = createGovernedLockAuthority({
 		inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false,
 	})
+
+	getApprovalIntent(block: ToolUse) {
+		const resource = (block.params as unknown as { resource?: string }).resource
+		return declareInternalStateIntent(block, `Release the durable claim for ${resource ?? "a resource"}`)
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "Release a previously claimed resource."

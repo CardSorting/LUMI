@@ -3,7 +3,7 @@
 ## Durable Constraints
 
 - `.dietcodeignore` remains the read/write security boundary. Workspace-local query auto-authority must never bypass it.
-- Command permission parsing and destructive/manual approval remain fail-closed.
+- Command permission parsing and approval remain fail-closed. Central command safety is derived from the exact declared command; model-provided risk hints cannot make an unknown command safe.
 - Initial checkpoints still serialize mutations, but read-only tools may proceed while the checkpoint commit is pending.
 - Scheduled completion-audit persistence and roadmap finalization are best-effort. Completion audit evaluation, optional workspace audit artifacts, message persistence, and checkpoint saving still occupy synchronous portions of completion.
 - Completed I/O cache entries are invalid after local mutation; reset the task coalescer generation. Unknown shell/MCP operations invalidate conservatively, and mutations affecting `.dietcodeignore` refresh policy synchronously before later reads.
@@ -12,8 +12,10 @@
 - Scheduled tool results are invocation-local. Canonical results are projected in model-emission order before advisory query-card replay; auto-approved local query presentation overlaps backend work. Non-query and interactive presentation remains shared. Do not append concurrent results directly to `TaskState.userMessageContent`.
 - All sibling mutations remain one lane because the classifier adds a shared `workspace-mutation` claim. Task verification commands share a `command-lane`; mutating/unknown commands fence the workspace.
 - Commands classified by the canonical JoyRide policy as `verification` or `safe-readonly` may overlap read-only diagnostics; shell operators, installs, builds, unknown commands, and environment mutations retain the workspace-wide fence.
-- `ExecutionFunnel.ts` is the sole tool execution authority. Parent, sibling, and subagent callers enter it; `ToolExecutorCoordinator` dispatches a handler only with the current in-process permit. Handlers may validate and prompt, but cannot publish an independent execution decision.
-- `ExecutionFunnelEvent` is the one execution projection. Consumers select a whole event and inspect its ordered stage trace; never infer status from handler prose or merge different invocation events.
+- `ExecutionFunnel.ts` is the sole approval and tool-execution authority. Parent, sibling, and subagent callers enter it; `ToolExecutorCoordinator` is a registry and owns no dispatch or approval path.
+- Approval is part of execution admission. The funnel freezes a handler's pure `ApprovalIntent`, evaluates current settings/policy, records one immutable decision, and only then issues an invocation- and generation-scoped permit. Missing/malformed intents and stale decisions fail closed.
+- `ExecutionFunnelEvent` is the one execution projection. It causally links intent, policy inputs, prompt, decision, and permit in one ordered trace. Consumers select a whole event; never infer status from handler prose or merge different invocation events.
+- Turn control has no legacy boolean fallback. Conditional mutation collision paths come from the frozen intent, and `npm run check:handler-imports` enforces that handlers do not reacquire approval authority.
 - `CommandExecutor` owns shell process timeout/cancellation. The funnel sets no competing shell timeout or retry, so it cannot start a replacement while an original process is alive; all advisory notification timers clear in `finally`. Scoped cancellation uses `cancelBackgroundCommand(ownerId)` and `hasActiveBackgroundCommand(ownerId)`.
 - Swarm execution lane concurrency must be controlled by tracking active execution slots in the pool (`running.size`) rather than yielded/suspended lifecycle states (`activeLaneExecutions`) to prevent premature queue saturation during setup.
 - Swarm resumes must check and validate that a candidate governed authority receipt is sealed and has valid integrity with a matching checksum before reusing historical agent work; unsealed or missing receipt evidence requires the lane to restart.
@@ -28,7 +30,7 @@
 
 ## Validation Coupling
 
-- When touching execution or query authority, run `ExecutionFunnel.test.ts`, `tool-executor-hooks.test.ts`, sibling/subagent parity tests, and `parentIoThroughput.test.ts`.
+- When touching execution, approval, or query authority, run `ExecutionFunnel.test.ts`, `tool-executor-hooks.test.ts`, sibling/subagent parity tests, `GoldenCartridgeToolHandler.test.ts`, and `parentIoThroughput.test.ts`.
 - When touching path/cache generations, run `TaskPathAuthorityCache.test.ts`, `TaskIoBackend.test.ts`, both ignore-controller suites, and `IoRequestCoalescer` coverage in `parentIoThroughput.test.ts`.
 - When touching read/list/search backends, run `extract-text.test.ts`, `glob/list-files.test.ts`, `ripgrep/index.test.ts`, and `languageParserCache.test.ts`.
 - When touching completion audit persistence, run `completionAuditResilience.test.ts` and `Orchestrator.test.ts`.

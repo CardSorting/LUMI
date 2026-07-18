@@ -29,7 +29,6 @@ import type { StateManager } from "../../../storage/StateManager"
 import type { TaskLatencyTracker } from "../../latency/TaskLatencyTracker"
 import type { MessageStateHandler } from "../../message-state"
 import type { TaskState } from "../../TaskState"
-import type { AutoApprove } from "../../tools/autoApprove"
 import type { HookExecution } from "../../types/HookExecution"
 import type { PathAuthorityRecord } from "../io/TaskPathAuthorityCache"
 import type { ToolExecutorCoordinator } from "../ToolExecutorCoordinator"
@@ -88,7 +87,6 @@ export interface TaskConfig {
 
 	// Settings
 	autoApprovalSettings: AutoApprovalSettings
-	autoApprover: AutoApprove
 	browserSettings: BrowserSettings
 	focusChainSettings: FocusChainSettings
 
@@ -164,9 +162,6 @@ export interface TaskCallbacks {
 	doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>
 
 	updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>
-
-	shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: DietCodeDefaultTool, path?: string) => Promise<boolean>
 
 	// Additional callbacks for task management
 	postStateToWebview: () => Promise<void>

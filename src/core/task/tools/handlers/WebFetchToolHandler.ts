@@ -1,26 +1,38 @@
-import { DietCodeAsk, DietCodeSayTool } from "@shared/ExtensionMessage"
+import { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
 import axios from "axios"
 import { DietCodeEnv } from "@/config"
 import { AuthService } from "@/services/auth/AuthService"
 import { buildDietCodeExtraHeaders } from "@/services/EnvUtils"
 import { featureFlagsService } from "@/services/feature-flags"
-import { telemetryService } from "@/services/telemetry"
 import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/DietCodeAccount"
 import { getAxiosSettings } from "@/shared/net"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
-import { showNotificationForApproval } from "../../utils"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class WebFetchToolHandler implements IFullyManagedTool {
+export class WebFetchToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.WEB_FETCH
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.url}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Fetch web content from ${block.params.url ?? ""}`,
+			requirements: [
+				{
+					capability: "network",
+					risk: "elevated",
+					requestedSideEffects: ["external network request"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to fetch content from ${block.params.url ?? "the web"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -36,8 +48,7 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 
 		// For partial blocks, we'll let the ToolExecutor handle auto-approval logic
 		// Just stream the UI update for now
-		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-		await uiHelpers.ask("tool" as DietCodeAsk, partialMessage, block.partial).catch(() => {})
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -67,63 +78,6 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 				return await config.callbacks.sayAndCreateMissingParamError(this.name, "prompt")
 			}
 			config.taskState.consecutiveMistakeCount = 0
-
-			// Create message for approval
-			const sharedMessageProps: DietCodeSayTool = {
-				tool: "webFetch",
-				path: url,
-				content: `Fetching URL: ${url}`,
-				operationIsLocatedInWorkspace: false,
-			}
-			const completeMessage = JSON.stringify(sharedMessageProps)
-
-			if (config.callbacks.shouldAutoApproveTool(this.name)) {
-				// Auto-approve flow
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-				telemetryService.captureToolUsage(
-					config.ulid,
-					"web_fetch",
-					config.api.getModel().id,
-					provider,
-					true,
-					true,
-					undefined,
-					block.isNativeToolCall,
-				)
-			} else {
-				// Manual approval flow
-				showNotificationForApproval(
-					`DietCode wants to fetch content from ${url}`,
-					config.autoApprovalSettings.enableNotifications,
-				)
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-				const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-				if (!didApprove) {
-					telemetryService.captureToolUsage(
-						config.ulid,
-						block.name,
-						config.api.getModel().id,
-						provider,
-						false,
-						false,
-						undefined,
-						block.isNativeToolCall,
-					)
-					return formatResponse.toolDenied()
-				}
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					true,
-					undefined,
-					block.isNativeToolCall,
-				)
-			}
 
 			// Execute the actual fetch
 			const baseUrl = DietCodeEnv.config().apiBaseUrl

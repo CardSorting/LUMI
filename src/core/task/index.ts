@@ -346,10 +346,15 @@ export class Task {
 
 		this.taskInitializationStartTime = performance.now()
 		this.taskState = new TaskState()
+		const executionGeneration = this.taskState.executionGeneration
 		this.latencyTracker = new TaskLatencyTracker()
 		if (params.initialTaskState) {
 			Object.assign(this.taskState, params.initialTaskState)
 		}
+		// Resuming creates a new execution lifecycle. Never inherit permits or decisions.
+		this.taskState.executionGeneration = executionGeneration
+		this.taskState.executionFunnelEventJson = undefined
+		this.taskState.executionInvocationLedger = {}
 		this.controller = controller
 		this.mcpHub = mcpHub
 		this.updateTaskHistory = updateTaskHistory
@@ -2913,7 +2918,9 @@ export class Task {
 		When you see the UI inactive during this, it means that a tool is breaking without presenting any UI. For example the write_to_file tool was breaking when relpath was undefined, and for invalid relpath it never presented UI.
 		*/
 		this.taskState.presentAssistantMessageLocked = false // this needs to be placed here, if not then calling this.presentAssistantMessage below would fail (sometimes) since it's locked
-		// NOTE: when tool is rejected, iterator stream is interrupted and it waits for userMessageContentReady to be true. Future calls to present will skip execution since didRejectTool and iterate until contentIndex is set to message length and it sets userMessageContentReady to true itself (instead of preemptively doing it in iterator)
+		// When the execution event records a rejection, the iterator stream is interrupted and waits for
+		// userMessageContentReady. Future presentation reads the same authoritative event and advances the
+		// content index before resuming the stream.
 		// Also advance when a tool was used and parallel calling is disabled
 		const settledTurnControl = executionFunnel.getTurnControl(this.taskState, this.isParallelToolCallingEnabled())
 		if (!block.partial || settledTurnControl.suppressFurtherContent) {
@@ -3325,8 +3332,6 @@ export class Task {
 			this.taskState.didCompleteReadingStream = false
 			this.taskState.userMessageContent = []
 			this.taskState.userMessageContentReady = false
-			this.taskState.didRejectTool = false
-			this.taskState.didAlreadyUseTool = false
 			this.taskState.executionFunnelEventJson = undefined
 			this.taskState.presentAssistantMessageLocked = false
 			this.taskState.presentAssistantMessageHasPendingUpdates = false
@@ -3773,7 +3778,7 @@ export class Task {
 			// need to save assistant responses to file before proceeding to tool use since user can exit at any moment and we wouldn't be able to save the assistant's response
 			let didEndLoop = false
 			if (assistantHasContent) {
-				// NOTE: this comment is here for future reference - this was a workaround for userMessageContent not getting set to true. It was due to it not recursively calling for partial blocks when didRejectTool, so it would get stuck waiting for a partial block to complete before it could continue.
+				// Partial blocks must recurse so a terminal execution event cannot leave the stream waiting forever.
 				// in case the content blocks finished
 				// it may be the api stream finished after the last parsed content block was executed, so  we are able to detect out of bounds and set userMessageContentReady to true (note you should not call presentAssistantMessage since if the last block is completed it will be presented again)
 				// const completeBlocks = this.assistantMessageContent.filter((block) => !block.partial) // if there are any partial blocks after the stream ended we can consider them invalid

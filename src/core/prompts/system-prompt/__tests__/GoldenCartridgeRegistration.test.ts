@@ -51,14 +51,14 @@ describe("Golden Cartridge registration", () => {
 	it("activation does not change permission or completion state", () => {
 		const taskState = new TaskState()
 		const before = {
-			didRejectTool: taskState.didRejectTool,
+			executionFunnelEventJson: taskState.executionFunnelEventJson,
 			doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
 			completionFunnelEventJson: taskState.completionFunnelEventJson,
 		}
 		activateSkillTools(taskState, GOLDEN_CARTRIDGE_SKILL_NAME)
 		assert.deepEqual(
 			{
-				didRejectTool: taskState.didRejectTool,
+				executionFunnelEventJson: taskState.executionFunnelEventJson,
 				doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
 				completionFunnelEventJson: taskState.completionFunnelEventJson,
 			},

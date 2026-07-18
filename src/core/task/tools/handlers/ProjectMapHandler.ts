@@ -6,7 +6,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import { resolveSessionSpiderEngine } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 type ProjectMapItem = {
 	path: string
@@ -128,6 +128,21 @@ const buildChoices = (risks: ProjectMapRisk[], staleGraph: boolean): ProjectMapC
  */
 export class ProjectMapHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.PROJECT_MAP
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Read workspace structure for ${block.params.path ?? block.params.symbol ?? block.params.query ?? "the project"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					scope: "workspace",
+					risk: "low",
+					requestedSideEffects: ["read structural registry and file existence metadata"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const target = block.params.path || block.params.symbol || block.params.query || "workspace"

@@ -2,10 +2,14 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareNoConsentIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 export class CognitiveMemoryChokeHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_CHOKE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Analyze cognitive-memory chokepoints")
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

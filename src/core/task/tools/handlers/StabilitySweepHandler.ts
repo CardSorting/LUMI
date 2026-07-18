@@ -2,13 +2,29 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilitySweepHandler: Triggers a structural integrity scan and repair cycle (PFH).
  */
 export class StabilitySweepHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_SWEEP
+
+	getApprovalIntent(block: ToolUse) {
+		const files = (block.params as unknown as { files?: unknown }).files
+		const paths = Array.isArray(files) ? files.filter((file): file is string => typeof file === "string") : []
+		return declareApprovalIntent(block, {
+			description: `Run an automated stability repair sweep over ${paths.length} file${paths.length === 1 ? "" : "s"}`,
+			requirements: (paths.length ? paths : [undefined]).map((filePath) => ({
+				capability: "workspace_write" as const,
+				path: filePath,
+				scope: filePath ? undefined : ("workspace" as const),
+				risk: "high" as const,
+				requestedSideEffects: ["apply automated workspace repair sweep"],
+				autoApprovalEligible: true,
+			})),
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const params = block.params as any

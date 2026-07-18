@@ -20,12 +20,12 @@ If you find yourself repeatedly clicking approve for the same safe operations, A
 
 ## How It Works
 
-Auto Approve is evaluated per tool call. When LUMI is about to read a file, edit a file, run a command, or use the browser, it checks your Auto Approve settings for that category.
+Auto Approve is evaluated per invocation by `ExecutionFunnel`. The registered handler first declares a pure intent; the funnel then evaluates every declared capability against current settings and execution policy. It records one automatic or explicit decision and issues a permit only after approval resolves.
 
 A few details matter:
 
 - **Workspace vs outside workspace**: "Read all files" and "Edit all files" only extend the base toggle. If the base toggle is off, the "all files" option does nothing.
-- **Terminal commands**: LUMI treats commands as either safe or requiring approval. "Execute safe commands" covers safe commands. "Execute all commands" extends to commands flagged as requiring approval.
+- **Terminal commands**: Central command classification, command-permission policy, trusted-command policy, and the current settings all apply. A model-supplied flag cannot make an unknown command safe.
 - **Notifications**: If enabled, LUMI sends OS-level notifications when approval is required, and when an auto-approved terminal command has been running for 30 seconds.
 
 ## Permissions
@@ -48,7 +48,7 @@ A few details matter:
 
 ## Safe vs Approval-Required Commands
 
-LUMI does not use a fixed allowlist. The model marks each command with a `requires_approval` flag based on the command and arguments. These are examples, not guarantees.
+LUMI classifies the exact normalized command centrally. Read-only and verification tiers can use **Execute safe commands**; trusted commands and **Execute all commands** follow their respective policies. These are examples, not guarantees.
 
 **Commonly treated as safe:**
 - `npm run build`, `npm test` - Build/test output
@@ -72,20 +72,15 @@ If you enable edits, use [Checkpoints](/core-workflows/checkpoints) so you can r
 
 ## YOLO Mode
 
-YOLO mode is Auto Approve on steroids. Check the box and LUMI auto-approves everything: file changes, terminal commands, browser actions, MCP tools, and mode transitions.
+YOLO mode changes agent interaction and mode-transition behavior. It is not a compatibility override for execution approval: `ExecutionFunnel` still evaluates the current per-capability settings and policy, records one decision, and issues a linked permit.
 
 <Note>
-**Warning: This is dangerous.** YOLO mode disables all safety checks. LUMI executes whatever it decides without asking permission.
+**Warning:** YOLO mode reduces interactive guidance and follow-up questions. Configure Auto Approve permissions separately; fencing, command policy, hooks, replay protection, and the approval-linked permit remain active.
 </Note>
 
 ### What Gets Auto-Approved
 
-When YOLO mode is enabled:
-- All file operations anywhere on your system
-- All terminal commands including potentially destructive ones
-- Browser actions
-- MCP server tools
-- Mode transitions (Plan to Act)
+When YOLO mode is enabled, the agent may proceed with best judgment rather than asking task-clarification questions, and mode transitions can be less interactive. Automatic execution still depends on the corresponding Auto Approve setting and execution policy.
 
 ### When to Use YOLO Mode
 
@@ -114,20 +109,21 @@ LUMI could:
 
 ### Enabling YOLO Mode
 
-Navigate to LUMI Settings, then Features, and check "YOLO Mode." No confirmation dialogs. Once enabled, LUMI auto-approves all actions immediately. Uncheck to disable.
+Navigate to LUMI Settings, then Features, and check "YOLO Mode." Configure Auto Approve permissions independently for the capabilities you intend to admit automatically. Uncheck YOLO mode to restore normal interactive guidance.
 
 ## Implementation (code paths)
 
 | Setting | Storage key | Effect |
 |---------|-------------|--------|
-| Per-category auto-approve | Various toggles in webview settings | Skips approval UI for matching tool categories |
-| YOLO Mode | `yoloModeToggled` (global state) | Auto-approves all tool calls; system prompt omits follow-up-question requirements |
+| Per-category auto-approve | `autoApprovalSettings` | Allows `ExecutionFunnel` to record automatic approval when the complete intent and policy are eligible |
+| YOLO Mode | `yoloModeToggled` (global state) | Changes prompt/follow-up and mode-transition behavior; does not override execution admission |
 
 **Code:**
 
 - Settings persistence: `src/core/controller/state/updateSettings.ts`
 - YOLO prompt behavior: `src/core/prompts/system-prompt/` variants (e.g. `next-gen/template.ts`)
-- Tool approval gate: `src/core/task/tools/utils/ToolResultUtils.ts` and `ToolConstants.ts`
-- MCP per-tool auto-approve: `UseMcpToolHandler.ts` checks `mcpHub.connections` auto-approve lists
+- Sole approval/permit gate: `src/core/task/tools/execution/ExecutionFunnel.ts`
+- Pure handler contract: `src/core/task/tools/types/ToolContracts.ts`
+- MCP per-tool setting: evaluated by `ExecutionFunnel` from `mcpHub.connections`
 
 YOLO Mode is the highest-risk setting. Use [checkpoints](/core-workflows/checkpoints) as your rollback layer when experimenting.

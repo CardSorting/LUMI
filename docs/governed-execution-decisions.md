@@ -290,7 +290,7 @@ Full architecture: [governed-subagent-execution.md](governed-subagent-execution.
 - Give every attempt a fresh runner, model client, prompt context, and timeout; abort and wait for quiescence before replacement.
 - Give each attempt one lane-local task state and tool coordinator; completion gates never mutate parent or sibling state.
 - Count tokens and cost across all attempts, and stop pending/running work when the aggregate parent budget is crossed.
-- Resolve read versus mutation authority before launch: read auto-approval is valid only for non-mutating lanes and constrains their toolset to local reads/diagnostics; mutation follows edit auto-approval; mixed swarms require both. Any missing permission becomes one parent approval, with no repeated inner prompts.
+- Record explicit launch consent for the declared subagent batch, then route every child operation through the identical `ExecutionFunnel` authority. Child read/edit settings apply to that child's pure intent; no launch decision or permit is inherited or reused by another invocation.
 - Propagate failed dependencies immediately, diagnose true deadlocks with dependency states, and release the orchestration lease in a final cleanup barrier.
 - Keep peer spawning and shared-ledger synthesis at the parent; workers return structured review/documentation requests unless explicitly assigned ownership.
 

@@ -2,10 +2,50 @@ import type { ToolUse } from "@core/assistant-message"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { NativeMutationManager } from "@/services/mutation/NativeMutationManager"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 export class DietcodeKernelToolHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.DIETCODE_KERNEL
+
+	getApprovalIntent(block: ToolUse) {
+		const action = (block.params.action ?? "").trim().toLowerCase()
+		const requirements =
+			action === "patch"
+				? [
+						{
+							capability: "workspace_write" as const,
+							path: block.params.path,
+							risk: "high" as const,
+							requestedSideEffects: ["apply a native workspace patch"],
+							autoApprovalEligible: true,
+						},
+					]
+				: action === "verify"
+					? [
+							{
+								capability: "command" as const,
+								risk: "high" as const,
+								requestedSideEffects: ["execute a native verification command"],
+								autoApprovalEligible: true,
+							},
+						]
+					: action === "coherence" || action === "refresh"
+						? [
+								{
+									capability: "internal_state" as const,
+									risk: "elevated" as const,
+									requestedSideEffects: ["mutate native execution metadata"],
+									autoApprovalEligible: false,
+								},
+							]
+						: []
+		return declareApprovalIntent(block, {
+			description: `Run native kernel action ${action || "status"}`,
+			requirements,
+			promptType: action === "verify" ? "command" : "tool",
+			promptMessage: action === "verify" ? (block.params.command ?? "") : undefined,
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} action='${block.params.action || "default"}']`

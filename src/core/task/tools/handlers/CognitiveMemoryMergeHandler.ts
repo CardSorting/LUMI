@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryMergeHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_MERGE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Merge durable cognitive-memory nodes")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[merge cognitive memory]"

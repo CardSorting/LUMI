@@ -91,7 +91,7 @@ LUMI repeats the same posture at three scales:
 
 | Scale | Gate | Entry | Fail-closed module |
 |-------|------|-------|-------------------|
-| Tool | Approval | Mutating `DietCodeDefaultTool` | Webview diff + `autoApprove.ts` |
+| Tool | Approval admission | Every `DietCodeDefaultTool` invocation | `ExecutionFunnel` intent → decision → permit |
 | Task | Completion | `attempt_completion` | `completionGatePipeline.ts` |
 | Swarm | Merge + reconciliation | `sealReceipt` | `MergeGate.runMergeGate()` + `runRoadmapPatchReconciliation()` |
 
@@ -203,11 +203,9 @@ Tool calls may be native (model API tools) or parsed from text (`parseAssistantM
 
 - Maps `DietCodeDefaultTool` → handler factory
 - Supports **dynamic subagent handlers** (`dynamicSubagentHandlers` map)
-- Validates via `ToolValidator`
-- Dispatches handlers only under the active permit issued by `ExecutionFunnel`
-- Returns structured `ToolResponse` to conversation
+- Owns no approval, policy, permit, or dispatch behavior
 
-`ExecutionFunnel` is the sole execution authority for parent, sibling, and subagent calls. It centralizes admission, policy, hooks, dispatch reliability, and the terminal execution event; the coordinator cannot invoke a handler without its permit.
+`ExecutionFunnel` is the sole approval and execution authority for parent, sibling, and subagent calls. It freezes the handler's pure intent, evaluates settings/policy, records one decision, issues the causally linked permit, dispatches the adapter, and publishes the terminal execution event. The coordinator is a registry only.
 
 Unwired enum entries (`rename_files`, `move_files`, `delete_file`, `focus_chain` as TODO handler) return `undefined` from factory — coordinator must handle absence.
 
@@ -270,8 +268,9 @@ These may run without blocking initial checkpoint commit (`READ_ONLY_TOOLS`):
 
 ### 7.1 Approval
 
-- Webview presents tool uses; user approves or rejects
-- `src/core/task/tools/autoApprove.ts` — rule-based auto-approval
+- `ExecutionFunnel` evaluates the handler's pure `ApprovalIntent` against current settings and policy
+- The funnel alone records automatic or explicit decisions and prompts when consent is required
+- A decision-linked, generation- and invocation-scoped permit is issued only after approval
 - Diff view via `HostProvider.createDiffViewProvider()` — `VscodeDiffViewProvider`
 
 ### 7.2 Hooks (8 kinds)

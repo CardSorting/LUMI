@@ -2,7 +2,6 @@
  * [LAYER: CORE]
  */
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
 import { findLast, parsePartialArrayString } from "@shared/array"
 import { DietCodeAsk, DietCodeAskQuestion } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
@@ -12,11 +11,15 @@ import { formatResponse } from "../../../prompts/responses"
 import { maybeTransitionToReplanMode } from "../../utils/replanModeTransition"
 import { shouldRejectFakeFollowupQuestion } from "../completion/fakeFollowupGuard"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareNoConsentIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.ASK
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Request task input from the user")
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.question}']`
@@ -60,14 +63,6 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 			return formatResponse.toolResult(
 				`[YOLO MODE: User input is not available in non-interactive mode. You must use available tools (read_file, list_files, search_files, etc.) to gather the information you need instead of asking the user. Proceed with using tools to find the answer to your question: "${question}"]`,
 			)
-		}
-
-		// Show notification if enabled
-		if (config.autoApprovalSettings.enableNotifications) {
-			showSystemNotification({
-				subtitle: "DietCode has a question...",
-				message: question.replace(/\n/g, " "),
-			})
 		}
 
 		const sharedMessage = {

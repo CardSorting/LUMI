@@ -1,7 +1,5 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
 import { createAndOpenGitHubIssue } from "@utils/github-url-utils"
 import * as os from "os"
 import { HostProvider } from "@/hosts/host-provider"
@@ -9,11 +7,33 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.REPORT_BUG
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Open an external GitHub issue draft for ${block.params.title ?? "a bug report"}`,
+			requirements: [
+				{
+					capability: "network",
+					risk: "elevated",
+					requestedSideEffects: ["open a pre-filled external issue URL"],
+					autoApprovalEligible: false,
+				},
+			],
+			promptType: this.name,
+			promptMessage: JSON.stringify({
+				title: block.params.title,
+				what_happened: block.params.what_happened,
+				steps_to_reproduce: block.params.steps_to_reproduce,
+				api_request_output: block.params.api_request_output,
+				additional_context: block.params.additional_context,
+			}),
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
@@ -28,7 +48,7 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 			additional_context: uiHelpers.removeClosingTag(block, "additional_context", block.params.additional_context),
 		})
 
-		await uiHelpers.ask(this.name, partialMessage, block.partial).catch(() => {})
+		await uiHelpers.say("text", partialMessage, undefined, undefined, block.partial).catch(() => {})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -62,14 +82,6 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Show notification if enabled
-		if (config.autoApprovalSettings.enableNotifications) {
-			showSystemNotification({
-				subtitle: "DietCode wants to create a github issue...",
-				message: `DietCode is suggesting to create a github issue with the title: ${title}`,
-			})
-		}
-
 		// Derive system information values algorithmically
 		const operatingSystem = `${os.platform()} ${os.release()}`
 		const currentMode = config.mode
@@ -80,37 +92,7 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 		const apiProvider = currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
 		const providerAndModel = `${apiProvider} / ${config.api.getModel().id}`
 
-		// Ask user for confirmation
-		const bugReportData = JSON.stringify({
-			title,
-			what_happened,
-			steps_to_reproduce,
-			api_request_output,
-			additional_context,
-			// Include derived values in the JSON for display purposes
-			provider_and_model: providerAndModel,
-			operating_system: operatingSystem,
-			system_info: systemInfo,
-			dietcode_version: dietcodeVersion,
-		})
-
-		const { text, images, files: reportBugFiles } = await config.callbacks.ask(this.name, bugReportData, false)
-
-		// If the user provided a response, treat it as feedback
-		if (text || (images && images.length > 0) || (reportBugFiles && reportBugFiles.length > 0)) {
-			let fileContentString = ""
-			if (reportBugFiles && reportBugFiles.length > 0) {
-				fileContentString = await processFilesIntoText(reportBugFiles)
-			}
-
-			await config.callbacks.say("user_feedback", text ?? "", images, reportBugFiles)
-			return formatResponse.toolResult(
-				`The user did not submit the bug, and provided feedback on the Github issue generated instead:\n<feedback>\n${text}\n</feedback>`,
-				images,
-				fileContentString,
-			)
-		}
-		// If no response, the user accepted the bug report
+		// ExecutionFunnel recorded explicit consent before opening the external URL.
 		try {
 			// Create a Map of parameters for the GitHub issue
 			const params = new Map<string, string>()

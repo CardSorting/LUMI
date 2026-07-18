@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryLinkHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_LINK
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Create a durable cognitive-memory relationship")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[link cognitive memory nodes]"

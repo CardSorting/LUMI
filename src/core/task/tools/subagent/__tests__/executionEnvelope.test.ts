@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
-import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
+import { EXECUTION_FUNNEL_SCHEMA_VERSION, type ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker } from "@shared/subagent/executionEnvelope"
 import { afterEach, describe, it } from "mocha"
@@ -21,8 +21,9 @@ import { buildParentToolResult, buildSwarmSummaryOverlay } from "../SwarmReportB
 
 function createAgentEnvelope(overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const executionFunnelEvent: ExecutionFunnelEvent = {
-		schemaVersion: 1,
+		schemaVersion: EXECUTION_FUNNEL_SCHEMA_VERSION,
 		taskId: "task-1",
+		taskGeneration: "test-generation",
 		invocationId: "tool-1",
 		permitId: "permit-1",
 		toolName: "read_file",

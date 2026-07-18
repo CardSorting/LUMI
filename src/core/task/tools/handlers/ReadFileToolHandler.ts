@@ -1,30 +1,44 @@
 import path from "node:path"
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
+import { resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
-import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
+import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SafeNumber } from "../../../../shared/utils/SafeNumber"
-import { showNotificationForApproval } from "../../utils"
-import { appendSessionStabilityContext, hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
+import { appendSessionStabilityContext } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class ReadFileToolHandler implements IFullyManagedTool {
+export class ReadFileToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.FILE_READ
 
 	constructor(private validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const relPath = block.params.path ?? block.params.absolutePath
+		return declareApprovalIntent(block, {
+			description: `Read ${relPath ?? "a file"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: relPath,
+					risk: "low",
+					requestedSideEffects: ["read file contents"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to read ${relPath ?? "a file"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -46,26 +60,11 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
-		// Handle auto-approval vs manual approval for partial
-		if (
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
-		) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-			await uiHelpers.ask("tool", partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relPath: string | undefined = block.params.path
-
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
@@ -94,18 +93,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 				? { absolutePath: pathResult, displayPath: relPath as string }
 				: pathResult
 
-		// Determine workspace context for telemetry
-		const fallbackAbsolutePath = path.resolve(config.cwd, relPath ?? "")
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: authority ? Boolean(authority.workspaceHint) : typeof pathResult !== "string",
-			resolvedToNonPrimary: !arePathsEqual(absolutePath, fallbackAbsolutePath),
-			resolutionMethod: (authority?.workspaceHint || typeof pathResult !== "string" ? "hint" : "primary_fallback") as
-				| "hint"
-				| "primary_fallback",
-		}
-
-		// Handle approval flow
 		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(relPath))
 		const sharedMessageProps = {
 			tool: "readFile",
@@ -114,73 +101,9 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
-		const completeMessage = JSON.stringify(sharedMessageProps)
-
-		let pendingPresentation: Promise<void> = Promise.resolve()
-		const shouldAutoApprove =
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relPath))
-		if (shouldAutoApprove) {
-			// Auto-approval flow
-			if (!config.isSubagentExecution) {
-				pendingPresentation = (async () => {
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-					await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-				})().catch(() => undefined)
-			}
-
-			// Capture telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		} else {
-			// Manual approval flow
-			const notificationMessage = `DietCode wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
-
-			// Show notification
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		}
-
 		// Execute the actual file read operation
 		const supportsImages = config.api.getModel().info.supportsImages ?? false
 		let fileContent: import("@integrations/misc/extract-file-content").FileContentResult
-		// Advisory UI is already rejection-contained and must not delay backend
-		// settlement or cancellation.
-		void pendingPresentation
 		try {
 			fileContent = await executeTaskIoBackend(config, block, authority, "small-read", async (io, signal) =>
 				extractFileContent(absolutePath, supportsImages, {

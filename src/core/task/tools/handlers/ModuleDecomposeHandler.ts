@@ -5,7 +5,7 @@ import * as path from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { ModuleDecomposer } from "../../../policy/ModuleDecomposer"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 interface DecomposeParams {
 	path: string
@@ -17,6 +17,21 @@ interface DecomposeParams {
  */
 export class ModuleDecomposeHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_DECOMPOSE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Read ${block.params.path ?? "a module"} to produce a decomposition plan`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: block.params.path,
+					risk: "low",
+					requestedSideEffects: ["read module source"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const params = block.params as unknown as DecomposeParams

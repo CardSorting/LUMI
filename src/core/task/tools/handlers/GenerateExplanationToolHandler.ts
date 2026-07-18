@@ -16,7 +16,7 @@ import type { DietCodeSayGenerateExplanation } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 /**
@@ -38,6 +38,21 @@ function createExplanationMessage(
 
 export class GenerateExplanationToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.GENERATE_EXPLANATION
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Read workspace changes to explain ${block.params.title ?? "code changes"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					scope: "workspace",
+					risk: "low",
+					requestedSideEffects: ["read git changes and changed files"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const title = block.params.title || "code changes"

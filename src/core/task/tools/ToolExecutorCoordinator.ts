@@ -1,7 +1,5 @@
-import type { ToolUse } from "@core/assistant-message"
 import { CLINE_MCP_TOOL_IDENTIFIER } from "@/shared/mcp"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { executionFunnel } from "./execution/ExecutionFunnel"
 import { AccessMcpResourceHandler } from "./handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./handlers/ActModeRespondHandler"
 import { ApplyPatchHandler } from "./handlers/ApplyPatchHandler"
@@ -61,22 +59,12 @@ import { WebSearchToolHandler } from "./handlers/WebSearchToolHandler"
 import { WriteToFileToolHandler } from "./handlers/WriteToFileToolHandler"
 import { AgentConfigLoader } from "./subagent/AgentConfigLoader"
 import { ToolValidator } from "./ToolValidator"
-import type { TaskConfig } from "./types/TaskConfig"
-import {
-	IFullyManagedTool,
-	IPartialBlockHandler,
-	IToolHandler,
-	SharedToolHandler,
-	type ToolResponse,
-} from "./types/ToolContracts"
+import { IPartialBlockHandler, IToolHandler, SharedToolHandler, type ToolResponse } from "./types/ToolContracts"
 
-// Re-export the tool handler contract for backward compatibility.
-// The canonical definitions live in ./types/ToolContracts to break the
-// coordinator↔handlers cycle.
 export { SharedToolHandler }
-export type { IFullyManagedTool, IPartialBlockHandler, IToolHandler, ToolResponse }
+export type { IPartialBlockHandler, IToolHandler, ToolResponse }
 
-/** Routes registered handlers only after ExecutionFunnel issues a permit. */
+/** Registry only. ExecutionFunnel owns approval, permit validation, and dispatch. */
 export class ToolExecutorCoordinator {
 	private handlers = new Map<string, IToolHandler>()
 	private dynamicSubagentHandlers = new Map<string, IToolHandler>()
@@ -197,17 +185,5 @@ export class ToolExecutorCoordinator {
 		}
 
 		return undefined
-	}
-
-	/**
-	 * Execute a tool through its registered handler
-	 */
-	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const handler = this.getHandler(block.name)
-		if (!handler) {
-			throw new Error(`No handler registered for tool: ${block.name}`)
-		}
-
-		return executionFunnel.dispatchAuthorizedOperation(config, block, handler)
 	}
 }

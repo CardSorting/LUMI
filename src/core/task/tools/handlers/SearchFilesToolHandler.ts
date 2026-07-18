@@ -10,17 +10,14 @@ import { telemetryService } from "@/services/telemetry"
 import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
-import { hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend, type TaskIoBackendCallbacks } from "../io/TaskIoBackend"
 import type { PathAuthorityRecord } from "../io/TaskPathAuthorityCache"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class SearchFilesToolHandler implements IFullyManagedTool {
+export class SearchFilesToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.SEARCH
 
 	constructor(private validator: ToolValidator) {}
@@ -29,6 +26,23 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		return `[${block.name} for '${block.params.regex}'${
 			block.params.file_pattern ? ` in '${block.params.file_pattern}'` : ""
 		}]`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const relPath = block.params.path ?? block.params.absolutePath
+		return declareApprovalIntent(block, {
+			description: `Search files in ${relPath ?? "the workspace"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: relPath,
+					risk: "low",
+					requestedSideEffects: ["search file contents"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to search files for ${block.params.regex ?? "a pattern"}`,
+		})
 	}
 
 	/**
@@ -260,28 +274,13 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
-		// Handle auto-approval vs manual approval for partial
-		if (
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
-		) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-			await uiHelpers.ask("tool", partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relDirPath: string | undefined = block.params.path
 		const regex: string | undefined = block.params.regex
 		const filePattern: string | undefined = block.params.file_pattern
-
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path", "regex")
@@ -309,22 +308,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		// Determine which paths to search
 		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath, authority)
-
-		// Determine workspace context for telemetry
-		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
-		const resolvedToNonPrimary =
-			searchPaths.length === 0
-				? true
-				: searchPaths.length > 1 || (primaryWorkspaceRoot ? !arePathsEqual(primaryWorkspaceRoot, config.cwd) : true)
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: !!workspaceHint,
-			resolvedToNonPrimary,
-			resolutionMethod: (workspaceHint ? "hint" : searchPaths.length > 1 ? "path_detection" : "primary_fallback") as
-				| "hint"
-				| "primary_fallback"
-				| "path_detection",
-		}
 
 		// Capture workspace path resolution telemetry
 		if (config.isMultiRootEnabled && config.workspaceManager) {
@@ -355,72 +338,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		// Approval before search I/O and reusable lookup. External-path results are
 		// never cacheable, and approval remains per invocation.
 		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(parsedPath))
-		const pendingMessageProps = {
-			tool: "searchFiles",
-			path: getReadablePath(config.cwd, relDirPath),
-			content: "",
-			regex: regex,
-			filePattern: filePattern,
-			operationIsLocatedInWorkspace,
-		} satisfies DietCodeSayTool
-
-		const pendingMessage = JSON.stringify(pendingMessageProps)
-
-		let pendingPresentation: Promise<void> = Promise.resolve()
-		const shouldAutoApprove =
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
-		if (shouldAutoApprove) {
-			if (!config.isSubagentExecution) {
-				pendingPresentation = (async () => {
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-					await config.callbacks.say("tool", pendingMessage, undefined, undefined, false)
-				})().catch(() => undefined)
-			}
-
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		} else {
-			const notificationMessage = `DietCode wants to search files for ${regex}`
-
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", pendingMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		}
-
 		const searchStartTime = performance.now()
 		let searchResults: Awaited<ReturnType<SearchFilesToolHandler["executeSearchesBounded"]>> = []
 		const results = await executeTaskIoBackend(config, block, authority, "search", async (io, signal) => {
@@ -456,12 +373,10 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
-		if (shouldAutoApprove && !config.isSubagentExecution) {
-			void pendingPresentation
-				.then(() => config.callbacks.say("tool", JSON.stringify(sharedMessageProps), undefined, undefined, false))
+		if (!config.isSubagentExecution) {
+			void config.callbacks
+				.say("tool", JSON.stringify(sharedMessageProps), undefined, undefined, false)
 				.catch(() => undefined)
-		} else {
-			void pendingPresentation
 		}
 
 		return results

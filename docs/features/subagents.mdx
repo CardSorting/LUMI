@@ -49,13 +49,11 @@ Deep dive: [Working with subagents](/WORKING_WITH_SUBAGENTS) · Code map in [com
 
 ## Auto-Approve Behavior
 
-Read/audit/planning lanes follow the **Read project files** auto-approve permission and receive only local read, skill-loading, and diagnostic tools. A lane that declares mutation follows the **Edit files** permission and requires approval once at the parent boundary when edit auto-approval is off; inner I/O then runs without repeated prompts while tool allowlists, hooks, locks, budgets, and the merge gate remain enforced.
+Launching a governed subagent batch requires one explicit approval decision recorded by `ExecutionFunnel`; it is not silently auto-approved. The launch intent records whether the proposed lanes declare mutation.
 
-A mixed swarm must satisfy both read and edit auto-approval. If either permission is unavailable, LUMI requests one approval for the entire batch.
+Each child tool operation then enters the identical `ExecutionFunnel` authority under its own task generation and invocation. Read and edit settings may allow an eligible child operation to be approved automatically, but a child never reuses the launch decision or another invocation's permit.
 
-In [YOLO mode](/features/auto-approve#yolo-mode), subagents are always auto-approved.
-
-If auto-approve is off, LUMI will ask for your approval before launching subagents, showing you the prompts it plans to send.
+LUMI shows the proposed prompts when requesting launch consent. Tool allowlists, hooks, locks, budgets, replay fencing, and the merge gate remain enforced after approval.
 
 ## What Subagents Can Do
 

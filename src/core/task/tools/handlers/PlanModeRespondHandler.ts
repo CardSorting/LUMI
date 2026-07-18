@@ -10,7 +10,7 @@ import { DietCodePlanModeResponse } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareNoConsentIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { StabilityScribe } from "../utils/StabilityScribe"
 import { getInitialTaskPreview } from "../utils/taskPreview"
@@ -20,6 +20,10 @@ const serializePlanPayload = (response: string, options: string[] = []): string 
 
 export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.PLAN_MODE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Publish a plan-mode response")
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

@@ -11,6 +11,11 @@
 - Do not use an ad hoc JSON hash as a completion decision ID; use the schema-versioned canonical digest.
 - Do not create a completion decision in a handler, finalizer, resume adapter, prompt projection, or webview component. All authority belongs to `CompletionFunnel.ts`; downstream code consumes its event.
 - Do not call a tool handler, `UniversalGuard`, execution hook, mutation fence, or roadmap preflight as a second execution gate. All authorization and dispatch belong to `ExecutionFunnel.ts`.
+- Do not inspect approval settings, auto-approve, prompt for operation consent, record a decision, or issue/reinterpret a permit in a handler. Handlers declare only a pure `ApprovalIntent`.
+- Do not restore a missing-intent default or treat stale/malformed decisions as approval. Approval is fail-closed and generation scoped.
+- Do not issue a permit before `approval.decision`, or accept a permit whose `permitDecisionId`, generation, or invocation differs from the recorded decision.
+- Do not let a composite handler call another handler directly. Use the funnel's delegated dispatch and ensure the child intent is covered by the frozen parent intent.
+- Do not discover and execute an undeclared command after approval; exact executable commands belong in normalized intent arguments before policy evaluation.
 - Do not infer tool success, failure, denial, or cancellation from presentation text. Consume the whole terminal `ExecutionFunnelEvent` for that invocation.
 - Do not add a compatibility executor beside the funnel. Reliability is subordinate to the active permit and lives in the same monolith.
 - Do not merge a pending event with fields from an older completed event. Select one whole event, while allowing separately verified durable terminal evidence to supersede stale presentation history.

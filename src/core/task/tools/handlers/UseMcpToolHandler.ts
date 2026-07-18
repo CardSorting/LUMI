@@ -1,21 +1,29 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { DietCodeAsk, DietCodeAskUseMcpServer } from "@shared/ExtensionMessage"
-import { telemetryService } from "@/services/telemetry"
+import { DietCodeAskUseMcpServer } from "@shared/ExtensionMessage"
 import { truncateContent } from "@/shared/content-limits"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
 import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class UseMcpToolHandler implements IFullyManagedTool {
+export class UseMcpToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.MCP_USE
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.server_name}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Use MCP tool ${block.params.tool_name ?? ""} on ${block.params.server_name ?? ""}`,
+			requirements: [
+				{ capability: "mcp", risk: "high", requestedSideEffects: ["remote tool invocation"], autoApprovalEligible: true },
+			],
+			promptType: "use_mcp_server",
+			notification: `DietCode wants to use ${block.params.tool_name ?? "an MCP tool"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -30,28 +38,13 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			arguments: uiHelpers.removeClosingTag(block, "arguments", mcp_arguments),
 		} satisfies DietCodeAskUseMcpServer)
 
-		// Check if tool should be auto-approved using MCP-specific logic
-		const config = uiHelpers.getConfig()
-		const shouldAutoApprove = config.callbacks.shouldAutoApproveTool(block.name)
-
-		if (shouldAutoApprove) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
-			await uiHelpers.say("use_mcp_server" as any, partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "use_mcp_server")
-			await uiHelpers.ask("use_mcp_server" as DietCodeAsk, partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("use_mcp_server", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const server_name: string | undefined = block.params.server_name
 		const tool_name: string | undefined = block.params.tool_name
 		const mcp_arguments: string | undefined = block.params.arguments
-
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		if (!server_name) {
@@ -81,69 +74,6 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Handle approval flow
-		const completeMessage = JSON.stringify({
-			type: "use_mcp_tool",
-			serverName: server_name,
-			toolName: tool_name,
-			arguments: mcp_arguments,
-		} satisfies DietCodeAskUseMcpServer)
-
-		const isToolAutoApproved = config.services.mcpHub.connections
-			?.find((conn: any) => conn.server.name === server_name)
-			?.server.tools?.find((tool: any) => tool.name === tool_name)?.autoApprove
-
-		if (config.callbacks.shouldAutoApproveTool(block.name) || isToolAutoApproved) {
-			// Auto-approval flow
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
-			await config.callbacks.say("use_mcp_server", completeMessage, undefined, undefined, false)
-
-			// Capture telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		} else {
-			// Manual approval flow
-			const notificationMessage = `DietCode wants to use ${tool_name || "unknown tool"} on ${server_name || "unknown server"}`
-
-			// Show notification
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "use_mcp_server")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("use_mcp_server", completeMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					undefined,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		}
-
 		// Show MCP request started message
 		await config.callbacks.say("mcp_server_request_started")
 
@@ -156,7 +86,8 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 			// Execute the MCP tool with reliability wrapper
 			const toolResult = await executionFunnel.executeReliableAction(
-				config.ulid,
+				config.taskId,
+				config.taskState.executionGeneration,
 				() => config.services.mcpHub.callTool(server_name, tool_name, parsedArguments, config.ulid),
 				{ concurrencyGroup: "mcp" },
 			)

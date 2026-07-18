@@ -7,7 +7,7 @@ import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { recordAdvisoryAuditCache } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareNoConsentIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { getInitialTaskPreview } from "../utils/taskPreview"
 
@@ -16,6 +16,10 @@ const ACT_MODE_AUDIT_INTERVAL = 5
 
 export class ActModeRespondHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.ACT_MODE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Publish an act-mode progress response")
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

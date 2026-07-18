@@ -5,7 +5,7 @@ import * as path from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 /**
  * DependencyMapHandler: Visualizes Codebase Integrity.
@@ -13,6 +13,21 @@ import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
  */
 export class DependencyMapHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_MAP
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: "Generate the workspace integrity map",
+			requirements: [
+				{
+					capability: "workspace_write",
+					path: ".spider/integrity_map.html",
+					risk: "elevated",
+					requestedSideEffects: ["write generated integrity report"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[generate integrity health map]"

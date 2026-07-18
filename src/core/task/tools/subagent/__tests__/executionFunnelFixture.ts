@@ -8,6 +8,7 @@ export function terminalExecutionEvent(toolName = "read_file", taskId = "task-1"
 	return {
 		schemaVersion: EXECUTION_FUNNEL_SCHEMA_VERSION,
 		taskId,
+		taskGeneration: "fixture-generation",
 		invocationId: `fixture:${toolName}:${++invocationSequence}`,
 		permitId: `fixture-permit:${invocationSequence}`,
 		toolName,

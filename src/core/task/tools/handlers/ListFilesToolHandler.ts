@@ -1,27 +1,39 @@
-import path from "node:path"
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
+import { resolveWorkspacePath } from "@core/workspace"
 import { listFiles } from "@services/glob/list-files"
-import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
+import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
-import { hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class ListFilesToolHandler implements IFullyManagedTool {
+export class ListFilesToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.LIST_FILES
 
 	constructor(private validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const relPath = block.params.path ?? block.params.absolutePath
+		return declareApprovalIntent(block, {
+			description: `List files in ${relPath ?? "a directory"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: relPath,
+					risk: "low",
+					requestedSideEffects: ["read directory entries"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to list ${relPath ?? "a directory"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -46,28 +58,13 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
-		// Handle auto-approval vs manual approval for partial
-		if (
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
-		) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-			await uiHelpers.ask("tool", partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relDirPath: string | undefined = block.params.path
 		const recursiveRaw: string | undefined = block.params.recursive
 		const recursive = recursiveRaw?.toLowerCase() === "true"
-
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
@@ -97,81 +94,13 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 				? { absolutePath: pathResult, displayPath: relDirPath }
 				: pathResult
 
-		// Determine workspace context for telemetry
-		const fallbackAbsolutePath = path.resolve(config.cwd, relDirPath ?? "")
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: authority ? Boolean(authority.workspaceHint) : typeof pathResult !== "string",
-			resolvedToNonPrimary: !arePathsEqual(absolutePath, fallbackAbsolutePath),
-			resolutionMethod: (authority?.workspaceHint || typeof pathResult !== "string" ? "hint" : "primary_fallback") as
-				| "hint"
-				| "primary_fallback",
-		}
-
-		// Handle approval before I/O — mirrors read_file (avoid wasted work on manual deny)
+		// Build the UI projection; admission has already been resolved by ExecutionFunnel.
 		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(relDirPath))
 		const sharedMessageProps = {
 			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
 			path: getReadablePath(config.cwd, displayPath),
 			content: "",
 			operationIsLocatedInWorkspace,
-		}
-
-		const completeMessage = JSON.stringify(sharedMessageProps)
-
-		let pendingPresentation: Promise<void> = Promise.resolve()
-		const shouldAutoApprove =
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
-		if (shouldAutoApprove) {
-			if (!config.isSubagentExecution) {
-				pendingPresentation = (async () => {
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-					await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-				})().catch(() => undefined)
-			}
-
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		} else {
-			const notificationMessage = `DietCode wants to view directory ${getWorkspaceBasename(absolutePath, "ListFilesToolHandler.notification")}/`
-
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
 		}
 
 		const result = await executeTaskIoBackend(config, block, authority, "traversal", async (io, signal) => {
@@ -186,13 +115,9 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 			return formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
 		})
 
-		if (shouldAutoApprove && !config.isSubagentExecution) {
+		if (!config.isSubagentExecution) {
 			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
-			void pendingPresentation
-				.then(() => config.callbacks.say("tool", resultMessage, undefined, undefined, false))
-				.catch(() => undefined)
-		} else {
-			void pendingPresentation
+			void config.callbacks.say("tool", resultMessage, undefined, undefined, false).catch(() => undefined)
 		}
 
 		return result

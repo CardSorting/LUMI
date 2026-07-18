@@ -5,7 +5,6 @@ import { flushTaskGeneration, getJoyRideCache } from "@core/joyride"
 import { formatResponse } from "@core/prompts/responses"
 import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import { type GatePolicyProvenance, resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
@@ -19,7 +18,6 @@ import { CoordinationError, CoordinationErrorCode } from "@shared/governance/Coo
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
-import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
 	buildCompletionGateReadinessBlock,
@@ -42,10 +40,9 @@ import {
 } from "../completionGatePipeline"
 import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { getTaskCompletionTelemetry } from "../utils"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { getInitialTaskPreview } from "../utils/taskPreview"
 
 async function buildAuditGateOptions(
@@ -114,6 +111,26 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const command = block.params.command
+		return declareApprovalIntent(block, {
+			description: command ? `Complete the task and execute: ${command}` : "Submit a task completion attempt",
+			requirements: command
+				? [
+						{
+							capability: "command",
+							risk: "elevated",
+							requestedSideEffects: ["execute completion command"],
+							autoApprovalEligible: true,
+						},
+					]
+				: [],
+			promptType: command ? "command" : "tool",
+			promptMessage: command ?? JSON.stringify({ tool: block.name }),
+			notification: command ? `DietCode wants to execute a completion command: ${command}` : undefined,
+		})
 	}
 
 	/**
@@ -339,13 +356,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		config.taskState.lastCompletionDecisionId = completionDecision.decisionId
 		config.taskState.lastCompletionDecisionResult = JSON.stringify(successResponse)
 
-		if (config.autoApprovalSettings.enableNotifications) {
-			showSystemNotification({
-				subtitle: "Task Completed",
-				message: result.replace(/\n/g, " "),
-			})
-		}
-
 		const addNewChangesFlagToLastCompletionResultMessage = async () => {
 			// Add newchanges flag if there are new changes to the workspace
 			const hasNewChanges = await config.callbacks.doesLatestTaskCompletionHaveNewChanges()
@@ -415,33 +425,15 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				await config.callbacks.updateFCListFromToolResponse(block.params.task_progress)
 			}
 
-			// Check if command should be auto-approved
-			// attempt_completion commands don't have requires_approval param, so we treat them as safe commands
-			const autoApproveResult = config.autoApprover?.shouldAutoApproveTool(DietCodeDefaultTool.BASH)
-			const autoApproveSafe = Array.isArray(autoApproveResult) ? autoApproveResult[0] : autoApproveResult
-
-			if (autoApproveSafe) {
-				// Auto-approve flow - show command as 'say' instead of 'ask'
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
-				await config.callbacks.say("command", command, undefined, undefined, false)
-			} else {
-				// Manual approval flow - need to ask for approval
-				showNotificationForApproval(
-					`DietCode wants to execute a command: ${command}`,
-					config.autoApprovalSettings.enableNotifications,
-				)
-
-				const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("command", command, config)
-				if (!didApprove) {
-					return formatResponse.toolDenied()
-				}
-			}
-
 			// Execute the command
-			const [userRejected, execCommandResult] = await config.callbacks.executeCommandTool(command, undefined) // no timeout for attempt_completion command
+			const [userRejected, execCommandResult] = await executionFunnel.executeReliableAction(
+				config.taskId,
+				config.taskState.executionGeneration,
+				() => config.callbacks.executeCommandTool(command, undefined),
+				{ concurrencyGroup: "shell", timeoutMs: 0, maxRetries: 1 },
+			)
 
 			if (userRejected) {
-				executionFunnel.recordUserDecision(config.taskState, false)
 				return execCommandResult
 			}
 			// user didn't reject, but the command may have output

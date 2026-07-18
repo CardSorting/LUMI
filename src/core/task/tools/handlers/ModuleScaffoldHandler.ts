@@ -5,7 +5,7 @@ import * as path from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { generateLayerComment } from "@/utils/joy-zoning"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 interface ScaffoldParams {
 	name: string
@@ -19,6 +19,33 @@ interface ScaffoldParams {
  */
 export class ModuleScaffoldHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_SCAFFOLD
+
+	getApprovalIntent(block: ToolUse) {
+		const params = block.params as unknown as Partial<ScaffoldParams>
+		const layer = (params.layer ?? "").toLowerCase()
+		const baseDir =
+			layer === "domain"
+				? "src/domain"
+				: layer === "core"
+					? "src/core"
+					: layer === "infrastructure"
+						? "src/infrastructure"
+						: layer === "ui"
+							? "src/ui"
+							: "src/utils"
+		const fileName = `${(params.name ?? "module").toLowerCase().replace(/[^a-z0-9]/g, "-")}.ts`
+		const filePath = path.join(baseDir, params.dir ?? "", fileName)
+		return declareApprovalIntent(block, {
+			description: `Create module and test scaffolding for ${params.name ?? "a module"}`,
+			requirements: [filePath, filePath.replace(".ts", ".test.ts")].map((target) => ({
+				capability: "workspace_write" as const,
+				path: target,
+				risk: "high" as const,
+				requestedSideEffects: ["create scaffolded workspace file"],
+				autoApprovalEligible: true,
+			})),
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const params = block.params as unknown as ScaffoldParams

@@ -12,7 +12,7 @@ import { telemetryService } from "@/services/telemetry"
 import { GOLDEN_CARTRIDGE_SKILL_NAME } from "@/shared/golden-cartridge"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 function parseFullReference(value: string | undefined): boolean {
@@ -34,6 +34,21 @@ export function activateSkillTools(taskState: TaskConfig["taskState"], skillName
 
 export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.USE_SKILL
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Load skill instructions for ${block.params.skill_name ?? "a skill"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					scope: "mixed",
+					risk: "low",
+					requestedSideEffects: ["read project, bundled, or global skill instructions"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const skillName = block.params.skill_name

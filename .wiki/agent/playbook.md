@@ -5,8 +5,9 @@ Last validated: 2026-07-18
 ## Current Snapshot
 
 - Task admission and agent loop: `src/core/task/index.ts`.
-- Tool execution authority: `src/core/task/tools/execution/ExecutionFunnel.ts`. This auditable monolith owns parent, sibling, and subagent admission, policy, permits, dispatch, reliability, and terminal classification.
-- Execution adapters: `src/core/task/ToolExecutor.ts`, `ToolExecutorCoordinator.ts`, sibling invocation contexts, and subagent runners consume the single `ExecutionFunnelEvent`; they do not derive execution state from handler text.
+- Tool execution authority: `src/core/task/tools/execution/ExecutionFunnel.ts`. This auditable monolith owns parent, sibling, and subagent approval preparation, settings/policy evaluation, prompting, the one immutable decision, decision-linked permits, dispatch, reliability, and terminal classification.
+- Approval is execution admission: a permit cannot exist until the funnel records an approved decision for the same task generation and invocation. Handlers synchronously declare a pure `ApprovalIntent`; they never read approval settings, prompt for operation consent, record a decision, or issue a permit.
+- Execution adapters: `src/core/task/ToolExecutor.ts`, registry-only `ToolExecutorCoordinator.ts`, sibling invocation contexts, and subagent runners consume the single `ExecutionFunnelEvent`; they do not derive execution or approval state from handler text.
 - Workspace-local query authority is a classification inside `ExecutionFunnel.ts`, not a separate gate.
 - Completion authority: `src/core/task/tools/completion/CompletionFunnel.ts`. This monolith owns collection, ordered gate evaluation, action authorization, canonical identity, durable SQLite CAS, publication, terminal classification, and the auditable stage trace.
 - Completion adapters: `AttemptCompletionHandler.ts`, task resume, subagent envelopes, and the webview consume the single `CompletionFunnelEvent`; they must not derive independent lifecycle or completion decisions.
@@ -38,7 +39,7 @@ Last validated: 2026-07-18
 
 ```sh
 npx tsc --noEmit --pretty false
-npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 --exit src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolBatch.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 --exit src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolDependency.test.ts src/core/task/tools/siblings/__tests__/SiblingToolScheduler.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts
 TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts
 npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts
 npm run test:unit
@@ -53,7 +54,7 @@ npm run benchmark:meow-io
 
 For completion work, start with `CompletionFunnel.test.ts`, `completionFunnelHardening.test.ts`, `TaskCompletionTerminalization.test.ts`, `completionFunnelMessages.test.ts`, and `taskCompletionEvidence.test.ts`. A terminal event must always be `phase: "completed"`, expose no next action, forbid `attempt_completion`, and never regress to pending when generic resume bookkeeping is appended.
 
-For execution work, start with `ExecutionFunnel.test.ts` and the parent/sibling/subagent parity suites. Every invocation must enter `ExecutionFunnel.execute()`, dispatch only under its active permit, and publish one terminal event whose decisive stage explains the outcome.
+For execution work, start with `ExecutionFunnel.test.ts` and the parent/sibling/subagent parity suites. Every invocation must enter `ExecutionFunnel.execute()`, record exactly one approval decision before permit issuance, dispatch only under that linked permit, and publish one terminal event whose ordered stages explain the outcome. Composite adapters may dispatch only child intents covered by the recorded parent intent. Run `npm run check:handler-imports` to enforce the no-handler-authority boundary.
 
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
 
@@ -75,3 +76,4 @@ The benchmark reports deterministic local-fixture evidence. Its “cold” mode 
 - [Operations guide](../meow-operations-guide.md)
 - [ADR index](../adr/README.md)
 - [Migration report](../meow-migration.md)
+- [Approval admission ADR](../adr/MEOW-011-execution-approval-admission.md)

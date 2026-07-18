@@ -4,9 +4,11 @@ import { TaskState } from "@core/task/TaskState"
 import { attachCommandExecutionEvidence, type CommandExecutionEvidence } from "@shared/command-execution-evidence"
 import type { GoldenCartridgeResult, GoldenCartridgeVerb } from "@shared/golden-cartridge"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { describe, it } from "mocha"
+import { afterEach, beforeEach, describe, it } from "mocha"
+import sinon from "sinon"
+import { executionFunnel } from "../../execution/ExecutionFunnel"
 import type { TaskConfig } from "../../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../../types/ToolContracts"
+import { declareNoConsentIntent, type IToolHandler, type ToolResponse } from "../../types/ToolContracts"
 import { type GoldenCartridgeAdapters, GoldenCartridgeToolHandler } from "../GoldenCartridgeToolHandler"
 
 class FakeHandler implements IToolHandler {
@@ -15,6 +17,9 @@ class FakeHandler implements IToolHandler {
 		readonly name: DietCodeDefaultTool,
 		readonly response: ToolResponse = "delegated-ok",
 	) {}
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, `Test adapter ${this.name}`)
+	}
 	getDescription(): string {
 		return this.name
 	}
@@ -70,6 +75,16 @@ async function result(handler: GoldenCartridgeToolHandler, config: TaskConfig, v
 }
 
 describe("GoldenCartridgeToolHandler", () => {
+	beforeEach(() => {
+		sinon
+			.stub(executionFunnel, "dispatchAuthorizedDelegatedOperation")
+			.callsFake(async (config, _parentBlock, delegatedBlock, delegatedHandler) =>
+				delegatedHandler.execute(config, delegatedBlock),
+			)
+	})
+
+	afterEach(() => sinon.restore())
+
 	it("accepts every canonical verb and returns the shared envelope", async () => {
 		const { config, handler } = fixture()
 		const payloads: Partial<Record<GoldenCartridgeVerb, Record<string, unknown>>> = {
@@ -413,6 +428,7 @@ describe("GoldenCartridgeToolHandler", () => {
 			validationQuestion: requirement,
 			changedSurfaces: ["src/owner.ts"],
 			testFiles: ["src/owner.test.ts"],
+			proposedCommands: ["npm test -- src/owner.test.ts"],
 			discoverRepositoryCommands: false,
 		})
 		value.adapters.command = new FakeHandler(DietCodeDefaultTool.BASH, commandResponse({}, "all focused assertions passed"))
@@ -420,6 +436,7 @@ describe("GoldenCartridgeToolHandler", () => {
 			validationQuestion: requirement,
 			changedSurfaces: ["src/owner.ts"],
 			testFiles: ["src/owner.test.ts"],
+			proposedCommands: ["npm test -- src/owner.test.ts"],
 			discoverRepositoryCommands: false,
 			rerun: true,
 		})
@@ -453,8 +470,8 @@ describe("GoldenCartridgeToolHandler", () => {
 	it("observation verbs do not mutate task, permission, or completion state", async () => {
 		const { config, handler, taskState } = fixture()
 		const before = {
-			didRejectTool: taskState.didRejectTool,
 			didEditFile: taskState.didEditFile,
+			executionFunnelEventJson: taskState.executionFunnelEventJson,
 			doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
 			completionFunnelEventJson: taskState.completionFunnelEventJson,
 		}
@@ -463,8 +480,8 @@ describe("GoldenCartridgeToolHandler", () => {
 		await result(handler, config, "seal", { requirement: "observe" })
 		assert.deepEqual(
 			{
-				didRejectTool: taskState.didRejectTool,
 				didEditFile: taskState.didEditFile,
+				executionFunnelEventJson: taskState.executionFunnelEventJson,
 				doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
 				completionFunnelEventJson: taskState.completionFunnelEventJson,
 			},

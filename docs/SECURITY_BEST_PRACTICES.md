@@ -12,8 +12,8 @@ LUMI has physical access to your workspace (files, terminal, browser, MCP). Secu
 
 | Layer | What it does | Where |
 |-------|--------------|-------|
-| **Tool approval** | Mutating tools wait for user approve/reject in webview | Tool handlers + diff view |
-| **Auto-approve rules** | Opt-in skip for trusted patterns only | `src/core/task/tools/autoApprove.ts` |
+| **Tool approval** | Every operation receives one recorded approval decision before a permit can exist | `ExecutionFunnel` + webview projection |
+| **Auto-approve policy** | Eligible intents use current per-capability settings, command safety/permission, and MCP policy | `src/core/task/tools/execution/ExecutionFunnel.ts` |
 | **Read-only allowlist** | 13 tools may run without blocking checkpoints | `READ_ONLY_TOOLS` in `src/shared/tools.ts` |
 | **Hooks** | Cancel or modify context at 8 lifecycle points | `src/core/hooks/hook-factory.ts` |
 | **Completion gates** | `attempt_completion` blocked until audit/roadmap/focus checks pass | `completionGatePipeline.ts` |

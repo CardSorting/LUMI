@@ -2,7 +2,7 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 interface QueryParams {
 	layer?: string
@@ -21,6 +21,21 @@ import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
  */
 export class StabilityQueryHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_QUERY
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: "Read the workspace stability registry",
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: ".spider",
+					risk: "low",
+					requestedSideEffects: ["read structural registry"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const params = block.params as unknown as QueryParams

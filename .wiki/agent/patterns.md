@@ -4,12 +4,15 @@
 
 1. Give every invocation a stable task-scoped invocation ID.
 2. Enter `ExecutionFunnel.execute()` from parent, sibling, or subagent transport code.
-3. Evaluate the monolith's ordered admission stages and publish each complete event projection.
-4. Issue one in-process permit only after all synchronous authority passes.
-5. Dispatch exactly one registered handler under that permit; keep operation-specific validation and consent in the handler.
-6. Run reliability, post-hook, and post-policy observation inside the permit context.
-7. Publish one immutable terminal event with a stable reason code and decisive stage.
-8. Project results in deterministic order and keep task completion under the separate `CompletionFunnel`.
+3. Derive conditional mutation and collision paths from the frozen intent inside the funnel; do not maintain a second tool-name decision table in a handler or transport.
+4. Normalize the operation and freeze the handler's synchronous, pure `ApprovalIntent`.
+5. Evaluate mode, lane, cancellation, fencing, roadmap, hooks, execution policy, approval settings, command safety, trusted commands, and MCP policy in the ordered monolith.
+6. Prompt only when policy cannot automatically admit the complete intent; record exactly one immutable decision.
+7. Issue one permit linked to that decision, task generation, and invocation, then dispatch the registered adapter.
+8. Validate any composite child intent is covered by the recorded parent intent before delegated dispatch.
+9. Run reliability, post-hook, and post-policy observation inside the permit context.
+10. Publish one deeply immutable terminal event with the original stage ordering and causal approval audit.
+11. Project results deterministically and keep task completion under the separate `CompletionFunnel`.
 
 ## Database-First Lease Lifecycle
 
@@ -43,7 +46,7 @@
 1. Enter the central funnel and classify the invocation as workspace query.
 2. Validate required parameters and enforce `.dietcodeignore`.
 3. Resolve whether the target is inside an open workspace.
-4. Reuse task authority for local query I/O; retain approval for external paths.
+4. Evaluate workspace/external scope against the current read settings in the central approval policy; do not infer consent in the handler.
 5. Skip architectural mutation guards and pre-tool observability hooks as recorded funnel stages.
 6. Return the result and publish the same terminal event contract used by governed tools.
 
@@ -81,7 +84,7 @@ Build one canonical snapshot per lifecycle decision and pass its result downstre
 ## Generation-Safe I/O Backend
 
 1. Validate parameters and resolve immutable path authority under the task's workspace/filesystem/policy generations.
-2. Complete any required external-path approval before reusable backend lookup; external results are never cacheable.
+2. Let `ExecutionFunnel` complete any required external-path approval before reusable backend lookup; external results and approval evidence are never cacheable.
 3. Look up and singleflight the semantic request before acquiring a class budget, so duplicate waiters consume one slot.
 4. Acquire the centrally bounded metadata/read, search, or traversal class and pass the invocation `AbortSignal` into the backend.
 5. Record backend start and first useful evidence independently from canonical completion.

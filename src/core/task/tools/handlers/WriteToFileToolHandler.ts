@@ -3,8 +3,7 @@ import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import type { ToolUse } from "@core/assistant-message"
 import { constructNewFileContent, getLineNumberFromCharIndex } from "@core/assistant-message/diff"
 import { formatResponse } from "@core/prompts/responses"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
+import { resolveWorkspacePath } from "@core/workspace"
 import { buildFileWriteContentAdvisory } from "@shared/audit/auditFileWrite"
 import { isWikiPath, isWikiWriteAuthorized } from "@shared/completion/wikiWritePolicy"
 import { DietCodeSayTool } from "@shared/ExtensionMessage"
@@ -14,23 +13,38 @@ import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/pat
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
 import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { StabilityScribe } from "../utils/StabilityScribe"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class WriteToFileToolHandler implements IFullyManagedTool {
+export class WriteToFileToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.FILE_NEW // This handler supports write_to_file, replace_in_file, and new_rule
 
 	constructor(private validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const relPath = block.params.path ?? block.params.absolutePath
+		return declareApprovalIntent(block, {
+			description: `${block.name} ${relPath ?? "a file"}`,
+			requirements: [
+				{
+					capability: "workspace_write",
+					path: relPath,
+					risk: "high",
+					requestedSideEffects: ["create or modify workspace file"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to modify ${relPath ?? "a file"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -45,59 +59,19 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		}
 
 		const config = uiHelpers.getConfig()
-
-		// Creates file if it doesn't exist, and opens editor to stream content in. We don't want to handle this in the try/catch below since the error handler for it resets the diff view, which wouldn't be open if this failed.
-		const result = await this.validateAndPrepareFileOperation(config, block, rawRelPath, rawDiff, rawContent)
-		if (!result) {
-			return
-		}
-
-		try {
-			const { relPath, absolutePath, fileExists, diff, content, newContent, matchIndices } = result
-
-			// Create and show partial UI message
-			const sharedMessageProps: DietCodeSayTool = {
-				tool: fileExists ? "editedExistingFile" : "newFileCreated",
-				path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
-				content: diff || content,
-				operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
-				startLineNumbers: matchIndices?.map((idx) =>
-					getLineNumberFromCharIndex(config.services.diffViewProvider.originalContent || "", idx),
-				),
-			}
-			const partialMessage = JSON.stringify(sharedMessageProps)
-
-			// Handle auto-approval vs manual approval for partial
-			if (await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath)) {
-				await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool") // in case the user changes auto-approval settings mid stream
-				await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
-			} else {
-				await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-				await uiHelpers.ask("tool", partialMessage, block.partial).catch(() => {})
-			}
-
-			// CRITICAL: Open editor and stream content in real-time (from original code)
-			if (!config.services.diffViewProvider.isEditing) {
-				// Open the editor and prepare to stream content in
-				await config.services.diffViewProvider.open(absolutePath, { displayPath: relPath })
-			}
-			// Editor is open, stream content in real-time (false = don't finalize yet)
-			await config.services.diffViewProvider.update(newContent, false)
-		} catch (error) {
-			// Reset diff view on error
-			await config.services.diffViewProvider.revertChanges()
-			await config.services.diffViewProvider.reset()
-			throw error
-		}
+		const partialMessage = JSON.stringify({
+			tool: block.name === DietCodeDefaultTool.FILE_EDIT ? "editedExistingFile" : "newFileCreated",
+			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", rawRelPath)),
+			content: rawDiff || rawContent,
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(rawRelPath),
+		} satisfies DietCodeSayTool)
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const rawRelPath = block.params.path
 		const rawContent = block.params.content // for write_to_file
 		const rawDiff = block.params.diff // for replace_in_file
-
-		// Extract provider information for telemetry
-		const { providerId, modelId } = this.getModelInfo(config)
 
 		// Validate required parameters based on tool type
 		if (!rawRelPath) {
@@ -155,7 +129,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				return "" // can only happen if the sharedLogic adds an error to userMessages
 			}
 
-			const { relPath, absolutePath, fileExists, diff, content, newContent, workspaceContext, matchIndices } = result
+			const { relPath, absolutePath, fileExists, diff, content, newContent, matchIndices } = result
 
 			// Handle approval flow
 			const sharedMessageProps: DietCodeSayTool = {
@@ -173,7 +147,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			if (!config.services.diffViewProvider.isEditing) {
 				// show gui message before showing edit animation
 				const partialMessage = JSON.stringify(sharedMessageProps)
-				await config.callbacks.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
+				await config.callbacks.say("tool", partialMessage, undefined, undefined, true).catch(() => undefined)
 				await config.services.diffViewProvider.open(absolutePath, { displayPath: relPath })
 			}
 			await config.services.diffViewProvider.update(newContent, true)
@@ -193,117 +167,21 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				// : undefined,
 			} satisfies DietCodeSayTool)
 
-			if (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relPath)) {
-				// Auto-approval flow
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-
-				// Capture telemetry
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					modelId,
-					providerId,
-					true,
-					true,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-
-				// we need an artificial delay to let the diagnostics catch up to the changes
-				await setTimeoutPromise(3_500)
-			} else {
-				// Manual approval flow with detailed feedback handling
-				const notificationMessage = `DietCode wants to ${fileExists ? "edit" : "create"} ${getWorkspaceBasename(relPath, "WriteToFile.notification")}`
-
-				// Show notification
-				showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-				// Need a more customized tool response for file edits to highlight the fact that the file was not updated (particularly important for deepseek)
-
-				const { response, text, images, files } = await config.callbacks.ask("tool", completeMessage, false)
-				executionFunnel.recordUserDecision(config.taskState, response === "yesButtonClicked")
-
-				if (response !== "yesButtonClicked") {
-					// Handle rejection with detailed messages
-					const fileDeniedNote = fileExists
-						? "The file was not updated, and maintains its original contents."
-						: "The file was not created."
-
-					// Process user feedback if provided (with file content processing)
-					if (text || (images && images.length > 0) || (files && files.length > 0)) {
-						let fileContentString = ""
-						if (files && files.length > 0) {
-							fileContentString = await processFilesIntoText(files)
-						}
-
-						// Push additional tool feedback using existing utilities
-						ToolResultUtils.pushAdditionalToolFeedback(
-							config.taskState.userMessageContent,
-							text,
-							images,
-							fileContentString,
-						)
-						await config.callbacks.say("user_feedback", text, images, files)
-					}
-
-					// // Clean up the diff view when operation is rejected
-					// await config.services.diffViewProvider.revertChanges()
-					// await config.services.diffViewProvider.reset()
-
-					telemetryService.captureToolUsage(
-						config.ulid,
-						block.name,
-						modelId,
-						providerId,
-						false,
-						false,
-						workspaceContext,
-						block.isNativeToolCall,
-					)
-
-					await config.services.diffViewProvider.revertChanges()
-					return `The user denied this operation. ${fileDeniedNote}`
-				}
-				// User hit the approve button, and may have provided feedback
-				if (text || (images && images.length > 0) || (files && files.length > 0)) {
-					let fileContentString = ""
-					if (files && files.length > 0) {
-						fileContentString = await processFilesIntoText(files)
-					}
-
-					// Push additional tool feedback using existing utilities
-					ToolResultUtils.pushAdditionalToolFeedback(
-						config.taskState.userMessageContent,
-						text,
-						images,
-						fileContentString,
-					)
-					await config.callbacks.say("user_feedback", text, images, files)
-				}
-
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					modelId,
-					providerId,
-					false,
-					true,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-			}
+			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
 			// Mark the file as edited by DietCode
 			config.services.fileContextTracker.markFileAsEditedByDietCode(relPath)
 
 			// Save the changes and get the result with reliability wrapper
 			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } =
-				await executionFunnel.executeReliableAction(config.ulid, () => config.services.diffViewProvider.saveChanges(), {
-					concurrencyGroup: "fs",
-				})
+				await executionFunnel.executeReliableAction(
+					config.taskId,
+					config.taskState.executionGeneration,
+					() => config.services.diffViewProvider.saveChanges(),
+					{
+						concurrencyGroup: "fs",
+					},
+				)
 
 			// Reset consecutive mistake counter on successful file operation
 			config.taskState.consecutiveMistakeCount = 0

@@ -137,10 +137,12 @@ LUMI owns approval, LLM loop, webview, and VS Code I/O. BroccoliDB owns proof, r
 ## Safety pipeline (summary)
 
 ```
-Tool proposed → PreToolUse hook (optional)
-            → User approve / auto-approve rule
-            → Execute via HostProvider or MCP
-            → PostToolUse hook (optional)
+Tool proposed → register + normalize → freeze pure ApprovalIntent
+            → mode/lane/fencing/roadmap/hook/execution policy
+            → approval settings/policy → automatic decision or user prompt
+            → record one decision → issue linked permit
+            → dispatch via HostProvider or MCP → reliability/post-policy
+            → immutable ExecutionFunnelEvent
 
 attempt_completion → snapshot builder → decision engine → action contract → action guard
                      (immutable         (pure function,     (nextAllowedAction +    (enforces at tool

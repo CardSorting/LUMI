@@ -9,17 +9,30 @@ Meaning: a consumer is inferring execution state from handler text, transient pr
 Response:
 
 1. Inspect `TaskState.executionFunnelEventJson`; for sibling/subagent work, inspect the invocation context or envelope `executionFunnelEvent`.
-2. Match the exact `taskId` and `invocationId`, then require `terminal: true`.
-3. Read `phase`, `reasonCode`, and the ordered `stages`; the decisive failed stage is the complete gate audit.
+2. Match the exact `taskId`, `taskGeneration`, and `invocationId`, then require `terminal: true`.
+3. Read `approvalIntent`, `approvalPolicyInputs`, `approvalDecision`, `permitDecisionId`, `phase`, and ordered `stages`; the decisive failed stage is the complete gate audit.
 4. Route the caller through `ExecutionFunnel.execute()` and consume its returned event. Do not call a handler or policy directly.
-5. If dispatch reports a missing permit, fix the bypassing caller rather than weakening `ToolExecutorCoordinator`.
+5. If dispatch reports a missing permit, fix the bypassing caller rather than adding a coordinator wrapper. The coordinator is a registry only.
 6. Keep tool execution and task completion distinct: `operation_succeeded` does not mean the task is complete.
 
 Focused proof:
 
 ```sh
-npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolBatch.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts --timeout 10000 --exit
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolDependency.test.ts src/core/task/tools/siblings/__tests__/SiblingToolScheduler.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts --timeout 10000 --exit
 ```
+
+## Approval Is Pending Forever or Automatic Approval Ignores Settings
+
+Symptom: one UI surface waits for consent while another claims approval, or a disabled approval action still dispatches.
+
+Response:
+
+1. Inspect the one `ExecutionFunnelEvent` for the current task generation and invocation; the legacy execution booleans no longer exist.
+2. Require ordered `approval.intent`, `approval.settings`, `approval.automatic`, `approval.prompt`, `approval.decision`, then `permit.issue` stages. `permit.issue` must be absent for denial, cancellation, expiry, malformed settings, and prompt failure.
+3. Confirm `permitDecisionId === approvalDecision.decisionId`, and that the decision links the same `intentId`, task generation, and invocation.
+4. If the intent is missing or malformed, fix `getApprovalIntent(block)` in the handler. Do not add a default approval or compatibility conversion.
+5. If a composite child is rejected, declare its capability/path/exact command in the parent intent or split it into another invocation. Never bypass delegated coverage validation.
+6. Re-run `ExecutionFunnel.test.ts` under `--no-config` and the parent/sibling/subagent parity suites.
 
 ## Completion UI Says Pending After Durable Success
 

@@ -5,7 +5,7 @@ import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { StabilityDoctor } from "../../../policy/StabilityDoctor"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilityDoctorHandler: Handles the 'diagnose_sovereignty' tool.
@@ -13,6 +13,21 @@ import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
  */
 export class StabilityDoctorHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_DIAGNOSE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: "Read workspace architecture data for stability diagnosis",
+			requirements: [
+				{
+					capability: "workspace_read",
+					scope: "workspace",
+					risk: "low",
+					requestedSideEffects: ["read structural registry and source metadata"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for current substrate]`

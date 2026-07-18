@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
@@ -8,6 +9,8 @@ import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import type { HookExecution } from "./types/HookExecution"
 
 export class TaskState {
+	/** Unique lifecycle generation. Approval decisions and permits never cross it. */
+	public executionGeneration: string = randomUUID()
 	public recursionDepth = 0
 	public maxTokens?: number
 	public maxCost?: number
@@ -64,14 +67,14 @@ export class TaskState {
 	conversationHistoryDeletedRange?: [number, number]
 
 	// Tool execution flags
-	didRejectTool = false
-	didAlreadyUseTool = false
 	didEditFile = false
 	lastToolName = "" // Track last tool used for consecutive call detection
 	/** Sole modern execution authority cached as one immutable funnel event. */
 	executionFunnelEventJson?: string
 	/** Bounded terminal audit trail. Non-terminal handler/UI messages are never authority. */
 	executionFunnelHistory?: ExecutionFunnelEvent[]
+	/** Current-generation replay ledger; bounded event history is not replay authority. */
+	executionInvocationLedger: Record<string, ExecutionFunnelEvent["phase"]> = {}
 
 	// Error tracking
 	consecutiveMistakeCount = 0

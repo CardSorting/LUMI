@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemorySubgraphHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_SUBGRAPH
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Read a cognitive-memory subgraph")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[extract knowledge subgraph]"

@@ -4,6 +4,7 @@ import {
 	commandOutputSummary,
 	readCommandExecutionEvidence,
 } from "@shared/command-execution-evidence"
+import type { ApprovalRequirement } from "@shared/execution/executionFunnelEvent"
 import type {
 	GoldenCartridgeEvidence,
 	GoldenCartridgeResult,
@@ -14,9 +15,10 @@ import type {
 } from "@shared/golden-cartridge"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { NativeMutationManager } from "@/services/mutation/NativeMutationManager"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import { ApplyPatchHandler } from "./ApplyPatchHandler"
 import { CognitiveMemorySnapshotHandler } from "./CognitiveMemorySnapshotHandler"
 import { CondenseHandler } from "./CondenseHandler"
@@ -272,6 +274,68 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 		return `[golden cartridge: ${block.params.verb ?? "unknown"}]`
 	}
 
+	getApprovalIntent(block: ToolUse) {
+		let payload: Payload = {}
+		try {
+			const parsed = block.params.payload ? JSON.parse(block.params.payload) : {}
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Payload
+		} catch {
+			// Malformed payload is operation validation; the intent remains a fail-closed read declaration.
+		}
+		const verb = block.params.verb as GoldenCartridgeVerb | undefined
+		const target = asString(payload.target) ?? asString(payload.path) ?? "."
+		const declaredCommands = [
+			...new Set([...asStrings(payload.proposedCommands), ...asStrings(payload.knownRepositoryCommands)]),
+		]
+		const requirements: ApprovalRequirement[] = [
+			{
+				capability: "workspace_read" as const,
+				scope: "workspace" as const,
+				risk: "low" as const,
+				requestedSideEffects: ["inspect repository evidence"],
+				autoApprovalEligible: true,
+			},
+		]
+		if (verb === "compress") {
+			requirements.push({
+				capability: "internal_state",
+				risk: "elevated",
+				requestedSideEffects: ["replace active context or persist cognitive memory"],
+				autoApprovalEligible: false,
+			})
+		}
+		if (verb === "patch_smallest") {
+			const files = patchFiles(asString(payload.proposedChange) ?? "")
+			for (const filePath of files) {
+				requirements.push({
+					capability: "workspace_write",
+					path: filePath,
+					risk: "high",
+					requestedSideEffects: ["apply delegated workspace patch"],
+					autoApprovalEligible: true,
+				})
+			}
+		}
+		if (verb === "disprove" && payload.execute !== false) {
+			requirements.push({
+				capability: "command",
+				risk: payload.requiresApproval === false ? "elevated" : "high",
+				requestedSideEffects: ["execute delegated validation command"],
+				autoApprovalEligible: true,
+			})
+		}
+		return declareApprovalIntent(block, {
+			description: `Run Golden Cartridge ${verb ?? "operation"}`,
+			requirements,
+			notification: `DietCode wants to run Golden Cartridge ${verb ?? "operation"}`,
+			normalizedArguments: {
+				verb: verb ?? "unknown",
+				target,
+				commands: declaredCommands,
+			},
+		})
+	}
+
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const verb = block.params.verb as GoldenCartridgeVerb | undefined
 		if (!verb || !VERBS.has(verb)) return `Error: Unknown Golden Cartridge verb '${verb ?? ""}'.`
@@ -340,7 +404,7 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 				})
 			}
 			if (cacheable) config.taskState.goldenCartridgeMetrics.cacheMisses++
-			const result = await this.dispatch(config, verb, payload)
+			const result = await this.dispatch(config, block, verb, payload)
 			if (!["measure", "seal"].includes(verb)) config.taskState.goldenCartridgeRecentResults.set(verb, result.result)
 			if (cacheable) {
 				config.taskState.goldenCartridgeEvidenceCache.set(cacheKey, {
@@ -376,20 +440,27 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 		return { verb, summary, evidence, result, sideEffects: SIDE_EFFECTS[verb], ...extra }
 	}
 
-	private async dispatch(config: TaskConfig, verb: GoldenCartridgeVerb, payload: Payload): Promise<GoldenCartridgeResult> {
+	private async dispatch(
+		config: TaskConfig,
+		parentBlock: ToolUse,
+		verb: GoldenCartridgeVerb,
+		payload: Payload,
+	): Promise<GoldenCartridgeResult> {
 		const target = asString(payload.target)
 		const question = asString(payload.question)
 		const suppliedEvidence = asEvidence(payload.evidence ?? payload.workingSet ?? payload.validationEvidence)
 
 		switch (verb) {
 			case "trace": {
-				const output = await this.adapters.projectMap.execute(
+				const output = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 					config,
+					parentBlock,
 					delegatedBlock(DietCodeDefaultTool.PROJECT_MAP, {
 						query: question ?? target ?? "",
 						symbol: target ?? "",
 						maxFiles: "8",
 					}),
+					this.adapters.projectMap,
 				)
 				const map = parseObject(output)
 				const mapFailure = delegatedFailure("project_map", output)
@@ -455,20 +526,24 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 			case "slice": {
 				const operations: Array<{ authority: string; output: string }> = []
 				if (target) {
-					const definitions = await this.adapters.definitions.execute(
+					const definitions = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 						config,
+						parentBlock,
 						delegatedBlock(DietCodeDefaultTool.LIST_CODE_DEF, { path: target }),
+						this.adapters.definitions,
 					)
 					operations.push({ authority: "list_code_definition_names", output: responseText(definitions) })
 				}
 				if (question) {
-					const search = await this.adapters.search.execute(
+					const search = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 						config,
+						parentBlock,
 						delegatedBlock(DietCodeDefaultTool.SEARCH, {
 							path: target ?? ".",
 							regex: escapeRegex(question),
 							file_pattern: "*",
 						}),
+						this.adapters.search,
 					)
 					operations.push({ authority: "search_files", output: responseText(search) })
 				}
@@ -509,13 +584,16 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 			case "resolve_authority":
 			case "find_reuse": {
 				const requirement = asString(payload.requirement) ?? question ?? target ?? ""
-				const map = await this.adapters.projectMap.execute(
+				const map = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 					config,
+					parentBlock,
 					delegatedBlock(DietCodeDefaultTool.PROJECT_MAP, { query: requirement, path: target ?? "", maxFiles: "10" }),
+					this.adapters.projectMap,
 				)
 				const search = requirement
-					? await this.adapters.search.execute(
+					? await executionFunnel.dispatchAuthorizedDelegatedOperation(
 							config,
+							parentBlock,
 							delegatedBlock(DietCodeDefaultTool.SEARCH, {
 								path: ".",
 								regex: escapeRegex(
@@ -527,6 +605,7 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 								),
 								file_pattern: "*",
 							}),
+							this.adapters.search,
 						)
 					: "No lexical probe supplied."
 				const mapObject = parseObject(map)
@@ -632,21 +711,25 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 				config.taskState.goldenCartridgeMetrics.compressions++
 				let snapshot: ToolResponse | undefined
 				if (payload.persistDurableMemory === true) {
-					snapshot = await this.adapters.snapshot.execute(
+					snapshot = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 						config,
+						parentBlock,
 						delegatedBlock(DietCodeDefaultTool.MEM_SNAPSHOT, {
 							content: JSON.stringify(retained),
 							metadata: JSON.stringify({ source: "golden_cartridge", explicitlyRequested: true }),
 						}),
+						this.adapters.snapshot,
 					)
 				}
 				let releaseOutput: string | undefined
 				const release = asStrings(payload.release)
 				if (release.length > 0) {
 					releaseOutput = responseText(
-						await this.adapters.condense.execute(
+						await executionFunnel.dispatchAuthorizedDelegatedOperation(
 							config,
+							parentBlock,
 							delegatedBlock(DietCodeDefaultTool.CONDENSE, { context: JSON.stringify(retained) }),
+							this.adapters.condense,
 						),
 					)
 				}
@@ -753,9 +836,11 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 				const allowedFiles = asStrings(payload.allowedFiles)
 				const unexpected = allowedFiles.length ? intendedFiles.filter((file) => !allowedFiles.includes(file)) : []
 				config.taskState.goldenCartridgeMetrics.patchAttempts++
-				const output = await this.adapters.patch.execute(
+				const output = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 					config,
+					parentBlock,
 					delegatedBlock(DietCodeDefaultTool.APPLY_PATCH, { input: patch }),
+					this.adapters.patch,
 				)
 				const failed = commandFailed(output) || delegatedFailure("apply_patch", output) !== undefined
 				if (failed) config.taskState.goldenCartridgeMetrics.patchFailures++
@@ -808,8 +893,9 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 				)
 				let discoveredTests = asStrings(payload.testFiles)
 				if (validationQuestion && discoveredTests.length === 0) {
-					const search = await this.adapters.search.execute(
+					const search = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 						config,
+						parentBlock,
 						delegatedBlock(DietCodeDefaultTool.SEARCH, {
 							path: ".",
 							regex: escapeRegex(
@@ -821,20 +907,24 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 							),
 							file_pattern: "*{test,spec}*",
 						}),
+						this.adapters.search,
 					)
 					discoveredTests = pathsFromText(search).filter((path) => /(?:test|spec)/i.test(path))
 				}
 				const suppliedCommands = asStrings(payload.proposedCommands)
 				const knownCommands = asStrings(payload.knownRepositoryCommands)
+				const admissionCommands = new Set([...suppliedCommands, ...knownCommands])
 				let configured: Array<{ command: string; source: string }> = []
 				if (payload.discoverRepositoryCommands !== false) {
-					const metadata = await this.adapters.search.execute(
+					const metadata = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 						config,
+						parentBlock,
 						delegatedBlock(DietCodeDefaultTool.SEARCH, {
 							path: ".",
 							regex: '("(test|check|typecheck|lint)(:[^"]+)?"\\s*:|^(test|check|typecheck|lint)\\s*:)',
 							file_pattern: "{package.json,Makefile,makefile}",
 						}),
+						this.adapters.search,
 					)
 					configured = configuredCommands(metadata)
 				}
@@ -927,11 +1017,13 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 						suppliedEvidence,
 					)
 				}
-				if (!selected || payload.execute === false)
+				if (!selected || payload.execute === false || !admissionCommands.has(selected.command))
 					return this.envelope(
 						verb,
 						selected
-							? "Ranked trustworthy validation candidates without executing them."
+							? admissionCommands.has(selected.command)
+								? "Ranked trustworthy validation candidates without executing them."
+								: "Ranked validation candidates without executing an undeclared command."
 							: "No trustworthy check was discovered.",
 						{
 							validation_question: validationQuestion,
@@ -945,16 +1037,20 @@ export class GoldenCartridgeToolHandler implements IToolHandler {
 						suppliedEvidence,
 						{
 							limitations: selected
-								? undefined
+								? admissionCommands.has(selected.command)
+									? undefined
+									: ["Execution requires a new invocation that declares the exact selected command."]
 								: ["No repository-defined or caller-supplied safe command was available."],
 						},
 					)
-				const output = await this.adapters.command.execute(
+				const output = await executionFunnel.dispatchAuthorizedDelegatedOperation(
 					config,
+					parentBlock,
 					delegatedBlock(DietCodeDefaultTool.BASH, {
 						command: selected.command,
 						requires_approval: payload.requiresApproval === false ? "false" : "true",
 					}),
+					this.adapters.command,
 				)
 				const executionEvidence = readCommandExecutionEvidence(output)
 				const outcome = validationStatus(executionEvidence)

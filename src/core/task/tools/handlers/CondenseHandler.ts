@@ -1,16 +1,26 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
-import { DietCodeAsk } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import {
+	declareInternalStateIntent,
+	type IPartialBlockHandler,
+	type IToolHandler,
+	type ToolResponse,
+} from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.CONDENSE
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Replace the active conversation context with a condensed summary", {
+			type: "condense",
+			message: block.params.context ?? "",
+			notification: "DietCode wants to condense the active conversation",
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
@@ -27,32 +37,7 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Show notification if enabled
-		if (config.autoApprovalSettings.enableNotifications) {
-			showSystemNotification({
-				subtitle: "DietCode wants to condense the conversation...",
-				message: `DietCode is suggesting to condense your conversation with: ${context}`,
-			})
-		}
-
-		// Ask user for response
-		const { text, images, files: condenseFiles } = await config.callbacks.ask("condense", context, false)
-
-		// If the user provided a response, treat it as feedback
-		if (text || (images && images.length > 0) || (condenseFiles && condenseFiles.length > 0)) {
-			let fileContentString = ""
-			if (condenseFiles && condenseFiles.length > 0) {
-				fileContentString = await processFilesIntoText(condenseFiles)
-			}
-
-			await config.callbacks.say("user_feedback", text ?? "", images, condenseFiles)
-			return formatResponse.toolResult(
-				`The user provided feedback on the condensed conversation summary:\n<feedback>\n${text}\n</feedback>`,
-				images,
-				fileContentString,
-			)
-		}
-		// If no response, the user accepted the condensed version
+		// ExecutionFunnel recorded explicit consent before this adapter was dispatched.
 		const apiConversationHistory = config.messageState.getApiConversationHistory()
 		const lastMessage = apiConversationHistory[apiConversationHistory.length - 1]
 		const summaryAlreadyAppended = lastMessage && lastMessage.role === "assistant"
@@ -78,7 +63,6 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 		const context = block.params.context || ""
 		const cleanedContext = uiHelpers.removeClosingTag(block, "context", context)
 
-		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "condense")
-		await uiHelpers.ask("condense" as DietCodeAsk, cleanedContext, block.partial).catch(() => {})
+		await uiHelpers.say("text", cleanedContext, undefined, undefined, block.partial).catch(() => {})
 	}
 }

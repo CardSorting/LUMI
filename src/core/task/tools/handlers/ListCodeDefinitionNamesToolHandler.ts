@@ -1,26 +1,39 @@
 import type { ToolUse } from "@core/assistant-message"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
+import { resolveWorkspacePath } from "@core/workspace"
 import { parseSourceCodeForDefinitionsTopLevel } from "@services/tree-sitter"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { formatResponse } from "@/core/prompts/responses"
-import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
-import { hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
+export class ListCodeDefinitionNamesToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.LIST_CODE_DEF
 
 	constructor(private validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const relPath = block.params.path ?? block.params.absolutePath
+		return declareApprovalIntent(block, {
+			description: `Analyze code definitions in ${relPath ?? "a directory"}`,
+			requirements: [
+				{
+					capability: "workspace_read",
+					path: relPath,
+					risk: "low",
+					requestedSideEffects: ["read source definitions"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to analyze ${relPath ?? "source files"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -43,25 +56,11 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// Handle auto-approval vs manual approval for partial
-		if (
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
-		) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-			await uiHelpers.ask("tool", partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relDirPath: string | undefined = block.params.path
-
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
@@ -96,63 +95,6 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			operationIsLocatedInWorkspace,
 		}
 
-		const completeMessage = JSON.stringify(sharedMessageProps)
-
-		let pendingPresentation: Promise<void> = Promise.resolve()
-		const shouldAutoApprove =
-			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
-			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
-		if (shouldAutoApprove) {
-			if (!config.isSubagentExecution) {
-				pendingPresentation = (async () => {
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-					await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-				})().catch(() => undefined)
-			}
-
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		} else {
-			const notificationMessage = `DietCode wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
-
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					undefined,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		}
-
 		const result = await executeTaskIoBackend(config, block, authority, "traversal", async (io, signal) =>
 			parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController, {
 				signal,
@@ -166,13 +108,9 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			}),
 		)
 
-		if (shouldAutoApprove && !config.isSubagentExecution) {
+		if (!config.isSubagentExecution) {
 			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
-			void pendingPresentation
-				.then(() => config.callbacks.say("tool", resultMessage, undefined, undefined, false))
-				.catch(() => undefined)
-		} else {
-			void pendingPresentation
+			void config.callbacks.say("tool", resultMessage, undefined, undefined, false).catch(() => undefined)
 		}
 
 		return result

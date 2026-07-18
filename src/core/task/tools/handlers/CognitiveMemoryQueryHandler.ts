@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryQueryHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_QUERY
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Query task cognitive memory")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[query cognitive memory]"

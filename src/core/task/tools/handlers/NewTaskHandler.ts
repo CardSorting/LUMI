@@ -1,14 +1,25 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import {
+	declareInternalStateIntent,
+	type IPartialBlockHandler,
+	type IToolHandler,
+	type ToolResponse,
+} from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.NEW_TASK
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Create a new task from the proposed context", {
+			type: this.name,
+			message: block.params.context ?? "",
+			notification: "DietCode wants to create a new task",
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for creating a new task]`
@@ -19,7 +30,7 @@ export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
 	 */
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		const context = uiHelpers.removeClosingTag(block, "context", block.params.context)
-		await uiHelpers.ask(this.name, context, true).catch(() => {})
+		await uiHelpers.say("text", context, undefined, undefined, true).catch(() => {})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -33,32 +44,7 @@ export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Show notification if enabled
-		if (config.autoApprovalSettings.enableNotifications) {
-			showSystemNotification({
-				subtitle: "DietCode wants to start a new task...",
-				message: `DietCode is suggesting to start a new task with: ${context}`,
-			})
-		}
-
-		// Ask user for response
-		const { text, images, files: newTaskFiles } = await config.callbacks.ask(this.name, context, false)
-
-		// If the user provided a response, treat it as feedback
-		if (text || (images && images.length > 0) || (newTaskFiles && newTaskFiles.length > 0)) {
-			let fileContentString = ""
-			if (newTaskFiles && newTaskFiles.length > 0) {
-				fileContentString = await processFilesIntoText(newTaskFiles)
-			}
-
-			await config.callbacks.say("user_feedback", text ?? "", images, newTaskFiles)
-			return formatResponse.toolResult(
-				`The user provided feedback instead of creating a new task:\n<feedback>\n${text}\n</feedback>`,
-				images,
-				fileContentString,
-			)
-		}
-		// If no response, the user clicked the "Create New Task" button
+		// ExecutionFunnel recorded explicit consent before this adapter was dispatched.
 		return formatResponse.toolResult(`The user has created a new task with the provided context.`)
 	}
 }

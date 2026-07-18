@@ -26,7 +26,6 @@ import type { TaskLatencyTracker } from "./latency/TaskLatencyTracker"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
 import { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUtils"
-import { AutoApprove } from "./tools/autoApprove"
 import {
 	executionFunnel,
 	isAuthoritativeToolFailure,
@@ -61,7 +60,6 @@ import { UniversalGuard } from "../policy/UniversalGuard"
 export { refreshIgnorePolicyAfterToolMutation } from "./tools/execution/ExecutionFunnel"
 
 export class ToolExecutor {
-	private autoApprover: AutoApprove
 	private coordinator: ToolExecutorCoordinator
 	private policyObserver: ReactivePolicyObserver
 	private guard: UniversalGuard
@@ -184,18 +182,6 @@ export class ToolExecutor {
 		return this.guard
 	}
 
-	// Auto-approval methods using the AutoApprove class
-	private shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
-		return this.autoApprover.shouldAutoApproveTool(toolName)
-	}
-
-	private async shouldAutoApproveToolWithPath(
-		blockname: DietCodeDefaultTool,
-		autoApproveActionpath: string | undefined,
-	): Promise<boolean> {
-		return this.autoApprover.shouldAutoApproveToolWithPath(blockname, autoApproveActionpath)
-	}
-
 	constructor(
 		// Core Services & Managers
 		private taskState: TaskState,
@@ -260,7 +246,6 @@ export class ToolExecutor {
 		private readonly getTaskSignal: () => AbortSignal,
 		private readonly latencyTracker?: TaskLatencyTracker,
 	) {
-		this.autoApprover = new AutoApprove(this.stateManager)
 		this.guard = new UniversalGuard(cwd, taskId, this.stateManager)
 		this.policyObserver = new ReactivePolicyObserver(this.guard as any) // Guard wraps engine
 		this.healer = new RefactorHealer(this.cwd)
@@ -370,7 +355,6 @@ export class ToolExecutor {
 			messageState: this.messageStateHandler,
 			api: this.api,
 			autoApprovalSettings: this.stateManager.getGlobalSettingsKey("autoApprovalSettings"),
-			autoApprover: this.autoApprover,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 			services: {
@@ -399,8 +383,6 @@ export class ToolExecutor {
 				updateFCListFromToolResponse: this.updateFCListFromToolResponse,
 				sayAndCreateMissingParamError: this.sayAndCreateMissingParamError,
 				removeLastPartialMessageIfExistsWithType: this.removeLastPartialMessageIfExistsWithType,
-				shouldAutoApproveTool: this.shouldAutoApproveTool.bind(this),
-				shouldAutoApproveToolWithPath: this.shouldAutoApproveToolWithPath.bind(this),
 				applyLatestBrowserSettings: this.applyLatestBrowserSettings.bind(this),
 				switchToActMode: this.switchToActMode,
 				switchToPlanMode: this.switchToPlanMode,
@@ -600,16 +582,17 @@ export class ToolExecutor {
 	 */
 	private async handleCompleteBlock(block: ToolUse, config: TaskConfig): Promise<void> {
 		const invocationDetail = this.invocationDetail(block)
+		const handler = this.coordinator.getHandler(block.name)
 		this.latencyTracker?.markOnce("tool_dispatch_started", invocationDetail)
 		this.latencyTracker?.markIoStage("dispatch_entered", invocationDetail)
 
 		const outcome = await executionFunnel.execute({
 			config,
 			block,
-			registered: this.coordinator.has(block.name),
+			registered: !!handler,
+			handler,
 			lane: getToolInvocationContext() ? "sibling" : "parent",
 			signal: getToolInvocationSignal() ?? this.getTaskSignal(),
-			operation: () => this.coordinator.execute(config, block),
 			postProcess: (result) => this.postProcessSuccessfulResult(block, config, result),
 		})
 		if (outcome.warning) void this.say("text", outcome.warning).catch(() => undefined)

@@ -2,11 +2,25 @@ import type { ToolUse } from "@core/assistant-message"
 import { loadMcpDocumentation } from "@core/prompts/loadMcpDocumentation"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class LoadMcpDocumentationHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.MCP_DOCS
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: "Load documentation for configured MCP servers",
+			requirements: [
+				{
+					capability: "mcp",
+					risk: "low",
+					requestedSideEffects: ["read MCP server capabilities"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

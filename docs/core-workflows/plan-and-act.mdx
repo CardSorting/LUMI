@@ -37,7 +37,7 @@ In **LUMI Settings → API Configuration**, use the **Plan** and **Act** tabs (`
 
 ## Auto-approve / YOLO
 
-Auto-approve rules (`src/core/task/tools/autoApprove.ts`) can skip approval prompts for trusted tool patterns. Enterprise docs may refer to this as "YOLO mode" — see [auto-approve](/features/auto-approve).
+`ExecutionFunnel` can record automatic approval when the operation's pure intent is eligible and current settings plus execution policy admit every declared capability. Otherwise it prompts and records the explicit decision before issuing a permit. Enterprise docs may refer to broad automation settings as "YOLO mode" — see [auto-approve](/features/auto-approve).
 
 ## Related
 

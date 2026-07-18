@@ -96,7 +96,6 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 			enableNotifications: false,
 			actions: { executeSafeCommands: false, executeAllCommands: false },
 		},
-		autoApprover: { shouldAutoApproveTool: sinon.stub().returns([false, false]) },
 		callbacks: {
 			say: sinon.stub().resolves(undefined),
 			ask: sinon.stub().resolves({ response: "yesButtonClicked" }),

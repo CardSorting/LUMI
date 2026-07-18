@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryRefreshHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_REFRESH
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, `Refresh durable cognitive node ${block.params.id ?? ""}`)
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[refresh cognitive memory]"

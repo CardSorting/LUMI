@@ -1,9 +1,6 @@
 import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
-import type { DietCodeDefaultTool } from "@shared/tools"
 import type { DietCodeAskResponse } from "@shared/WebviewMessage"
-import { telemetryService } from "@/services/telemetry"
 import type { ToolParamName, ToolUse } from "../../../assistant-message"
-import { showNotificationForApproval } from "../../utils"
 import { removeClosingTag } from "../utils/ToolConstants"
 import type { TaskConfig } from "./TaskConfig"
 
@@ -36,20 +33,6 @@ export interface StronglyTypedUIHelpers {
 	removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => string
 	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: DietCodeAsk | DietCodeSay) => Promise<void>
 
-	// Approval methods
-	shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: DietCodeDefaultTool, path?: string) => Promise<boolean>
-	askApproval: (messageType: DietCodeAsk, message: string) => Promise<boolean>
-
-	// Telemetry and notifications
-	captureTelemetry: (
-		toolName: DietCodeDefaultTool,
-		autoApproved: boolean,
-		approved: boolean,
-		isNativeToolCall?: boolean,
-	) => void
-	showNotificationIfEnabled: (message: string) => void
-
 	// Config access - returns the proper typed config
 	getConfig: () => TaskConfig
 }
@@ -63,37 +46,6 @@ export function createUIHelpers(config: TaskConfig): StronglyTypedUIHelpers {
 		ask: config.callbacks.ask,
 		removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => removeClosingTag(block, tag, text),
 		removeLastPartialMessageIfExistsWithType: config.callbacks.removeLastPartialMessageIfExistsWithType,
-		shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => config.autoApprover.shouldAutoApproveTool(toolName),
-		shouldAutoApproveToolWithPath: config.callbacks.shouldAutoApproveToolWithPath,
-		askApproval: async (messageType: DietCodeAsk, message: string): Promise<boolean> => {
-			const { response } = await config.callbacks.ask(messageType, message, false)
-			return response === "yesButtonClicked"
-		},
-		captureTelemetry: (
-			toolName: DietCodeDefaultTool,
-			autoApproved: boolean,
-			approved: boolean,
-			isNativeToolCall?: boolean,
-		) => {
-			// Extract provider information for telemetry
-			const apiConfig = config.services.stateManager.getApiConfiguration()
-			const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-			const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-
-			telemetryService.captureToolUsage(
-				config.ulid,
-				toolName,
-				config.api.getModel().id,
-				provider,
-				autoApproved,
-				approved,
-				undefined,
-				isNativeToolCall,
-			)
-		},
-		showNotificationIfEnabled: (message: string) => {
-			showNotificationForApproval(message, config.autoApprovalSettings.enableNotifications)
-		},
 		getConfig: () => config,
 	}
 }

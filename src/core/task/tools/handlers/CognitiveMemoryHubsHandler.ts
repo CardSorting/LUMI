@@ -1,10 +1,14 @@
 import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryHubsHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_HUBS
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, "Read highly connected cognitive-memory nodes")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "Identify highly-connected 'Hub' nodes in the Knowledge Graph for rapid context indexing."

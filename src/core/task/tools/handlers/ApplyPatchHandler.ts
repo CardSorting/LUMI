@@ -1,25 +1,20 @@
 import { readFile } from "node:fs/promises"
 import type { ToolUse } from "@core/assistant-message"
 import { resolveWorkspacePath } from "@core/workspace"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { isWikiPath, isWikiWriteAuthorized } from "@shared/completion/wikiWritePolicy"
 import type { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { BASH_WRAPPERS, DiffError, PATCH_MARKERS, type Patch, PatchActionType, type PatchChunk } from "@/shared/Patch"
 import { preserveEscaping } from "@/shared/string"
-import { showNotificationForApproval } from "../../utils"
-import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { type FileOpsResult, FileProviderOperations } from "../utils/FileProviderOperations"
 import { PatchParser } from "../utils/PatchParser"
 import { PathResolver } from "../utils/PathResolver"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 interface FileChange {
 	type: PatchActionType
@@ -40,7 +35,7 @@ export const PatchDietCodeSayMap = {
 	[PatchActionType.UPDATE]: "editedExistingFile",
 }
 
-export class ApplyPatchHandler implements IFullyManagedTool {
+export class ApplyPatchHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.APPLY_PATCH
 	private config?: TaskConfig
 	private pathResolver?: PathResolver
@@ -61,148 +56,40 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		return `[${this.name} for patch application]`
 	}
 
-	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
-		const rawInput = block.params.input
-		if (!rawInput) {
-			return
-		}
-
-		try {
-			const allFiles = this.extractAllFiles(rawInput)
-			if (allFiles.length === 0) {
-				return
-			}
-
-			const config = uiHelpers.getConfig()
-			this.initializeHelpers(config)
-
-			// Preview the first file being edited
-			await this.previewPatchStream(rawInput, uiHelpers).catch(() => {})
-		} catch {
-			// Wait for more data if parsing fails
-		}
+	getApprovalIntent(block: ToolUse) {
+		const paths = this.extractAllFiles(block.params.input ?? "")
+		return declareApprovalIntent(block, {
+			description: `Apply patch to ${paths.length} file${paths.length === 1 ? "" : "s"}`,
+			requirements: paths.map((filePath) => ({
+				capability: "workspace_write" as const,
+				path: filePath,
+				risk: "high" as const,
+				requestedSideEffects: ["create, modify, move, or delete workspace file"],
+				autoApprovalEligible: true,
+			})),
+			promptMessage: JSON.stringify({ tool: "applyPatch", paths, content: block.params.input ?? "" }),
+			notification: `DietCode wants to apply a patch to ${paths.length} file${paths.length === 1 ? "" : "s"}`,
+		})
 	}
 
-	private async previewPatchStream(rawInput: string, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		const rawInput = block.params.input
+		if (!rawInput) return
 		const config = uiHelpers.getConfig()
-		const provider = config.services.diffViewProvider
-		this.initializeHelpers(config)
-
-		const lines = this.stripBashWrapper(rawInput.split("\n"))
-
-		// Extract the first operation path and type
-		let targetPath: string | undefined
-		let actionType: PatchActionType | undefined
-		let contentStartIndex = -1
-
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i]
-			if (line.startsWith(PATCH_MARKERS.ADD)) {
-				provider.editType = "modify"
-				targetPath = line.substring(PATCH_MARKERS.ADD.length).trim()
-				actionType = PatchActionType.ADD
-				contentStartIndex = i + 1
-				break
-			}
-			if (line.startsWith(PATCH_MARKERS.UPDATE)) {
-				provider.editType = "modify"
-				targetPath = line.substring(PATCH_MARKERS.UPDATE.length).trim()
-				actionType = PatchActionType.UPDATE
-				contentStartIndex = i + 1
-				break
-			}
-			if (line.startsWith(PATCH_MARKERS.DELETE)) {
-				targetPath = line.substring(PATCH_MARKERS.DELETE.length).trim()
-				actionType = PatchActionType.DELETE
-				contentStartIndex = i + 1
-				break
-			}
-		}
-
-		if (!targetPath || targetPath.length === 0 || targetPath.includes("***") || !actionType) {
-			return
-		}
-
-		// Check for move marker
-		let movePath: string | undefined
-		if (actionType === PatchActionType.UPDATE && contentStartIndex >= 0) {
-			const nextLine = lines[contentStartIndex]
-			if (nextLine?.startsWith(PATCH_MARKERS.MOVE)) {
-				movePath = nextLine.substring(PATCH_MARKERS.MOVE.length).trim()
-				contentStartIndex++
-			}
-		}
-
-		// For ADD operations, ensure we have content
-		if (actionType === PatchActionType.ADD) {
-			if (contentStartIndex < 0 || contentStartIndex >= lines.length) {
-				return
-			}
-			const contentLines = lines.slice(contentStartIndex)
-			if (contentLines.length === 0 || (contentLines.length === 1 && contentLines[0] === "")) {
-				return
-			}
-		}
-
-		const finalPath = movePath || targetPath
-		const targetResolution = await this.pathResolver?.resolveAndValidate(finalPath, "ApplyPatchHandler.previewPatch")
-		if (!targetResolution) {
-			return
-		}
-
-		await config.callbacks
-			.ask(
-				"tool",
-				JSON.stringify({
-					tool: PatchDietCodeSayMap[actionType],
-					path: getReadablePath(config.cwd, finalPath),
-					content: rawInput,
-					operationIsLocatedInWorkspace: await isLocatedInWorkspace(finalPath),
-				}),
-				true,
-			)
-			.catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
-
-		const stream: { content: string | undefined } = { content: undefined }
-
-		switch (actionType) {
-			case PatchActionType.ADD: {
-				const contentLines = lines.slice(contentStartIndex)
-				stream.content = contentLines
-					.filter((l) => l.startsWith("+"))
-					.map((l) => l.substring(1))
-					.join("\n")
-				break
-			}
-			case PatchActionType.UPDATE: {
-				const sourceResolution = await this.pathResolver?.resolveAndValidate(
-					targetPath,
-					"ApplyPatchHandler.previewPatch.source",
-				)
-				if (!sourceResolution) {
-					return
-				}
-
-				const originalContent = provider.originalContent
-				if (originalContent === undefined) {
-					return
-				}
-
-				// For streaming preview, just show original content - full application happens in execute
-				stream.content = originalContent
-				break
-			}
-			case PatchActionType.DELETE:
-				stream.content = ""
-				provider.editType = "modify"
-				break
-			default:
-				return
-		}
-
-		if (stream.content === undefined) {
-			return
-		}
+		const firstPath = this.extractAllFiles(rawInput)[0]
+		if (!firstPath) return
+		await uiHelpers.say(
+			"tool",
+			JSON.stringify({
+				tool: "editedExistingFile",
+				path: getReadablePath(config.cwd, firstPath),
+				content: rawInput,
+				operationIsLocatedInWorkspace: await isLocatedInWorkspace(firstPath),
+			}),
+			undefined,
+			undefined,
+			block.partial,
+		)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -265,7 +152,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 				}
 			}
 
-			// For each file: prepare, get approval, then save
+			// Admission was resolved once for the complete invocation; apply each declared change.
 			for (const message of messages) {
 				const messagePath = message.path
 				if (!messagePath) {
@@ -290,14 +177,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 				// Prepare the change for this file (open and update, but don't save)
 				await this.prepareFileChange(change, operationPath)
 
-				// Get approval
-				const approved = await this.handleApproval(config, block, message, rawInput)
-				if (!approved) {
-					this.config = undefined
-					await provider.revertChanges()
-					await provider.reset()
-					return "The user denied this patch operation."
-				}
+				await config.callbacks.say("tool", JSON.stringify({ ...message, content: rawInput }), undefined, undefined, false)
 
 				// Save the changes for this file after approval
 				const fileResult = await this.saveFileChange(change, operationPath)
@@ -689,64 +569,5 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		)
 
 		return summaries
-	}
-
-	private async handleApproval(
-		config: TaskConfig,
-		block: ToolUse,
-		message: DietCodeSayTool,
-		rawInput: string,
-	): Promise<boolean> {
-		const patch = { ...message, content: rawInput }
-		const completeMessage = JSON.stringify(patch)
-		const shouldAutoApprove = await config.callbacks.shouldAutoApproveToolWithPath(block.name, message.path)
-
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const providerId = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-		const modelId = config.api.getModel().id
-
-		if (shouldAutoApprove) {
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-			telemetryService.captureToolUsage(
-				config.ulid,
-				this.name,
-				modelId,
-				providerId,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-			return true
-		}
-
-		showNotificationForApproval(`DietCode wants to edit '${message.path}'`, config.autoApprovalSettings.enableNotifications)
-
-		await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-		const { response, text, images, files } = await config.callbacks.ask("tool", completeMessage, false)
-
-		if (text || images?.length || files?.length) {
-			const fileContent = files?.length ? await processFilesIntoText(files) : ""
-			ToolResultUtils.pushAdditionalToolFeedback(config.taskState.userMessageContent, text, images, fileContent)
-			await config.callbacks.say("user_feedback", text, images, files)
-		}
-
-		const approved = response === "yesButtonClicked"
-		executionFunnel.recordUserDecision(config.taskState, approved)
-		telemetryService.captureToolUsage(
-			config.ulid,
-			this.name,
-			modelId,
-			providerId,
-			false,
-			approved,
-			undefined,
-			block.isNativeToolCall,
-		)
-
-		return approved
 	}
 }

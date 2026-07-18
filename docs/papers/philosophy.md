@@ -31,7 +31,7 @@ Each line maps to code you can open:
 | Task runs the loop | `src/core/task/index.ts` — observe → stream → tool → repeat |
 | Tools are typed and routed | `DietCodeDefaultTool` in `src/shared/tools.ts` → `ToolExecutorCoordinator` |
 | Host bridge executes physically | `HostProvider` → `src/hosts/vscode/hostbridge/` |
-| Approval gates mutating work | Webview diff view + `autoApprove.ts` + user response |
+| Approval is execution admission | `ExecutionFunnel`: pure intent → policy/settings → one decision → linked permit |
 | Hooks intercept lifecycle | 8 hook kinds in `src/core/hooks/hook-factory.ts` |
 | Completion is earned | `completionGatePipeline.ts` + roadmap gates + audit checklist |
 | Parallel lanes are governed | `use_subagents` → `GovernedSwarmCoordinator` + `LockNecessity` + `MergeGate` |
@@ -205,7 +205,7 @@ MCP, hooks, skills, workflows, and subagents extend LUMI — they do not bypass 
 | **Hooks** | 8 lifecycle points; can cancel or modify context, not silently mutate disk |
 | **Skills** | On-demand via `use_skill` — not always-on prompt bloat |
 | **Workflows** | Slash-invoked markdown — explicit, not ambient |
-| **Subagents** | `use_subagents` + dynamic handlers — same hook and approval inheritance |
+| **Subagents** | `use_subagents` + dynamic handlers — identical per-invocation funnel authority without decision/permit inheritance |
 | **Governed swarms** | Parent coordinates; lanes declare execution mode; merge gate before success |
 
 The agent layer refuses to become an ungoverned plugin host. Extensions attach to **tool contracts**, not raw filesystem access.
@@ -250,7 +250,7 @@ Observed absences are design choices:
 
 | Refusal | Evidence |
 |---------|----------|
-| Silent file writes | Write handlers require approval path |
+| Silent file writes | Write intents require one recorded decision before a linked permit exists |
 | Mystery provider routing | `providers.json` lists 4 wired providers; `buildApiHandler` matches |
 | Chat as sole memory | BroccoliDB cognitive tools + disk persistence |
 | IDE lock-in at core | `HostProvider` abstracts VS Code; core avoids direct `vscode` imports |

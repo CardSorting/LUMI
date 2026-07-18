@@ -18,62 +18,61 @@ This execution authority is separate from task completion. A successful tool eve
 
 | Concern | Canonical implementation |
 | --- | --- |
-| Admission, policy, permit, dispatch, reliability, terminal classification | `src/core/task/tools/execution/ExecutionFunnel.ts` |
+| Approval preparation, admission, decision, permit, dispatch, reliability, terminal classification | `src/core/task/tools/execution/ExecutionFunnel.ts` |
 | Serializable event contract | `src/shared/execution/executionFunnelEvent.ts` |
 | Parent adapter and result projection | `src/core/task/ToolExecutor.ts` |
-| Handler lookup and permit-protected dispatch | `src/core/task/tools/ToolExecutorCoordinator.ts` |
+| Handler registry only | `src/core/task/tools/ToolExecutorCoordinator.ts` |
 | Sibling invocation capture | `src/core/task/tools/siblings/ToolInvocationContext.ts` |
 | Governed subagent integration | `src/core/task/tools/subagent/SubagentRunner.ts` |
 | Task state projection | `src/core/task/TaskState.ts` |
 | Task completion authority | `src/core/task/tools/completion/CompletionFunnel.ts` |
 
-The former `ActionExecutor`, `executionAuthority`, and `ToolHookUtils` execution gates were removed. Their authoritative behavior now lives inside `ExecutionFunnel`; callers cannot fall back to those paths.
+The former `ActionExecutor`, `executionAuthority`, `ToolHookUtils`, unconditional `autoApprove.ts`, executor/coordinator approval callbacks, handler-local approval paths, and compatibility decision helpers were removed. Their remaining contracts are either pure handler adapters or owned inside `ExecutionFunnel`; callers cannot fall back to those paths.
 
 ## Funnel contract
 
 Every invocation moves through one ordered decision trace:
 
-1. Publish `evaluating`.
-2. Reject a replay of a terminal invocation ID.
-3. Verify handler registration.
-4. Normalize global parameters and reconcile browser lifecycle.
-5. Enforce prior user rejection and the per-turn tool budget.
-6. Enforce governed-lane tool authority.
-7. Check task and invocation cancellation.
-8. Inject target-layer evidence where applicable.
-9. Enforce strict plan-mode restrictions.
-10. Classify the operation and verify mutation fencing.
-11. Check sibling/subagent resource collisions.
-12. Enforce roadmap write preflight.
-13. Run the applicable `UniversalGuard` pre-policy.
-14. Run the centralized `PreToolUse` hook.
-15. Recheck cancellation and issue one unforgeable in-process permit.
-16. Publish `authorized`, then `executing`.
-17. Dispatch exactly one registered handler under that permit.
-18. Run task-scoped reliability, then centralized `PostToolUse` and post-policy observation.
-19. Classify the result and publish exactly one terminal event.
-20. Advance the workspace revision after a successful local mutation.
+1. Register the invocation under its task generation and reject sequential or concurrent replay.
+2. Prepare and normalize the operation.
+3. Obtain and freeze the handler's synchronous, pure `ApprovalIntent`.
+4. Evaluate mode, lane, fencing, intent-derived collision paths, roadmap, cancellation, hooks, and execution policy.
+5. Snapshot and evaluate approval settings, trusted-command policy, command safety tiers, and MCP per-tool policy.
+6. Prompt only when the complete intent is not eligible for automatic admission.
+7. Record exactly one immutable approval decision for the same task generation, invocation, and intent.
+8. Issue one unforgeable invocation-scoped permit linked to that recorded decision.
+9. Dispatch exactly one registered adapter through the funnel's permit-validating primitive.
+10. Run task-scoped reliability without reacquiring or bypassing approval.
+11. Enrich the result, run centralized post-hook/policy observation, classify the outcome, and advance the workspace revision after a successful mutation.
+12. Publish one authoritative immutable terminal event with the complete ordered trace.
 
-The coordinator fails closed if code attempts to call a handler without the active permit. This makes the funnel a real execution boundary rather than a convention.
+The funnel itself fails closed if code attempts to call an adapter without the active approval-linked permit. The registry cannot dispatch. This makes the funnel a real execution boundary rather than a convention.
 
 ```mermaid
 flowchart TD
   A[Parent, sibling, or subagent invocation] --> B[ExecutionFunnel evaluating]
-  B --> C{Ordered admission stages pass?}
-  C -->|No| D[blocked / denied / cancelled event]
-  C -->|Yes| E[Issue single dispatch permit]
-  E --> F[Coordinator dispatches one handler]
-  F --> G[Central post-hook and policy observation]
-  G --> H{succeeded, failed, denied, or cancelled}
-  H --> I[Immutable terminal event + bounded history]
-  I --> J[Adapters project result in deterministic order]
+  B --> C[Freeze pure ApprovalIntent]
+  C --> D{Admission and approval policy pass?}
+  D -->|Explicit consent required| E[Prompt user]
+  D -->|Automatic or not required| F[Record one approval decision]
+  E --> F
+  D -->|No| G[blocked / denied / cancelled event]
+  F --> H[Issue decision-linked permit]
+  H --> I[Funnel dispatches one adapter]
+  I --> J[Reliability + central post-policy]
+  J --> K[Immutable terminal event + bounded history]
+  K --> L[Adapters project result in deterministic order]
 ```
 
 ## One event, no inferred status
 
 `ExecutionFunnelEvent` is the sole serializable execution projection. It contains:
 
-- schema version, task ID, invocation ID, and optional permit ID;
+- schema version, task ID, task generation, invocation ID, and optional permit ID;
+- frozen approval intent and normalized arguments;
+- applicable settings/policy inputs, automatic-approval consideration, and prompt fact;
+- exactly one immutable approval decision with actor/mechanism and intent identity;
+- permit-to-decision identity link;
 - tool name and parent/sibling/subagent lane;
 - current phase and decision kind;
 - stable reason code and human-readable reason;
@@ -82,7 +81,7 @@ flowchart TD
 
 Terminal phases are `blocked`, `denied`, `cancelled`, `succeeded`, and `failed`. Consumers must select one whole event for one invocation. They must not infer success from handler prose, scan tool-result strings for lifecycle state, merge different events, or use presentation flags as another gate.
 
-`TaskState.executionFunnelEventJson` stores the current projection. `executionFunnelHistory` retains a bounded terminal history for replay protection and audit. Sibling invocation contexts and subagent execution envelopes carry the same event type.
+`TaskState.executionFunnelEventJson` stores the current projection. `executionFunnelHistory` retains a bounded terminal audit history, while the current-generation invocation ledger preserves replay rejection after history eviction. Sibling invocation contexts and subagent execution envelopes carry the same event type.
 
 ## Authority boundaries
 
@@ -100,7 +99,9 @@ The subagent runner supplies its governed lane mode and allowlist decision to th
 
 ### Handlers
 
-Handlers own operation-specific validation, consent prompts, and backend calls. When explicit consent is needed, the handler reports the decision through `executionFunnel.recordUserDecision()`. Automatic and inherited subagent approval are also recorded as funnel stages. Handlers do not mutate rejection state or publish authoritative execution status themselves.
+Handlers own operation-specific input interpretation and backend calls. Every registered handler synchronously returns a configuration-free `ApprovalIntent` describing identity, normalized arguments, capability/risk, paths/scopes, side effects, human-readable consent text, and automatic-approval eligibility. Handlers never inspect approval settings, decide approval, prompt for operation consent, run approval hooks, record approval state, issue/reinterpret permits, or publish authoritative execution status.
+
+`ask_followup_question` and completion feedback remain semantic user-input operations after their own invocation has been admitted; they are not operation-approval authorities.
 
 ## Risk-proportional paths inside one authority
 
@@ -127,18 +128,20 @@ Retries, timeouts, concurrency, and circuit state are integrated into `Execution
 
 ## Stream and turn control
 
-After dispatch, task streaming asks `executionFunnel.getTurnControl()` for the one projection of rejection and non-parallel tool-budget exhaustion. The older booleans remain transient presentation compatibility fields, but no consumer interprets them independently. The terminal event is primary.
+After dispatch, task streaming asks `executionFunnel.getTurnControl()` for the one projection of rejection and non-parallel tool-budget exhaustion. The former `didRejectTool` and `didAlreadyUseTool` compatibility booleans were deleted; only the current-generation event is authoritative.
 
 Execution success never sets task completion. Completion UI and resume behavior consume `CompletionFunnelEvent`, not `ExecutionFunnelEvent`.
 
 ## Adding or changing a tool
 
 1. Register the handler in `ToolExecutorCoordinator`.
-2. Add effect classification inside `ExecutionFunnel` when the tool is a new query or local mutation class.
-3. Keep operation-specific input parsing and consent UI in the handler.
-4. Do not call `handler.execute()`, `UniversalGuard`, lifecycle hooks, or mutation gates outside the funnel.
-5. Route parent, sibling, and subagent use through `ExecutionFunnel.execute()`.
-6. Assert the terminal event and decisive stage in tests; do not assert status by matching presentation text alone.
+2. Implement synchronous `getApprovalIntent(block)` using the pure intent builders; declare the complete possible side-effect envelope and exact commands up front.
+3. Keep operation-specific input parsing and backend behavior in the handler, with no approval settings or consent UI.
+4. Add centralized classification only when policy cannot be derived from the declared intent.
+5. Do not call `handler.execute()`, `UniversalGuard`, lifecycle hooks, or mutation gates outside the funnel.
+6. Route parent, sibling, and subagent use through `ExecutionFunnel.execute()`.
+7. Assert the approval decision, causal permit link, terminal event, and decisive stage in tests; do not assert status by matching presentation text alone.
+8. Run `npm run check:handler-imports` to enforce the handler boundary.
 
 ## Failure diagnosis
 
@@ -158,7 +161,11 @@ Start with `TaskState.executionFunnelEventJson` or the envelope event. The termi
 | `policy_denied` | Pre-execution policy rejected the invocation |
 | `hook_cancelled` | A lifecycle hook cancelled execution |
 | `task_cancelled` | Task or invocation cancellation became active |
-| `user_denied` | Explicit operation consent was denied |
+| `approval_preparation_failed` | Intent or approval settings preparation failed closed |
+| `approval_denied` | Explicit operation consent was denied |
+| `approval_cancelled` | Cancellation occurred before approval resolved |
+| `approval_expired` | Explicit approval did not resolve before its deadline |
+| `approval_failed` | Approval prompting failed |
 | `preparation_failed` | The transport adapter could not build the canonical invocation configuration |
 | `operation_failed` | Handler threw or returned an authoritative failure |
 | `operation_succeeded` | Handler completed successfully |
@@ -175,18 +182,20 @@ npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config \
   --require ./src/test/requires.cjs \
   src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts \
   src/test/tool-executor-hooks.test.ts \
-  src/core/task/tools/siblings/__tests__/SiblingToolBatch.test.ts \
+  src/core/task/tools/siblings/__tests__/SiblingToolDependency.test.ts \
+  src/core/task/tools/siblings/__tests__/SiblingToolScheduler.test.ts \
   src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts \
   src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts \
   --timeout 10000 --exit
 ```
 
-Then run `npm run check-types`, `npm run lint`, `npm run test:unit`, and `npm run ci:build`.
+Then run `npm run check-types`, `npm run lint`, `npm run check:handler-imports`, `npm run test:unit`, `npm run ci:build`, and `npm run vscode:prepublish`.
 
 ## Invariants
 
 - One funnel authorizes every parent, sibling, and subagent tool call.
-- No handler dispatch occurs without a current permit.
+- No adapter dispatch occurs without a current permit linked to the one recorded approved decision for the same task generation, invocation, and intent.
+- No permit exists before `approval.decision`.
 - Every invocation has one immutable terminal event.
 - Event status is never reconstructed from presentation text.
 - A successful local mutation advances the workspace revision once.

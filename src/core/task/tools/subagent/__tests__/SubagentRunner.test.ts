@@ -13,6 +13,7 @@ import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
+import { declareApprovalIntent } from "../../types/ToolContracts"
 import { SubagentBuilder } from "../SubagentBuilder"
 import { SubagentRunner } from "../SubagentRunner"
 import { SubagentTranscriptRecorder } from "../SubagentTranscriptRecorder"
@@ -103,10 +104,15 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 		browserSettings: {},
 		focusChainSettings: {},
 		autoApprovalSettings: {
+			version: 1,
 			enableNotifications: false,
-			actions: { executeSafeCommands: false, executeAllCommands: false },
+			actions: {
+				readFiles: true,
+				readFilesExternally: false,
+				executeSafeCommands: false,
+				executeAllCommands: false,
+			},
 		},
-		autoApprover: { shouldAutoApproveTool: sinon.stub().returns([false, false]) },
 		callbacks: {
 			say: sinon.stub().resolves(undefined),
 			ask: sinon.stub().resolves({ response: "yesButtonClicked" }),
@@ -117,8 +123,6 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 			cancelRunningCommandTool: sinon.stub().resolves(false),
 			doesLatestTaskCompletionHaveNewChanges: sinon.stub().resolves(false),
 			updateFCListFromToolResponse: sinon.stub().resolves(),
-			shouldAutoApproveTool: sinon.stub().returns([true, true]),
-			shouldAutoApproveToolWithPath: sinon.stub().resolves(false),
 			postStateToWebview: sinon.stub().resolves(),
 			reinitExistingTaskFromId: sinon.stub().resolves(),
 			cancelTask: sinon.stub().resolves(),
@@ -135,6 +139,21 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 			getHandler: sinon.stub().callsFake((toolName: DietCodeDefaultTool) => {
 				if (toolName === DietCodeDefaultTool.LIST_FILES) {
 					return {
+						name: DietCodeDefaultTool.LIST_FILES,
+						getApprovalIntent: (block: { name: string; params: Record<string, string> }) =>
+							declareApprovalIntent(block as never, {
+								description: "List files for the subagent test",
+								requirements: [
+									{
+										capability: "workspace_read",
+										risk: "low",
+										requestedSideEffects: [],
+										autoApprovalEligible: true,
+										path: block.params.path,
+										scope: "workspace",
+									},
+								],
+							}),
 						execute: sinon.stub().resolves("ok"),
 						getDescription: sinon.stub().returns("list_files"),
 					}
@@ -346,6 +365,21 @@ describe("SubagentRunner", () => {
 			resolveAllStarted = resolve
 		})
 		config.coordinator.getHandler = sinon.stub().returns({
+			name: DietCodeDefaultTool.LIST_FILES,
+			getApprovalIntent: (block: { name: string; params: Record<string, string> }) =>
+				declareApprovalIntent(block as never, {
+					description: "List files for the bounded parallel-read test",
+					requirements: [
+						{
+							capability: "workspace_read",
+							risk: "low",
+							requestedSideEffects: [],
+							autoApprovalEligible: true,
+							path: block.params.path,
+							scope: "workspace",
+						},
+					],
+				}),
 			execute: sinon.stub().callsFake(async (_config: TaskConfig, block: { params: { path: string } }) => {
 				started.push(block.params.path)
 				if (started.length === 4) resolveFirstWaveStarted()

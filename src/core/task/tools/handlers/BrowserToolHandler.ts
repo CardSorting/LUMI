@@ -2,17 +2,37 @@ import { BrowserAction, BrowserActionResult, browserActions, DietCodeSayBrowserA
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
-import { showNotificationForApproval } from "../../utils"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class BrowserToolHandler implements IFullyManagedTool {
+export class BrowserToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.BROWSER
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.action}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const launch = block.params.action === "launch"
+		return declareApprovalIntent(block, {
+			description: launch
+				? `Launch browser at ${block.params.url ?? ""}`
+				: `Perform browser action ${block.params.action ?? ""}`,
+			requirements: launch
+				? [
+						{
+							capability: "browser",
+							risk: "elevated",
+							requestedSideEffects: ["launch browser", "external navigation"],
+							autoApprovalEligible: true,
+						},
+					]
+				: [],
+			promptType: launch ? "browser_action_launch" : "tool",
+			promptMessage: launch ? (block.params.url ?? "") : undefined,
+			notification: launch ? `DietCode wants to launch ${block.params.url ?? "a browser"}` : undefined,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -28,21 +48,13 @@ export class BrowserToolHandler implements IFullyManagedTool {
 
 		// Handle partial block streaming - exact original logic
 		if (action === "launch") {
-			if (uiHelpers.shouldAutoApproveTool(block.name)) {
-				await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "browser_action_launch")
-				await uiHelpers.say(
-					"browser_action_launch",
-					uiHelpers.removeClosingTag(block, "url", url),
-					undefined,
-					undefined,
-					block.partial,
-				)
-			} else {
-				await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "browser_action_launch")
-				await uiHelpers
-					.ask("browser_action_launch", uiHelpers.removeClosingTag(block, "url", url), block.partial)
-					.catch(() => {})
-			}
+			await uiHelpers.say(
+				"browser_action_launch",
+				uiHelpers.removeClosingTag(block, "url", url),
+				undefined,
+				undefined,
+				block.partial,
+			)
 		} else {
 			await uiHelpers.say(
 				this.name,
@@ -85,24 +97,6 @@ export class BrowserToolHandler implements IFullyManagedTool {
 					return errorResult
 				}
 				config.taskState.consecutiveMistakeCount = 0
-
-				// Handle approval flow for launch using callbacks
-				const autoApprover = config.autoApprover || { shouldAutoApproveTool: () => false }
-				if (autoApprover.shouldAutoApproveTool(block.name)) {
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "browser_action_launch")
-					await config.callbacks.say("browser_action_launch", url, undefined, undefined, false)
-				} else {
-					// Show notification for approval if enabled
-					showNotificationForApproval(
-						`DietCode wants to use a browser and launch ${url}`,
-						config.autoApprovalSettings.enableNotifications,
-					)
-					await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "browser_action_launch")
-					const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("browser_action_launch", url, config)
-					if (!didApprove) {
-						return formatResponse.toolDenied()
-					}
-				}
 
 				// Start loading spinner
 				await config.callbacks.say("browser_action_result", "")

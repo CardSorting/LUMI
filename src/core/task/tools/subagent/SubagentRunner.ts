@@ -47,12 +47,7 @@ import {
 	getLatestCheckpointHashFromMessages,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
-import {
-	executionFunnel,
-	getDeclaredMutationPaths,
-	shouldBypassGuardForLaneIoTool,
-	shouldUseIoAuthorityReadFastPath,
-} from "../execution/ExecutionFunnel"
+import { executionFunnel, shouldBypassGuardForLaneIoTool, shouldUseIoAuthorityReadFastPath } from "../execution/ExecutionFunnel"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -1074,21 +1069,19 @@ export class SubagentRunner {
 						config: subagentConfig,
 						block: toolCallBlock,
 						registered: !!handler,
+						handler,
 						lane: "subagent",
 						laneMode: this.laneExecutionMode,
 						allowedInLane: this.allowedTools.includes(toolName),
-						collisionCheck: (() => {
-							const mutationPaths = getDeclaredMutationPaths(toolCallBlock)
-							return this.streamId && mutationPaths.length > 0
-								? async () => {
-										const collision = await orchestrator.checkCollision(this.streamId!, mutationPaths)
-										return collision
-											? `[COLLISION] ${collision} Wait for the other agent to finish or coordinate elsewhere.`
-											: undefined
-									}
-								: undefined
-						})(),
-						operation: () => executionFunnel.dispatchAuthorizedOperation(subagentConfig, toolCallBlock, handler!),
+						collisionCheck: this.streamId
+							? async (mutationPaths) => {
+									if (mutationPaths.length === 0) return undefined
+									const collision = await orchestrator.checkCollision(this.streamId!, [...mutationPaths])
+									return collision
+										? `[COLLISION] ${collision} Wait for the other agent to finish or coordinate elsewhere.`
+										: undefined
+								}
+							: undefined,
 					})
 					toolResult = outcome.result ?? formatResponse.toolError(outcome.event.reason)
 
@@ -1295,10 +1288,10 @@ export class SubagentRunner {
 				config: subagentConfig,
 				block: toolCallBlock,
 				registered: !!handler,
+				handler,
 				lane: "subagent",
 				laneMode: this.laneExecutionMode,
 				allowedInLane: this.allowedTools.includes(toolName),
-				operation: () => executionFunnel.dispatchAuthorizedOperation(subagentConfig, toolCallBlock, handler!),
 			})
 			const toolResult: unknown = execution.result ?? formatResponse.toolError(execution.event.reason)
 
@@ -1331,16 +1324,11 @@ export class SubagentRunner {
 				config: subagentConfig,
 				block: toolCallBlock,
 				registered: !!this.baseConfig.coordinator.getHandler(toolName),
+				handler: this.baseConfig.coordinator.getHandler(toolName),
 				lane: "subagent",
 				laneMode: this.laneExecutionMode,
 				allowedInLane: false,
 				laneDenialReason: `Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Tool was not executed.`,
-				operation: () =>
-					executionFunnel.dispatchAuthorizedOperation(
-						subagentConfig,
-						toolCallBlock,
-						this.baseConfig.coordinator.getHandler(toolName)!,
-					),
 			})
 			outcomes.push({
 				call,

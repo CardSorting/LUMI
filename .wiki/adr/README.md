@@ -15,6 +15,9 @@ Decisions governing the admission, concurrency limits, and execution order of si
 
 ## 2. Authority Reuse
 Decisions governing risk-proportional governance and caching of workspace authorities.
+* **[MEOW-011: Approval Is Execution Admission](MEOW-011-execution-approval-admission.md)**
+  Makes `ExecutionFunnel` the sole approval decision and permit authority; handlers declare pure intents only.
+  * *Implementing Surface:* `src/core/task/tools/execution/ExecutionFunnel.ts`
 * **[MEOW-002: Fast Path and Governed Mutation](MEOW-002-fast-path-governed-mutation.md)**
   Separates read-only/reversible execution paths from blocked mutation fences.
   * *Implementing Surfaces:* [ToolExecutor.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/ToolExecutor.ts) and [ToolValidator.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/ToolValidator.ts)

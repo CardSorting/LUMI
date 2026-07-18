@@ -1,27 +1,39 @@
-import { DietCodeAsk, DietCodeSayTool } from "@shared/ExtensionMessage"
+import { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
 import axios from "axios"
 import { DietCodeEnv } from "@/config"
 import { AuthService } from "@/services/auth/AuthService"
 import { buildDietCodeExtraHeaders } from "@/services/EnvUtils"
 import { featureFlagsService } from "@/services/feature-flags"
-import { telemetryService } from "@/services/telemetry"
 import { parsePartialArrayString } from "@/shared/array"
 import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/DietCodeAccount"
 import { getAxiosSettings } from "@/shared/net"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
-import { showNotificationForApproval } from "../../utils"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-export class WebSearchToolHandler implements IFullyManagedTool {
+export class WebSearchToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.WEB_SEARCH
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.query}']`
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		return declareApprovalIntent(block, {
+			description: `Search the web for ${block.params.query ?? ""}`,
+			requirements: [
+				{
+					capability: "network",
+					risk: "elevated",
+					requestedSideEffects: ["external network request"],
+					autoApprovalEligible: true,
+				},
+			],
+			notification: `DietCode wants to search for ${block.params.query ?? "a query"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -37,8 +49,7 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 
 		// For partial blocks, we'll let the ToolExecutor handle auto-approval logic
 		// Just stream the UI update for now
-		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-		await uiHelpers.ask("tool" as DietCodeAsk, partialMessage, block.partial).catch(() => {})
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -74,63 +85,6 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			if (allowedDomains.length > 0 && blockedDomains.length > 0) {
 				config.taskState.consecutiveMistakeCount++
 				return formatResponse.toolError("Cannot specify both allowed_domains and blocked_domains")
-			}
-
-			// Create message for approval
-			const sharedMessageProps: DietCodeSayTool = {
-				tool: "webSearch",
-				path: query,
-				content: `Searching for: ${query}`,
-				operationIsLocatedInWorkspace: false,
-			}
-			const completeMessage = JSON.stringify(sharedMessageProps)
-
-			if (config.callbacks.shouldAutoApproveTool(this.name)) {
-				// Auto-approve flow
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-				telemetryService.captureToolUsage(
-					config.ulid,
-					"web_search",
-					config.api.getModel().id,
-					provider,
-					true,
-					true,
-					undefined,
-					block.isNativeToolCall,
-				)
-			} else {
-				// Manual approval flow
-				showNotificationForApproval(
-					`DietCode wants to search for: ${query}`,
-					config.autoApprovalSettings.enableNotifications,
-				)
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-				const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-				if (!didApprove) {
-					telemetryService.captureToolUsage(
-						config.ulid,
-						block.name,
-						config.api.getModel().id,
-						provider,
-						false,
-						false,
-						undefined,
-						block.isNativeToolCall,
-					)
-					return formatResponse.toolDenied()
-				}
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					true,
-					undefined,
-					block.isNativeToolCall,
-				)
 			}
 
 			// Execute the actual search

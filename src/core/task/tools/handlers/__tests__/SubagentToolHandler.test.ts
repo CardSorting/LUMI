@@ -20,20 +20,13 @@ import type { TaskConfig } from "../../types/TaskConfig"
 import { createUIHelpers } from "../../types/UIHelpers"
 import { UseSubagentsToolHandler } from "../SubagentToolHandler"
 
-function createConfig(options?: {
-	autoApproveSafe?: boolean
-	autoApproveAll?: boolean
-	autoApproveEdits?: boolean
-	taskAskResponse?: "yesButtonClicked" | "noButtonClicked"
-	subagentsEnabled?: boolean
-}) {
+function createConfig(options?: { subagentsEnabled?: boolean }) {
 	const taskState = new TaskState()
-	const askResponse = options?.taskAskResponse ?? "yesButtonClicked"
 	const subagentsEnabled = options?.subagentsEnabled ?? true
 
 	const callbacks = {
 		say: sinon.stub().resolves(undefined),
-		ask: sinon.stub().resolves({ response: askResponse }),
+		ask: sinon.stub().resolves({ response: "yesButtonClicked" }),
 		saveCheckpoint: sinon.stub().resolves(),
 		sayAndCreateMissingParamError: sinon.stub().resolves("missing"),
 		removeLastPartialMessageIfExistsWithType: sinon.stub().resolves(),
@@ -41,14 +34,6 @@ function createConfig(options?: {
 		cancelRunningCommandTool: sinon.stub().resolves(false),
 		doesLatestTaskCompletionHaveNewChanges: sinon.stub().resolves(false),
 		updateFCListFromToolResponse: sinon.stub().resolves(),
-		shouldAutoApproveTool: sinon
-			.stub()
-			.callsFake((toolName: DietCodeDefaultTool) =>
-				toolName === DietCodeDefaultTool.FILE_EDIT
-					? [options?.autoApproveEdits ?? options?.autoApproveAll ?? false, false]
-					: [options?.autoApproveSafe ?? false, options?.autoApproveAll ?? false],
-			),
-		shouldAutoApproveToolWithPath: sinon.stub().resolves(false),
 		postStateToWebview: sinon.stub().resolves(),
 		reinitExistingTaskFromId: sinon.stub().resolves(),
 		cancelTask: sinon.stub().resolves(),
@@ -83,15 +68,6 @@ function createConfig(options?: {
 				executeSafeCommands: false,
 				executeAllCommands: false,
 			},
-		},
-		autoApprover: {
-			shouldAutoApproveTool: sinon
-				.stub()
-				.callsFake((toolName: DietCodeDefaultTool) =>
-					toolName === DietCodeDefaultTool.FILE_EDIT
-						? [options?.autoApproveEdits ?? options?.autoApproveAll ?? false, false]
-						: [options?.autoApproveSafe ?? false, options?.autoApproveAll ?? false],
-				),
 		},
 		browserSettings: {},
 		focusChainSettings: {},
@@ -242,8 +218,8 @@ describe("SubagentToolHandler", () => {
 		sinon.assert.notCalled(leaseStub)
 	})
 
-	it("streams partial use_subagents approval as ask when not auto-approved", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: false, autoApproveAll: false })
+	it("keeps partial UI as a projection and never prompts for approval", async () => {
+		const { config, callbacks } = createConfig()
 		const handler = new UseSubagentsToolHandler()
 		const uiHelpers = createUIHelpers(config)
 
@@ -260,36 +236,6 @@ describe("SubagentToolHandler", () => {
 			uiHelpers,
 		)
 
-		sinon.assert.calledOnce(callbacks.removeLastPartialMessageIfExistsWithType)
-		sinon.assert.calledWithExactly(callbacks.removeLastPartialMessageIfExistsWithType, "say", "use_subagents")
-		sinon.assert.calledOnce(callbacks.ask)
-		sinon.assert.calledWithMatch(callbacks.ask, "use_subagents", sinon.match.string, true)
-
-		const payload = JSON.parse(callbacks.ask.firstCall.args[1])
-		assert.deepEqual(payload.prompts, ["[execution_mode:read_only] first prompt", "[execution_mode:read_only] second prompt"])
-		sinon.assert.notCalled(callbacks.say)
-	})
-
-	it("streams partial use_subagents approval as say when auto-approved", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: false })
-		const handler = new UseSubagentsToolHandler()
-		const uiHelpers = createUIHelpers(config)
-
-		await handler.handlePartialBlock(
-			{
-				type: "tool_use",
-				name: DietCodeDefaultTool.USE_SUBAGENTS,
-				params: {
-					prompt_1: "[execution_mode:read_only] first prompt",
-					prompt_2: "[execution_mode:read_only] second prompt",
-				},
-				partial: true,
-			},
-			uiHelpers,
-		)
-
-		sinon.assert.calledOnce(callbacks.removeLastPartialMessageIfExistsWithType)
-		sinon.assert.calledWithExactly(callbacks.removeLastPartialMessageIfExistsWithType, "ask", "use_subagents")
 		sinon.assert.calledOnce(callbacks.say)
 		sinon.assert.calledWithMatch(callbacks.say, "use_subagents", sinon.match.string, undefined, undefined, true)
 
@@ -298,63 +244,8 @@ describe("SubagentToolHandler", () => {
 		sinon.assert.notCalled(callbacks.ask)
 	})
 
-	it("uses one approval for the full batch and stops on denial", async () => {
-		const { config, callbacks, taskState } = createConfig({ taskAskResponse: "noButtonClicked" })
-		const runStub = sinon.stub(SubagentRunner.prototype, "run")
-		const handler = new UseSubagentsToolHandler()
-
-		const result = await handler.execute(config, {
-			type: "tool_use",
-			name: DietCodeDefaultTool.USE_SUBAGENTS,
-			params: {
-				prompt_1: "[execution_mode:read_only] one",
-				prompt_2: "two",
-			},
-			partial: false,
-		})
-
-		assert.equal(result, "The user denied this operation.")
-		assert.equal(taskState.didRejectTool, true)
-		sinon.assert.calledOnce(callbacks.ask)
-		assert.equal(callbacks.ask.firstCall.args[0], "use_subagents")
-		sinon.assert.notCalled(runStub)
-	})
-
-	it("uses read-file auto-approve level (safe only) for approval bypass", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: false })
-		sinon.stub(SubagentRunner.prototype, "run").resolves({
-			status: "completed",
-			result: "done",
-			stats: {
-				toolCalls: 1,
-				inputTokens: 2,
-				outputTokens: 3,
-				cacheWriteTokens: 0,
-				cacheReadTokens: 0,
-				totalCost: 0.25,
-				contextTokens: 5,
-				contextWindow: 200000,
-				contextUsagePercentage: 0.0025,
-			},
-		})
-
-		const handler = new UseSubagentsToolHandler()
-		await handler.execute(config, {
-			type: "tool_use",
-			name: DietCodeDefaultTool.USE_SUBAGENTS,
-			params: {
-				prompt_1: "[execution_mode:read_only] one",
-			},
-			partial: false,
-		})
-
-		sinon.assert.notCalled(callbacks.ask)
-		const subagentStatusCalls = callbacks.say.getCalls().filter((call) => call.args[0] === "subagent")
-		assert.ok(subagentStatusCalls.length >= 1)
-	})
-
 	it("executes one bounded read-only confidence probe and preserves the tentative source finding", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "confidence-probe-handler-"))
 		tempDirs.push(tempDir)
 		const disk = await import("@core/storage/disk")
@@ -406,54 +297,8 @@ describe("SubagentToolHandler", () => {
 		assert.match(String(result), /Merge gate passed: true/)
 	})
 
-	it("requires edit approval once for mutating lane I/O", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: false })
-		sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", result: "done", stats: emptyStats() })
-
-		await new UseSubagentsToolHandler().execute(config, {
-			type: "tool_use",
-			name: DietCodeDefaultTool.USE_SUBAGENTS,
-			params: { prompt_1: "[execution_mode:mutation] edit the assigned file" },
-			partial: false,
-		})
-
-		sinon.assert.calledOnce(callbacks.ask)
-		assert.equal(callbacks.ask.firstCall.args[0], "use_subagents")
-	})
-
-	it("uses edit auto-approval for a mutating lane without requiring read auto-approval", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: false, autoApproveEdits: true })
-		sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", result: "done", stats: emptyStats() })
-
-		await new UseSubagentsToolHandler().execute(config, {
-			type: "tool_use",
-			name: DietCodeDefaultTool.USE_SUBAGENTS,
-			params: { prompt_1: "[execution_mode:mutation] edit the assigned file" },
-			partial: false,
-		})
-
-		sinon.assert.notCalled(callbacks.ask)
-	})
-
-	it("requires both read and edit auto-approval for a mixed-authority swarm", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: false, autoApproveEdits: true })
-		sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", result: "done", stats: emptyStats() })
-
-		await new UseSubagentsToolHandler().execute(config, {
-			type: "tool_use",
-			name: DietCodeDefaultTool.USE_SUBAGENTS,
-			params: {
-				prompt_1: "[execution_mode:read_only] inspect the assigned file",
-				prompt_2: "[execution_mode:mutation] edit the assigned file",
-			},
-			partial: false,
-		})
-
-		sinon.assert.calledOnce(callbacks.ask)
-	})
-
 	it("keeps status I/O failures off the execution path and still releases the lease", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true })
+		const { config, callbacks } = createConfig()
 		callbacks.say.withArgs("subagent").rejects(new Error("webview unavailable"))
 		sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", result: "done", stats: emptyStats() })
 		const releaseStub = sinon
@@ -472,7 +317,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("fans out prompts in parallel and emits aggregated status", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config, callbacks } = createConfig()
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-handler-"))
 		tempDirs.push(tempDir)
 		const disk = await import("@core/storage/disk")
@@ -558,7 +403,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("preserves accepted work when final artifact promotion fails after receipt seal", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config, callbacks } = createConfig()
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-promotion-"))
 		tempDirs.push(tempDir)
 		const disk = await import("@core/storage/disk")
@@ -592,7 +437,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("does not let child-stream registration block any lane", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		;(config as TaskConfig & { getSessionStreamId: () => string }).getSessionStreamId = () => "parent-stream"
 		let slowRegistrationFinished = false
 		const startsBeforeSlowRegistration: string[] = []
@@ -623,7 +468,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("continues after per-subagent failures and reports both outcomes", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 
 		const runStub = sinon.stub(SubagentRunner.prototype, "run").callsFake(async (prompt: string) => {
 			if (prompt.includes("fail")) {
@@ -679,7 +524,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("retries transient failures on a fresh runner and accounts for every attempt", async () => {
-		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config, callbacks } = createConfig()
 		const runnerInstances = new Set<SubagentRunner>()
 		let attempts = 0
 		sinon.stub(Math, "random").returns(0)
@@ -739,7 +584,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("releases execution capacity during retry backoff", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		const events: string[] = []
 		let retryAttempts = 0
 		sinon.stub(Math, "random").returns(1)
@@ -777,7 +622,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("fails the crossing lane when the aggregate parent cost budget is exceeded", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		config.taskState.maxCost = 0.15
 		sinon.stub(SubagentRunner.prototype, "run").resolves({
 			status: "completed",
@@ -807,7 +652,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("runs configured subagent tools using the prompt parameter", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		const handler = new UseSubagentsToolHandler()
 		const dynamicToolName = "use_subagent_code_reviewer"
 		sinon.stub(AgentConfigLoader, "getInstance").returns({
@@ -865,7 +710,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("propagates failed dependencies without executing downstream lanes", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		const executedPrompts: string[] = []
 		sinon.stub(SubagentRunner.prototype, "run").callsFake(async (prompt: string) => {
 			executedPrompts.push(prompt)
@@ -891,7 +736,7 @@ describe("SubagentToolHandler", () => {
 	})
 
 	it("starts critical-path lanes before lower-priority ready lanes under contention", async () => {
-		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const { config } = createConfig()
 		const startOrder: string[] = []
 		let activeRuns = 0
 		let maxActiveRuns = 0

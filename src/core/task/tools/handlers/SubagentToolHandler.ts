@@ -26,10 +26,8 @@ import { v4 as uuidv4 } from "uuid"
 import { createLockAuthority } from "@/core/governance/LockAuthority"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
 import type { GatePreflightReadinessIssue } from "../completionGatePipeline"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
 import {
@@ -94,9 +92,8 @@ import { SubagentRunner, type SubagentRunResult } from "../subagent/SubagentRunn
 import { buildParentToolResult, buildSwarmSummaryOverlay } from "../subagent/SwarmReportBuilder"
 import { detectDeadlocks } from "../subagent/TarjanDeadlockDetector"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 interface ConfigWithExtensions extends TaskConfig {
 	getSessionStreamId?: () => string
@@ -117,20 +114,8 @@ function collectPrompts(block: ToolUse, configuredSubagentName?: string): string
 	return PROMPT_KEYS.map((key) => block.params[key]?.trim()).filter((prompt): prompt is string => !!prompt)
 }
 
-function requiredApprovalTools(prompts: string[], params: Record<string, string | undefined>): DietCodeDefaultTool[] {
-	return [
-		...new Set(
-			prompts.map((prompt, index) =>
-				declaresMutationIntent(resolveLaneLockIntent(prompt, params, index))
-					? DietCodeDefaultTool.FILE_EDIT
-					: DietCodeDefaultTool.USE_SUBAGENTS,
-			),
-		),
-	]
-}
-
-function isToolAutoApproved(result: boolean | [boolean, boolean] | undefined): boolean {
-	return Array.isArray(result) ? result[0] : !!result
+function subagentRequestsMutation(prompts: string[], params: Record<string, string | undefined>): boolean {
+	return prompts.some((prompt, index) => declaresMutationIntent(resolveLaneLockIntent(prompt, params, index)))
 }
 
 function excerpt(text: string | undefined, maxChars = 1200): string {
@@ -223,12 +208,32 @@ function buildSwarmEnvelopeDraft(options: {
 	}
 }
 
-export class UseSubagentsToolHandler implements IFullyManagedTool {
+export class UseSubagentsToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.USE_SUBAGENTS
 
 	getDescription(_block: ToolUse): string {
 		const configuredSubagentName = resolveConfiguredSubagentName(_block.name)
 		return configuredSubagentName ? `[subagent: ${configuredSubagentName}]` : "[subagents]"
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const configuredSubagentName = resolveConfiguredSubagentName(block.name)
+		const prompts = collectPrompts(block, configuredSubagentName)
+		const mutating = subagentRequestsMutation(prompts, block.params)
+		return declareApprovalIntent(block, {
+			description: `Launch ${prompts.length} governed subagent${prompts.length === 1 ? "" : "s"}`,
+			requirements: [
+				{
+					capability: "subagent",
+					risk: mutating ? "high" : "elevated",
+					requestedSideEffects: [mutating ? "delegate workspace mutation" : "delegate governed execution"],
+					autoApprovalEligible: false,
+				},
+			],
+			promptType: "use_subagents",
+			promptMessage: JSON.stringify({ prompts } satisfies DietCodeAskUseSubagents),
+			notification: `DietCode wants to use ${prompts.length} subagent${prompts.length === 1 ? "" : "s"}`,
+		})
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -248,17 +253,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		}
 
 		const partialMessage = JSON.stringify({ prompts } satisfies DietCodeAskUseSubagents)
-		const shouldAutoApprove = requiredApprovalTools(prompts, block.params).every((tool) =>
-			isToolAutoApproved(uiHelpers.shouldAutoApproveTool(tool)),
-		)
-
-		if (shouldAutoApprove) {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "use_subagents")
-			await uiHelpers.say("use_subagents", partialMessage, undefined, undefined, block.partial)
-		} else {
-			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "use_subagents")
-			await uiHelpers.ask("use_subagents", partialMessage, block.partial).catch(() => {})
-		}
+		await uiHelpers.say("use_subagents", partialMessage, undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -296,59 +291,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		Logger.info(
 			`[SubagentToolHandler] Spawning swarm of ${prompts.length} subagents (Mode: ${currentMode}, Concurrency: ${DEFAULT_SUBAGENT_CONCURRENCY}, Timeout: ${SUBAGENT_SWARM_TIMEOUT_MS / 60_000}m)`,
 		)
-
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-		const approvalPayload: DietCodeAskUseSubagents = { prompts }
-		const approvalBody = JSON.stringify(approvalPayload)
-
-		const didAutoApprove = requiredApprovalTools(prompts, block.params as Record<string, string | undefined>).every((tool) =>
-			isToolAutoApproved(config.autoApprover?.shouldAutoApproveTool(tool)),
-		)
-
-		if (didAutoApprove) {
-			telemetryService.captureToolUsage(
-				config.ulid,
-				this.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		} else {
-			showNotificationForApproval(
-				prompts.length === 1
-					? `DietCode wants to use ${configuredSubagentName ? `the '${configuredSubagentName}' subagent` : "a subagent"}`
-					: `DietCode wants to use ${prompts.length} subagents`,
-				config.autoApprovalSettings.enableNotifications,
-			)
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("use_subagents", approvalBody, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					this.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					undefined,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				this.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
-		}
 
 		config.taskState.consecutiveMistakeCount = 0
 

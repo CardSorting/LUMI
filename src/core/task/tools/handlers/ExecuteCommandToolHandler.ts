@@ -1,7 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
-import { showSystemNotification } from "@integrations/notifications"
 import {
 	appendTextToToolResponse,
 	buildVerificationFailureAdvisory,
@@ -9,25 +8,21 @@ import {
 	extractTextFromToolResponse,
 	isVerificationCommand,
 } from "@shared/audit/auditPostTool"
-import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import {
 	attachCommandExecutionEvidence,
 	type CommandExecutionEvidence,
 	readCommandExecutionEvidence,
 } from "@shared/command-execution-evidence"
-import { DietCodeAsk } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { arePathsEqual } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { showNotificationForApproval } from "../../utils"
 import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IPartialBlockHandler, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
-import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { getInitialTaskPreview } from "../utils/taskPreview"
 
 // Default timeout for commands in yolo mode and background exec mode
@@ -70,7 +65,7 @@ export function resolveCommandTimeoutSeconds(
 	return isLikelyLongRunningCommand(command) ? LONG_RUNNING_COMMAND_TIMEOUT_SECONDS : DEFAULT_COMMAND_TIMEOUT_SECONDS
 }
 
-export class ExecuteCommandToolHandler implements IFullyManagedTool {
+export class ExecuteCommandToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.BASH
 
 	constructor(private readonly validator: ToolValidator) {}
@@ -79,30 +74,37 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		return `[${block.name} for '${block.params.command}']`
 	}
 
+	getApprovalIntent(block: ToolUse) {
+		const command = block.params.command ?? ""
+		const risky = block.params.requires_approval?.toLowerCase() !== "false"
+		return declareApprovalIntent(block, {
+			description: `Execute command: ${command}`,
+			requirements: [
+				{
+					capability: "command",
+					risk: risky ? "high" : "elevated",
+					requestedSideEffects: ["execute shell command"],
+					autoApprovalEligible: true,
+				},
+			],
+			promptType: "command",
+			promptMessage: command,
+			notification: `DietCode wants to execute a command: ${command}`,
+		})
+	}
+
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		const command = block.params.command
 		if (uiHelpers.getConfig().isSubagentExecution) {
 			return
 		}
 
-		// Check if this should be auto-approved to determine UI flow
-		const shouldAutoApprove = uiHelpers.shouldAutoApproveTool(this.name)
-
-		if (shouldAutoApprove) {
-			// For auto-approved commands, we can't partially stream a say prematurely
-			// since it may become an ask based on the requires_approval parameter
-			// So we wait for the complete block
-			return
-		}
-		await uiHelpers
-			.ask("command" as DietCodeAsk, uiHelpers.removeClosingTag(block, "command", command), block.partial)
-			.catch(() => {})
+		await uiHelpers.say("command", uiHelpers.removeClosingTag(block, "command", command), undefined, undefined, block.partial)
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		let command: string | undefined = block.params.command
 		const requiresApprovalRaw: string | undefined = block.params.requires_approval
-		const requiresApprovalPerLLM = requiresApprovalRaw?.toLowerCase() === "true"
 		const timeoutParam: string | undefined = block.params.timeout
 		let timeoutSeconds: number | undefined
 		const evidenceResponse = (content: ToolResponse, overrides: Partial<CommandExecutionEvidence> = {}): ToolResponse =>
@@ -116,11 +118,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 				stderrAvailable: false,
 				...overrides,
 			})
-
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		if (!command) {
@@ -176,30 +173,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			// If no hint, use primary workspace (cwd)
 		}
 
-		// Check command permission validation (CLINE_COMMAND_PERMISSIONS env var)
-		const permissionResult = config.services.commandPermissionController.validateCommand(actualCommand)
-		if (!permissionResult.allowed) {
-			let errorMessage: string
-			if (permissionResult.failedSegment) {
-				errorMessage =
-					`Command "${actualCommand}" was denied by CLINE_COMMAND_PERMISSIONS. ` +
-					`Segment "${permissionResult.failedSegment}" ${permissionResult.reason}.`
-			} else {
-				const matchedPattern = permissionResult.matchedPattern
-					? ` (matched pattern: ${permissionResult.matchedPattern})`
-					: ""
-				errorMessage =
-					`Command "${actualCommand}" was denied by CLINE_COMMAND_PERMISSIONS. ` +
-					`Reason: ${permissionResult.reason}${matchedPattern}`
-			}
-			if (!config.isSubagentExecution) {
-				await config.callbacks.say("command_permission_denied", errorMessage)
-			}
-			return evidenceResponse(formatResponse.toolError(formatResponse.permissionDeniedError(errorMessage)), {
-				approvalStatus: "denied",
-			})
-		}
-
 		// Check dietcodeignore validation for command
 		const commandValidation = this.validator.validateCommand(actualCommand)
 		if (!commandValidation.ok) {
@@ -209,30 +182,13 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return evidenceResponse(formatResponse.toolError(commandValidation.error), { approvalStatus: "denied" })
 		}
 
-		let didAutoApprove = false
-		let approvalStatus: CommandExecutionEvidence["approvalStatus"] = "unknown"
-
-		// If the model says this command is safe and auto approval for safe commands is true, execute the command
-		// If the model says the command is risky, but *BOTH* auto approve settings are true, execute the command
-		const autoApproveResult = config.autoApprover?.shouldAutoApproveTool(block.name)
-		const [autoApproveSafe, autoApproveAll] = Array.isArray(autoApproveResult)
-			? autoApproveResult
-			: [autoApproveResult, false]
-
 		// Determine workspace context for telemetry
 		const resolvedToNonPrimary = !arePathsEqual(executionDir, config.cwd)
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: workspaceHintUsed,
-			resolvedToNonPrimary,
-			resolutionMethod: (workspaceHintUsed ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
-		}
-
 		// Capture workspace path resolution telemetry
 		if (config.isMultiRootEnabled && config.workspaceManager) {
 			const workspaceIndex = config.workspaceManager.getRoots().findIndex((r) => arePathsEqual(r.path, executionDir))
 			telemetryService.captureWorkspacePathResolved(
-				config.ulid,
+				config.taskId,
 				"ExecuteCommandToolHandler",
 				workspaceHintUsed ? "hint_provided" : "fallback_to_primary",
 				workspaceHintUsed ? "workspace_name" : undefined,
@@ -240,78 +196,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 				workspaceIndex >= 0 ? workspaceIndex : undefined,
 				true,
 			)
-		}
-
-		if (
-			config.isSubagentExecution ||
-			(!requiresApprovalPerLLM && autoApproveSafe) ||
-			(requiresApprovalPerLLM && autoApproveSafe && autoApproveAll)
-		) {
-			// Auto-approve flow
-			if (!config.isSubagentExecution) {
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
-				await config.callbacks.say("command", actualCommand, undefined, undefined, false)
-			}
-			didAutoApprove = true
-			approvalStatus = requiresApprovalPerLLM ? "approved" : "not_required"
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		} else {
-			// Manual approval flow
-			showNotificationForApproval(
-				`DietCode wants to execute a command: ${actualCommand}`,
-				config.autoApprovalSettings.enableNotifications,
-			)
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback(
-				"command",
-				`${actualCommand}${autoApproveSafe && requiresApprovalPerLLM ? COMMAND_REQ_APP_STRING : ""}`,
-				config,
-			)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-				return evidenceResponse(formatResponse.toolDenied(), { approvalStatus: "denied" })
-			}
-			approvalStatus = "approved"
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		}
-
-		// Setup timeout notification for long-running auto-approved commands
-		let timeoutId: NodeJS.Timeout | undefined
-		if (didAutoApprove && config.autoApprovalSettings.enableNotifications && !config.isSubagentExecution) {
-			// if the command was auto-approved, and it's long running we need to notify the user after some time has passed without proceeding
-			timeoutId = setTimeout(() => {
-				showSystemNotification({
-					subtitle: "Command is still running",
-					message: "An auto-approved command has been running for 30s, and may need your attention.",
-				})
-			}, 30_000)
 		}
 
 		// Execute the command in the correct directory
@@ -331,6 +215,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		try {
 			;[userRejected, result] = await executionFunnel.executeReliableAction(
 				config.ulid,
+				config.taskState.executionGeneration,
 				async () => {
 					commandStarted = true
 					config.latencyTracker?.recordIoClassStarted(ioClass)
@@ -352,25 +237,19 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		} catch (error) {
 			if (!commandStarted) config.latencyTracker?.recordIoClassCancelled(ioClass)
 			return evidenceResponse(formatResponse.toolError(`Command execution failed: ${String(error)}`), {
-				approvalStatus,
+				approvalStatus: "unknown",
 				started: true,
 				executionError: error instanceof Error ? error.message : String(error),
 				durationMs: Date.now() - startedAt,
 			})
-		} finally {
-			if (timeoutId) clearTimeout(timeoutId)
 		}
 		const canonicalEvidence = readCommandExecutionEvidence(result)
 		result = evidenceResponse(result, {
 			...canonicalEvidence,
 			command: actualCommand,
-			approvalStatus,
+			approvalStatus: "unknown",
 			durationMs: canonicalEvidence?.durationMs ?? Date.now() - startedAt,
 		})
-
-		if (userRejected) {
-			executionFunnel.recordUserDecision(config.taskState, false)
-		}
 
 		if (!userRejected && config.auditToolOutputAdvisoryEnabled && !config.isSubagentExecution) {
 			const outputText = extractTextFromToolResponse(result)

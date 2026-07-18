@@ -286,7 +286,6 @@ const USER_SETTINGS_FIELDS = {
 	maxConsecutiveMistakes: { default: 3 as number },
 	strictPlanModeEnabled: { default: false as boolean },
 	yoloModeToggled: { default: false as boolean },
-	autoApproveAllToggled: { default: true as boolean },
 	safeYoloModeToggled: { default: false as boolean },
 	useAutoCondense: { default: true as boolean },
 	subagentsEnabled: { default: true as boolean },

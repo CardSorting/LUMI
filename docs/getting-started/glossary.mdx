@@ -21,7 +21,7 @@ description: "Terms used in LUMI documentation and the agent workspace."
 | **Plan mode** | Read-only exploration; agent uses `plan_mode_respond`. |
 | **Act mode** | Implementation mode; mutating tools allowed via `act_mode_respond`. |
 | **Checkpoint** | Snapshot of workspace state during a task (`src/integrations/checkpoints/`). |
-| **Auto-approve** | Rules that skip manual approval for matching tools (`src/core/task/tools/autoApprove.ts`). |
+| **Auto-approve** | Current settings and execution policy that let `ExecutionFunnel` record an automatic decision for an eligible intent. |
 | **Focus chain** | Todo tracking tool (`focus_chain` in `DietCodeDefaultTool`). |
 | **Slash command** | `/newtask`, `/compact`, `/roadmap`, etc. — parsed in `src/core/slash-commands/`. |
 | **Workflow** | Custom markdown instruction file invoked as `/filename` when enabled. |

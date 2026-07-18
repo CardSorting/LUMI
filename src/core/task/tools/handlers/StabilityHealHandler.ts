@@ -2,13 +2,28 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilityHealHandler: Applies high-fidelity AST repairs (PFH).
  */
 export class StabilityHealHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.STABILITY_HEAL
+
+	getApprovalIntent(block: ToolUse) {
+		const diagnostics = (block.params as unknown as { diagnostics?: Array<{ path?: string }> }).diagnostics ?? []
+		return declareApprovalIntent(block, {
+			description: `Apply ${diagnostics.length} workspace stability repair${diagnostics.length === 1 ? "" : "s"}`,
+			requirements: (diagnostics.length ? diagnostics : [{}]).map((diagnostic) => ({
+				capability: "workspace_write" as const,
+				path: diagnostic.path,
+				scope: diagnostic.path ? undefined : ("workspace" as const),
+				risk: "high" as const,
+				requestedSideEffects: ["apply automated source repair"],
+				autoApprovalEligible: true,
+			})),
+		})
+	}
 
 	getDescription(block: ToolUse): string {
 		const params = block.params as any

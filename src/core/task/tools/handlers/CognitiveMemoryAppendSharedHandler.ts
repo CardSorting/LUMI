@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareInternalStateIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryAppendSharedHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_APPEND_SHARED
+
+	getApprovalIntent(block: ToolUse) {
+		return declareInternalStateIntent(block, "Append content to durable shared cognitive memory")
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[append to shared memory layer]"

@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryBlameHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_BLAME
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, `Read cognitive modification history for ${block.params.path ?? "a path"}`)
+	}
 
 	getDescription(block: ToolUse): string {
 		return `[blame cognitive memory for '${block.params.path}']`

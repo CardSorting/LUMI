@@ -24,7 +24,7 @@ Use this when you change code and need to update the matching doc.
 
 | Source | Documentation |
 |--------|---------------|
-| `src/core/task/tools/autoApprove.ts` | [Auto-approve](features/auto-approve.mdx) |
+| `src/core/task/tools/execution/ExecutionFunnel.ts` | [Auto-approve](features/auto-approve.mdx) · [Central execution funnel](parent-thread-execution-authority.md) |
 | `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) · [Central execution funnel](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
 | `src/core/task/tools/attemptCompletionUtils.ts` | [Central execution funnel](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
 | `src/core/task/tools/completion/CompletionLifecycleDecisionEngine.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |

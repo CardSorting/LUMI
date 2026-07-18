@@ -6,7 +6,7 @@ import { emitProgress, recordLastError } from "@/services/roadmap/RoadmapProgres
 import { RoadmapService, slimEvidence } from "@/services/roadmap/RoadmapService"
 import { journalRoadmapToolCall } from "@/services/roadmap/RoadmapToolJournal"
 import type { TaskConfig } from "../types/TaskConfig"
-import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
+import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../types/ToolContracts"
 
 const KNOWN_ACTIONS = new Set([
 	"guide",
@@ -32,6 +32,24 @@ export class RoadmapToolHandler implements IToolHandler {
 
 	constructor(name: DietCodeDefaultTool = DietCodeDefaultTool.ROADMAP) {
 		this.name = name
+	}
+
+	getApprovalIntent(block: ToolUse) {
+		const requested = (block.params.action ?? "").trim().toLowerCase()
+		const action = requested || (block.name === DietCodeDefaultTool.ROADMAP_CHECKPOINT ? "checkpoint" : "guide")
+		const mutates = action === "apply_bootstrap_fill"
+		return declareApprovalIntent(block, {
+			description: `${mutates ? "Update" : "Read"} roadmap state with action ${action}`,
+			requirements: [
+				{
+					capability: mutates ? "workspace_write" : "workspace_read",
+					scope: "workspace",
+					risk: mutates ? "high" : "low",
+					requestedSideEffects: [mutates ? "update workspace roadmap artifacts" : "read workspace roadmap artifacts"],
+					autoApprovalEligible: true,
+				},
+			],
+		})
 	}
 
 	getDescription(block: ToolUse): string {

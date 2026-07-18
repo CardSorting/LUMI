@@ -102,7 +102,7 @@ When working with MCP servers, it's important to follow security best practices:
 | Component | Path | Role |
 |-----------|------|------|
 | Connection hub | `src/services/mcp/McpHub.ts` | Spawns servers, lists tools/resources, routes calls |
-| Tool handler | `src/core/task/tools/handlers/UseMcpToolHandler.ts` | Executes MCP tools with approval/auto-approve |
+| Tool handler | `src/core/task/tools/handlers/UseMcpToolHandler.ts` | Declares pure MCP intent and executes only under the funnel permit |
 | Resource handler | `src/core/task/tools/handlers/AccessMcpResourceHandler.ts` | Reads MCP resources into context |
 | Remote add | `src/core/controller/mcp/addRemoteMcpServer.ts` | Adds SSE/HTTP servers from UI |
 

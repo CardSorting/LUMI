@@ -2,10 +2,14 @@ import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { TaskConfig } from "../types/TaskConfig"
-import { IToolHandler } from "../types/ToolContracts"
+import { declareNoConsentIntent, IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryCentralityHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_CENTRALITY
+
+	getApprovalIntent(block: ToolUse) {
+		return declareNoConsentIntent(block, `Read cognitive centrality for ${block.params.id ?? "a node"}`)
+	}
 
 	getDescription(_block: ToolUse): string {
 		return "[get node centrality]"
