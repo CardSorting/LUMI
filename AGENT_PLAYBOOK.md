@@ -4,7 +4,7 @@
 > **When do I use it?** At task start to understand the active developer landscape, blockers, and orientation paths.
 > **What is the source of truth?** The live workspace layout, manifests, package files, and the active task requirements.
 
-Last audited: 2026-07-15
+Last audited: 2026-07-18
 
 ## Current Status
 
@@ -16,12 +16,17 @@ Last audited: 2026-07-15
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
 | Tools | 64 typed tool enum values | `src/shared/tools.ts` |
 | Providers | 6 provider keys in code/UI | `src/core/api/index.ts`, `src/shared/providers/providers.json` |
-| Active pass | Subagent Execution & Scoped Cancellation pass | Current working tree |
+| Active pass | Lease reconciliation, scheduler liveness, and durable completion hardening | Current working tree |
 
 ## What Is Happening Right Now
 
-The active work is hardening and optimizing subagent task execution, scoped cancellation, and durability:
+The active work now includes production authority and terminalization hardening:
 
+- `src/core/governance/LockAuthority.ts` fixes coordination mode at startup and uses SQLite as the sole production lease authority.
+- `src/core/swarm/SwarmMutexService.ts` allocates precision-safe lease epochs/fencing tokens and commits exact-tuple lease changes under `BEGIN IMMEDIATE`.
+- `src/core/governance/AdministrativeLockCleaner.ts` isolates explicit, logged ownership overrides from normal orchestration.
+- `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` detects only unresolvable SCCs from a versioned scheduler snapshot.
+- `src/core/task/tools/handlers/AttemptCompletionHandler.ts` persists terminal results through a lease/state CAS in `task_completions`.
 - `src/integrations/terminal/CommandExecutor.ts` implements scoped command cancellation using `ownerId` to cancel processes concurrently and independently.
 - `src/core/task/tools/handlers/SubagentToolHandler.ts` improves subagent concurrency controls by counting active execution slots (`running.size`) rather than yielded lifecycle states, and prefetches parent context asynchronously off the critical path.
 - `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts` ensures resume safety by requiring a valid, sealed governed lane receipt and matching checksum before reusing previous agent results.
@@ -34,7 +39,8 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 2. Read this file, [HANDOFF.md](HANDOFF.md), [TROUBLESHOOTING.md](TROUBLESHOOTING.md), and [WIKI.md](WIKI.md).
 3. For architecture, verify against `docs/architecture/current.md`, `docs/PROJECT_MAP.md`, and `docs/AGENT_STACK.md`.
 4. For active agent/finalization work, inspect `src/core/task/tools/finalization/` and `src/core/prompts/system-prompt/components/integrity_wiki.ts`.
-5. Pick the smallest validation command that matches the touched surface.
+5. For coordination/completion work, inspect `LockAuthority.ts`, `SwarmMutexService.ts`, `TarjanDeadlockDetector.ts`, and `AttemptCompletionHandler.ts` before changing a projection or retry path.
+6. Pick the smallest validation command that matches the touched surface.
 
 ## Active Priorities
 
@@ -45,6 +51,8 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 | Separate stable docs from handoff state | Prevents stale wiki sprawl | Put durable architecture in `WIKI.md`, temporary state in `HANDOFF.md` |
 | Prevent doc drift regressions | Provider/version metrics drifted and were corrected in this pass | Keep metrics tied to manifests and code |
 | Keep completion/finalization lifecycle deterministic | Recent architecture centers on action contracts | Do not bypass `CompletionLifecycleDecisionEngine` or `CompletionActionGuard` |
+| Preserve one production coordination authority | Database outage must not create split-brain fallback | Keep `sqlite` fail-closed and `local_test` explicit |
+| Keep terminalization restart-safe | In-memory completion state is not durable | Commit `task_completions` only through lease/state CAS |
 
 ## Current Blockers And Friction
 
@@ -64,6 +72,11 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 | `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts` | Resuming swarms requires valid governed receipt integrity. |
 | `src/core/task/tools/subagent/SubagentRunner.ts` | Subagent tool repetition detection and durable transcript checks. |
 | `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts` | Atomic, buffered transcript persistence to disk. |
+| `src/core/governance/LockAuthority.ts` | SQLite authority ordering, exact release, and reconciliation. |
+| `src/core/governance/AdministrativeLockCleaner.ts` | Isolated manual/panic cleanup with an override reason. |
+| `src/core/swarm/SwarmMutexService.ts` | Transactional lease generation and precision-safe fencing. |
+| `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` | Typed wait-for graph and escape-aware SCC detection. |
+| `src/core/task/tools/handlers/AttemptCompletionHandler.ts` | Canonical decision digest and durable terminal CAS. |
 | `src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts` | Tests for transcript durability, retry, integrity, and replay contract. |
 
 ## Files To Avoid Touching Casually
@@ -85,6 +98,8 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 | Use `HostProvider` for VS Code I/O | Import `vscode` directly in core code |
 | Validate with the narrowest relevant command first | Run full CI as a reflex when a focused test proves the touched path |
 | Update docs when code changes alter workflow or contracts | Let metrics, provider counts, or command guidance drift |
+| Treat SQLite as production coordination authority | Infer ownership from memory, PID, mtime, or a projection file |
+| Keep epochs/tokens as decimal strings or `bigint` | Convert fencing identity through JavaScript `number` |
 | Record reproduced failures in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Record guesses as troubleshooting facts |
 | Keep LUMI session docs separate from BroccoliDB substrate docs | Merge the narratives into one vague agent story |
 
@@ -94,6 +109,7 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 |---|---|
 | Production TypeScript | `npx tsc --noEmit --pretty false --project tsconfig.json` |
 | Focused Subagent/Executor tests | `TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts` |
+| Coordination/liveness/completion tests | `npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts` |
 | Touched file style | `npx biome check <files> --files-ignore-unknown=true --diagnostic-level=error` |
 | Docs links | `npm run docs:check-agent-links` |
 | Docs branding | `npm run docs:check-agent-branding` |
@@ -109,6 +125,8 @@ The active work is hardening and optimizing subagent task execution, scoped canc
 - `cline-pass` is a real active provider key because both `buildApiHandler` and `providers.json` list it.
 - The root docs created in this pass are workspace operating docs, not Mintlify user docs.
 - Agent playbook generation should preserve human-authored wiki content by updating managed sections.
+- Production coordination records use `authorityMode: sqlite`; `local_test` records never migrate into production authority.
+- Completion is terminal only after the durable `task_completions` CAS commits.
 
 ## Known Unknowns
 

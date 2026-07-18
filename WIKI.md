@@ -4,7 +4,7 @@
 > **When do I use it?** When proposing or auditing architectural changes to ensure alignment with subsystem boundaries.
 > **What is the source of truth?** The physical file architecture, codebase imports, and the active `tsconfig.json` paths mapping.
 
-Last audited: 2026-07-09
+Last audited: 2026-07-18
 
 ## System Summary
 
@@ -27,6 +27,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Agent loop | `src/core/task/` | Prompt -> API stream -> parse message -> execute tools -> completion |
 | Tools | `src/core/task/tools/`, `src/shared/tools.ts` | 63 typed default tools plus dynamic subagent tools |
 | Completion/finalization | `src/core/task/tools/completion/`, `src/core/task/tools/finalization/` | Deterministic lifecycle decisions, action guards, receipts, wiki finalization |
+| Coordination authority | `src/core/governance/`, `src/core/swarm/SwarmMutexService.ts`, `src/infrastructure/db/Config.ts` | SQLite production leases, fencing, projections, reconciliation, durable terminal results |
 | Workspace intelligence | `src/core/workspace-intelligence/` | Finalization-time cognitive model, drift findings, classified knowledge signals |
 | Providers | `src/core/api/`, `src/shared/providers/providers.json` | Five active provider keys in current code/UI |
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
@@ -72,7 +73,16 @@ Key files:
 - `src/core/task/tools/handlers/RunFinalizationToolHandler.ts`
 - `src/core/task/tools/finalization/AutonomousDocumentationFinalizer.ts`
 
-Rule: handlers adapt and execute; the decision engine decides; the action guard enforces. Do not add new completion eligibility logic in a handler.
+Rule: handlers adapt and execute; the decision engine decides; the action guard enforces. Do not add new completion eligibility logic in a handler. A successful decision becomes terminal only after `AttemptCompletionHandler` commits the lease/state CAS row in `task_completions`.
+
+## Coordination And Liveness Contract
+
+- Production uses immutable `sqlite` coordination authority. `local_test` is explicit and never a database-outage fallback.
+- `SwarmMutexService` allocates lease epochs and fencing tokens as arbitrary-precision decimal strings under `BEGIN IMMEDIATE`.
+- Memory, governed lock files, and Broccoli fences are projections. Release and reconciliation compare owner, epoch, token, and mode before cleanup.
+- `AdministrativeLockCleaner` is the isolated ownership-override path; normal runtime cannot force-release a swarm.
+- `TarjanDeadlockDetector` evaluates typed wait edges from an immutable scheduler snapshot and applies recovery only if scheduler/lane versions are unchanged.
+- `task_completions` is the durable terminal-result source of truth across restart and multi-process delivery.
 
 ## Workspace Intelligence Engine
 
@@ -172,6 +182,8 @@ Release workflows build platform-targeted VSIX files and run doctor checks. Publ
 | DietCode | Legacy/internal naming still present in code paths, settings, and storage keys |
 | BroccoliDB | Local substrate package for context, runtime graph, Spider, snapshots |
 | Completion spine | Snapshot -> decision -> action contract -> guard |
+| Terminal CAS | `BEGIN IMMEDIATE` transaction binding completion to the current lease generation and task state version |
+| Coordination projection | Memory/file/Broccoli copy of an authoritative SQLite lease; never independent authority |
 | Finalization lane | Same-session documentation/ledger path after engineering verification |
 | Agent Playbook Method | Workspace-specific agent handoff pattern for reducing rediscovery |
 | Workspace Intelligence Engine | Harness subsystem that turns finalization evidence and workspace inspection into classified durable knowledge |

@@ -207,11 +207,11 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Memory & reasoning](MEMORY_AND_REASONING.md) | Context, cognitive memory tools |
 | [Working with subagents](WORKING_WITH_SUBAGENTS.md) | Background agent delegation |
 | [Roadmap projection quick reference](governed-roadmap-projection-quickref.md) | Patch tags, invariants, operator legend — start here |
-| [Governed subagent execution](governed-subagent-execution.md) | Lane modes, per-agent projection, merge gate, receipts |
+| [Governed subagent execution](governed-subagent-execution.md) | Lane modes, SQLite lease authority, wait-for liveness, merge gate, receipts |
 | [Governed execution runbook](governed-execution-runbook.md) | Operator incident playbook, violation catalog, retry flow |
 | [Governed execution schema](governed-execution-schema.md) | Receipt schema v3 field reference |
 | [Governed execution decisions](governed-execution-decisions.md) | ADR-style design decisions |
-| [Governed execution authority](governed-execution-authority.md) | Coordinator vs receipt authority, deadlock prevention |
+| [Governed execution authority](governed-execution-authority.md) | SQLite authority, safe reconciliation, deadlock prevention, terminal CAS |
 | [Governance](../GOVERNANCE.md) | Maintainer process, branch protection, release policy |
 | [Changelog](../CHANGELOG.md) | User-facing release notes ([Keep a Changelog](https://keepachangelog.com/)) |
 | [Support](../.github/SUPPORT.md) | Where to get help |
@@ -220,7 +220,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
 | [Parent-thread execution authority](parent-thread-execution-authority.md) | I/O fast path, shift-right gates, completion audit caching |
 | [Completion gate lifecycle](completion-gate-lifecycle-migration.md) | Engineering vs finalization lanes, receipt requirements, lifecycle states |
-| [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) | Centralized deterministic authority, binding action contracts, action guard enforcement |
+| [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) | Deterministic decisions, action guards, and restart-safe terminal completion CAS |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |
 
@@ -299,6 +299,5 @@ Architecture milestone notes (archaeology only): [history/architecture/](history
 4. **Measured claims** — Metrics cite verifiable paths (`package.json`, `src/shared/tools.ts`, etc.).
 
 **Calm agency:** approve before mutate, checkpoint after tool use, complete only through gates.
-
 
 

@@ -1,3 +1,5 @@
+import { CoordinationError } from "@shared/governance/CoordinationErrors"
+import { Logger } from "@shared/services/Logger"
 import type { GovernedExecutionPathMetrics } from "@shared/subagent/governedExecution"
 import type { SubagentRunResult } from "./SubagentRunner"
 
@@ -84,6 +86,17 @@ const TRANSIENT_FAILURE_PATTERNS = [
 	/service unavailable/i,
 	/socket hang up/i,
 	/overloaded/i,
+	/roadmap admission rejected/i,
+	/claim rejected/i,
+	/lock collision/i,
+	/ambiguous_roadmap_admission/i,
+	/lease denied/i,
+	/mutex collision/i,
+	/lock held by/i,
+	/held by/i,
+	/collision/i,
+	/ownership ambiguous/i,
+	/split-brain/i,
 ]
 
 const TERMINAL_FAILURE_PATTERNS = [
@@ -108,13 +121,49 @@ export function errorMessage(error: unknown): string {
 	return typeof error === "string" ? error : "Subagent execution failed"
 }
 
-/** Retry only failures that are likely to change without changing the task input. */
-export function isRetryableSubagentFailure(error: unknown): boolean {
+export interface RecoveryDecision {
+	action: "retry" | "reconcile_then_retry" | "abort_current_owner" | "fail_closed"
+	delayMs?: number
+	consumesBudget: boolean
+	reasonCode: string
+}
+
+export function getRecoveryDecision(error: unknown, failedAttempts: number): RecoveryDecision {
+	if (error instanceof CoordinationError) {
+		const action = error.retryClass === "abort_owner" ? "abort_current_owner" : error.retryClass
+		const delayMs =
+			action === "retry" || action === "reconcile_then_retry" ? calculateRetryDelayMs(failedAttempts) : undefined
+		return {
+			action,
+			delayMs,
+			consumesBudget: true,
+			reasonCode: error.code,
+		}
+	}
+
 	const message = errorMessage(error)
 	if (TERMINAL_FAILURE_PATTERNS.some((pattern) => pattern.test(message))) {
-		return false
+		return { action: "fail_closed", consumesBudget: false, reasonCode: "TERMINAL_FAILURE" }
 	}
-	return TRANSIENT_FAILURE_PATTERNS.some((pattern) => pattern.test(message))
+
+	const isTransient = TRANSIENT_FAILURE_PATTERNS.some((pattern) => pattern.test(message))
+	if (isTransient) {
+		Logger.warn(`[ParentAgentFlowControl] Legacy error regex match: ${message}`)
+		return {
+			action: "retry",
+			delayMs: calculateRetryDelayMs(failedAttempts),
+			consumesBudget: true,
+			reasonCode: "LEGACY_TRANSIENT",
+		}
+	}
+
+	return { action: "fail_closed", consumesBudget: false, reasonCode: "UNKNOWN_FAILURE" }
+}
+
+/** Retry only failures that are likely to change without changing the task input. */
+export function isRetryableSubagentFailure(error: unknown): boolean {
+	const decision = getRecoveryDecision(error, 0)
+	return decision.action === "retry" || decision.action === "reconcile_then_retry"
 }
 
 /** AWS-style full jitter: a random delay between zero and a capped exponential ceiling. */

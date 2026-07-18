@@ -93,7 +93,7 @@ describe("governed execution hardening", () => {
 			assert.equal(first.ok, true)
 			if (!first.ok) return
 
-			const forged = { ...first.claim!, fencingToken: first.claim!.fencingToken + 99 }
+			const forged = { ...first.claim!, fencingToken: (BigInt(first.claim!.fencingToken) + 99n).toString() }
 			const release = await authority.release(forged)
 			assert.equal(release.ok, false)
 			if (!release.ok) {
@@ -484,7 +484,7 @@ describe("governed execution hardening", () => {
 		it("recovers stale file locks", async () => {
 			const fileLock = await import("@shared/governance/fileLock")
 			tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "filelock-stale-"))
-			await fileLock.acquireGovernedFileLock(tempDir, "governed-lane:s:1", "worker-a", 1, 1)
+			await fileLock.acquireGovernedFileLock(tempDir, "governed-lane:s:1", "worker-a", 1, 1, "s", "1", 1)
 			await new Promise((resolve) => setTimeout(resolve, 5))
 			const recovered = await fileLock.recoverStaleGovernedFileLocks(tempDir, "governed-lane:", 1)
 			assert.ok(recovered.length > 0)

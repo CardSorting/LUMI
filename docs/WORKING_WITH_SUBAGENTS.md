@@ -23,6 +23,8 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` |
 | Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` |
 | Parent flow control | `src/core/task/tools/subagent/ParentAgentFlowControl.ts` · [Execution authority](parent-thread-execution-authority.md) |
+| Deadlock analysis | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` |
+| Durable lock authority | `src/core/governance/LockAuthority.ts` · `src/core/swarm/SwarmMutexService.ts` |
 | Lane completion gates | `src/core/task/tools/subagentCompletionGates.ts` |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
 
@@ -36,6 +38,8 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 4. A FIFO pool allows three active model requests; queued and retry-backoff lanes consume no active slot.
 5. `SubagentRunner` executes the child loop with lane-scoped tools; non-mutating lanes cannot invoke write, command, MCP, memory-mutation, or repair tools.
 6. The parent stops progress I/O, atomically stages the artifact, reconciles receipts, publishes the sealed terminal artifact, and returns synthesized output.
+
+Scheduler recovery uses an immutable, versioned wait-for snapshot. Dependency and ownership cycles are reported as deadlocks only when timers, lease expiry, outside resource owners, and unrelated capacity cannot resolve them. The state version is checked again before recovery is applied.
 
 ## Agent types
 
@@ -56,6 +60,8 @@ The parent launch is the approval boundary:
 - Inner tools do not prompt repeatedly after launch, but allowlists, mutation locks, budgets, and merge checks still apply.
 - **Completion gates** on lanes run **sync quality checks only**; hardening audit is deferred to the parent seal barrier. Full blocking enforcement remains on parent `attempt_completion` — see [Parent-thread execution authority](parent-thread-execution-authority.md#subagent-lane-vs-parent-vs-seal).
 - **I/O authority** on non-mutating lanes: read/list/search tools bypass UniversalGuard and may parallelize when the parent pool allows — see [Governed execution runbook § Fast I/O](governed-execution-runbook.md#retry-decision-flow).
+- **Production mutation authority** is SQLite-only. Memory, file locks, and Broccoli fences are projections; database outages retry or fail closed and never switch the process to local authority.
+- **Lease identity** is owner + epoch + fencing token + authority mode. Tokens remain decimal strings for precision safety.
 
 ## Governed swarms
 
@@ -69,8 +75,9 @@ Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts a
 ### Lifecycle (production handler)
 
 ```
-roadmap pressure admit → orchestration lease → audit preflight
+roadmap pressure admit → SQLite orchestration lease → audit preflight
   → classify lane intent → acquire agent roadmap projections → DAG schedule → execute lanes
+  → snapshot wait-for graph → SCC/escape analysis → version re-check
   → local events + patch proposals → per-lane completion_gate → merge gate
   → patch reconciliation → coordinator workspace commit → seal or crash seal
   → optional roadmap completion (policy-gated)

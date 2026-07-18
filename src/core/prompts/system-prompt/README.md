@@ -166,6 +166,22 @@ interface ConfigOverride {
 
 The `PromptBuilder` orchestrates the construction of the final prompt by combining templates, components, and placeholders:
 
+In ACT mode it also appends one semantic execution-state section:
+
+```text
+# EXECUTION STATE
+
+Mode: ACT
+Workspace: <workspacePath>
+Task: <taskId>
+Next required action: <nextAction>
+Active hard blockers: <blockers>
+Lane progress: <lanesComplete>/<lanesTotal> complete
+Completion condition: <condition>
+```
+
+This is an agent decision surface, not an operator dump. It includes only the next required action, current hard blockers, aggregate lane progress, and completion condition. Raw fencing tokens, lease epochs, mistake counters, and advisory warnings must remain out of this section. Add new fields only when they change the model's next legal semantic transition.
+
 ```typescript
 class PromptBuilder {
   private templateEngine: TemplateEngine;

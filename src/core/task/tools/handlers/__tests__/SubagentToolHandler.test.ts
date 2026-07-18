@@ -891,6 +891,42 @@ describe("SubagentToolHandler", () => {
 		let activeRuns = 0
 		let maxActiveRuns = 0
 
+		const flowControl = require("../../subagent/ParentAgentFlowControl")
+		sinon.stub(flowControl, "computeMaxInFlightLanes").returns(1)
+
+		sinon.stub(GovernedSwarmCoordinator.prototype, "acquireLane").callsFake(async function (
+			this: GovernedSwarmCoordinator,
+			swarmId: string,
+			agentId: string,
+			index: number,
+			laneIntent: any,
+		) {
+			this.getLaneDAG().markRunning(index, agentId, laneIntent.executionMode)
+			return {
+				success: true,
+				claim: {
+					laneId: `swarm-lane:${swarmId}:${index}`,
+					ownerAgent: agentId,
+					locks: [],
+					released: false,
+					index,
+				} as any,
+			}
+		})
+		sinon.stub(GovernedSwarmCoordinator.prototype, "releaseLane").callsFake(async function (
+			this: GovernedSwarmCoordinator,
+			claim: any,
+			sealed: boolean,
+			failed = false,
+			error?: string,
+		) {
+			if (sealed) {
+				this.getLaneDAG().markSealed(claim.index)
+			} else if (failed) {
+				this.getLaneDAG().markFailed(claim.index, error)
+			}
+		})
+
 		sinon.stub(SubagentRunner.prototype, "run").callsFake(async (prompt: string) => {
 			activeRuns++
 			maxActiveRuns = Math.max(maxActiveRuns, activeRuns)
@@ -912,7 +948,7 @@ describe("SubagentToolHandler", () => {
 			partial: false,
 		})
 
-		assert.ok(maxActiveRuns <= 3)
+		assert.equal(maxActiveRuns, 1)
 		assert.ok(startOrder.indexOf("leaf-c") < startOrder.indexOf("leaf-a"))
 		assert.ok(startOrder.indexOf("leaf-c") < startOrder.indexOf("leaf-b"))
 	})

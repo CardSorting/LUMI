@@ -1324,49 +1324,49 @@ export class FluidPolicyEngine {
 			if (status.prophecy) {
 				header += `\n${status.prophecy}\n`
 			}
-		}
 
-		// Workload Activity Injection
-		const doubt = this.stabilityMonitor.getDoubtSignal(path.relative(this.cwd, absolutePath))
-		const cooldown = this.stabilityMonitor.getCooldownStatus()
+			// Workload Activity Injection
+			const doubt = this.stabilityMonitor.getDoubtSignal(path.relative(this.cwd, absolutePath))
+			const cooldown = this.stabilityMonitor.getCooldownStatus()
 
-		if (doubt > 1.0) {
-			header += `\n⚠️ HIGH WORKLOAD DETECTED (Ratio: ${SafeNumber.format(doubt, 1)}, Cooldown: ${cooldown.active})\n`
-		}
+			if (doubt >= 15.0) {
+				header += `\n⚠️ HIGH WORKLOAD DETECTED (Ratio: ${SafeNumber.format(doubt, 1)}, Cooldown: ${cooldown.active})\n`
+			}
 
-		// V28: Proactive Recovery Template Injection
-		let scratchpadExists = false
-		try {
-			await fs.access(path.join(this.cwd, "scratchpad.md"))
-			scratchpadExists = true
-		} catch (_) {}
+			// V28: Proactive Recovery Template Injection
+			let scratchpadExists = false
+			try {
+				await fs.access(path.join(this.cwd, "scratchpad.md"))
+				scratchpadExists = true
+			} catch (_) {}
 
-		if (!scratchpadExists && (doubt > 5 || cooldown.active)) {
-			const template = this.getSystemDiagnostics()
-			header +=
-				`⚠️ HEAVY INVESTIGATION DETECTED: Your activity suggests a plan update is needed.\n` +
-				`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
-				`\`\`\`markdown\n${template}\n\`\`\`\n`
-		}
+			if (!scratchpadExists && (doubt >= 15.0 || cooldown.active)) {
+				const template = this.getSystemDiagnostics()
+				header +=
+					`⚠️ HEAVY INVESTIGATION DETECTED: Your activity suggests a plan update is needed.\n` +
+					`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
+					`\`\`\`markdown\n${template}\n\`\`\`\n`
+			}
 
-		// V33: Refactor awareness for diagnostic injection
-		const isRefactoringIntent =
-			this.refactorTurnsRemaining > 0 || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
-		const normPath = this.normalize(absolutePath)
-		const nodeSize = this.spiderEngine.nodes.get(normPath)?.astComplexity || 0
-		const drift = this.stabilityMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
-		const activity = this.stabilityMonitor.isHighlyActive(normPath, isRefactoringIntent, nodeSize)
+			// V33: Refactor awareness for diagnostic injection
+			const isRefactoringIntent =
+				this.refactorTurnsRemaining > 0 || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
+			const normPath = this.normalize(absolutePath)
+			const nodeSize = this.spiderEngine.nodes.get(normPath)?.astComplexity || 0
+			const drift = this.stabilityMonitor.getTaskDrift(true, isRefactoringIntent)
+			const activity = this.stabilityMonitor.isHighlyActive(normPath, isRefactoringIntent, nodeSize)
 
-		if (activity.active) {
-			header += `\n🔥 HIGH ACTIVITY LEVEL DETECTED:\n${activity.reason}\nThis file is changing very rapidly. Consider a quick Strategic Review to stay aligned.\n`
-		}
+			if (activity.active) {
+				header += `\n🔥 HIGH ACTIVITY LEVEL DETECTED:\n${activity.reason}\nThis file is changing very rapidly. Consider a quick Strategic Review to stay aligned.\n`
+			}
 
-		if (drift.warning) {
-			header += `\n${drift.warning}\n`
-		}
+			if (drift.warning) {
+				header += `\n${drift.warning}\n`
+			}
 
-		if (drift.drift > 0.15) {
-			header += `\n🕸️ [STRUCTURAL DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
+			if (drift.drift > 0.15) {
+				header += `\n🕸️ [STRUCTURAL DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
+			}
 		}
 
 		// V340: Sovereign Drafting & Instruction Pruning

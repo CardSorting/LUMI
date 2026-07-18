@@ -247,16 +247,40 @@ export interface Schema {
 		weight: number
 		createdAt: number
 	}
+	swarm_lock_generations: {
+		resourceKey: string
+		highestLeaseEpoch: string
+		highestFencingToken: string
+	}
 	swarm_locks: {
 		resource: string
 		ownerId: string
 		expiresAt: number
 		createdAt: number
+		leaseEpoch?: string
+		fencingToken?: string
+		protocolVersion?: number
+		authorityMode?: string
+		pid?: number
+	}
+	task_completions: {
+		taskId: string
+		decisionId: string
+		status: "succeeded" | "failed" | "cancelled"
+		evaluatedStateVersion: number
+		evaluatedCheckpointJson: string
+		decisionJson: string
+		ownerId: string
+		leaseEpoch: string
+		fencingToken: string
+		committedAt: number
 	}
 }
 
 let _db: Kysely<Schema> | null = null
 let _rawDb: Database.Database | null = null
+let _dbIsPersistent = false
+let _coordinationDbHealthy = false
 let _dbPath: string | null = null
 let _onDbPathChanged: (() => void) | null = null
 let _lifecyclePromise: Promise<unknown> = Promise.resolve()
@@ -313,6 +337,8 @@ export async function getDb(): Promise<Kysely<Schema>> {
 			let rawDb: Database.Database
 			try {
 				rawDb = new Database(dbPath)
+				_dbIsPersistent = dbPath !== ":memory:"
+				_coordinationDbHealthy = _dbIsPersistent
 			} catch (error: any) {
 				Logger.error(`[Config] Failed to open database file at ${dbPath}: ${error.message}`)
 
@@ -333,11 +359,15 @@ export async function getDb(): Promise<Kysely<Schema>> {
 							if (fs.existsSync(`${dbPath}-shm`)) fs.renameSync(`${dbPath}-shm`, `${corruptBackupPath}-shm`)
 						}
 						rawDb = new Database(dbPath)
+						_dbIsPersistent = true
+						_coordinationDbHealthy = false
 					} catch (recoveryError: any) {
 						Logger.error(
 							`[Config] Database recovery failed: ${recoveryError.message}. Falling back to in-memory database.`,
 						)
 						rawDb = new Database(":memory:")
+						_dbIsPersistent = false
+						_coordinationDbHealthy = false
 					}
 				} else if (isNativeModuleVersionMismatch(error)) {
 					disableSqlitePersistence(error.message)
@@ -347,6 +377,8 @@ export async function getDb(): Promise<Kysely<Schema>> {
 						`[Config] Falling back to in-memory database due to database initialization failure: ${error.message}`,
 					)
 					rawDb = new Database(":memory:")
+					_dbIsPersistent = false
+					_coordinationDbHealthy = false
 				}
 			}
 
@@ -713,9 +745,83 @@ export async function getDb(): Promise<Kysely<Schema>> {
 					resource TEXT PRIMARY KEY,
 					ownerId TEXT NOT NULL,
 					expiresAt BIGINT NOT NULL,
-					createdAt BIGINT NOT NULL
+					createdAt BIGINT NOT NULL,
+					leaseEpoch TEXT,
+					fencingToken TEXT,
+					protocolVersion INTEGER,
+					authorityMode TEXT,
+					pid INTEGER
 				)`,
 			)
+
+			await execute(
+				`CREATE TABLE IF NOT EXISTS swarm_lock_generations (
+					resourceKey TEXT PRIMARY KEY,
+					highestLeaseEpoch TEXT NOT NULL,
+					highestFencingToken TEXT NOT NULL
+				)`,
+			)
+
+			await execute(
+				`CREATE TABLE IF NOT EXISTS task_completions (
+					taskId TEXT PRIMARY KEY,
+					decisionId TEXT NOT NULL,
+					status TEXT NOT NULL,
+					evaluatedStateVersion INTEGER NOT NULL,
+					evaluatedCheckpointJson TEXT NOT NULL,
+					decisionJson TEXT NOT NULL,
+					ownerId TEXT NOT NULL,
+					leaseEpoch TEXT NOT NULL,
+					fencingToken TEXT NOT NULL,
+					committedAt BIGINT NOT NULL
+				)`,
+			)
+			await execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_completions_decision ON task_completions(decisionId)`)
+
+			// Inspect table schema using PRAGMA table_info to handle existing databases safely
+			let hasEpoch = false
+			let hasToken = false
+			let hasProto = false
+			let hasAuthorityMode = false
+			let hasPid = false
+			try {
+				const result = await execute("PRAGMA table_info(swarm_locks)")
+				if (result && result.rows) {
+					for (const row of result.rows) {
+						if ((row as any).name === "leaseEpoch") hasEpoch = true
+						if ((row as any).name === "fencingToken") hasToken = true
+						if ((row as any).name === "protocolVersion") hasProto = true
+						if ((row as any).name === "authorityMode") hasAuthorityMode = true
+						if ((row as any).name === "pid") hasPid = true
+					}
+				}
+			} catch {}
+
+			if (!hasEpoch) {
+				try {
+					await execute("ALTER TABLE swarm_locks ADD COLUMN leaseEpoch TEXT")
+				} catch {}
+			}
+			if (!hasToken) {
+				try {
+					await execute("ALTER TABLE swarm_locks ADD COLUMN fencingToken TEXT")
+				} catch {}
+			}
+			if (!hasProto) {
+				try {
+					await execute("ALTER TABLE swarm_locks ADD COLUMN protocolVersion INTEGER")
+				} catch {}
+			}
+			if (!hasAuthorityMode) {
+				try {
+					await execute("ALTER TABLE swarm_locks ADD COLUMN authorityMode TEXT")
+				} catch {}
+			}
+			if (!hasPid) {
+				try {
+					await execute("ALTER TABLE swarm_locks ADD COLUMN pid INTEGER")
+				} catch {}
+			}
 
 			// Additional Indices
 			await execute(`CREATE INDEX IF NOT EXISTS idx_swarm_locks_owner ON swarm_locks(ownerId)`)
@@ -741,6 +847,8 @@ export async function getDb(): Promise<Kysely<Schema>> {
 			_dbPromise = null
 			_db = null
 			_rawDb = null
+			_dbIsPersistent = false
+			_coordinationDbHealthy = false
 			throw e
 		}
 	})()
@@ -751,16 +859,35 @@ export async function getDb(): Promise<Kysely<Schema>> {
 export async function getRawDb(): Promise<Database.Database> {
 	if (_rawDb) return _rawDb
 	await getDb()
-	return _rawDb!
+	if (!_rawDb) throw new Error("SQLite database is unavailable.")
+	return _rawDb
+}
+
+/** Coordination authority must never inherit Config's non-durable in-memory recovery fallback. */
+export async function getCoordinationDb(): Promise<Kysely<Schema>> {
+	const db = await getDb()
+	if (!_dbIsPersistent || !_coordinationDbHealthy) {
+		throw new Error("Persistent SQLite coordination authority is unavailable.")
+	}
+	return db
+}
+
+export async function getCoordinationRawDb(): Promise<Database.Database> {
+	await getCoordinationDb()
+	if (!_rawDb) throw new Error("Persistent SQLite coordination database is unavailable.")
+	return _rawDb
 }
 
 export async function destroyDb(): Promise<void> {
 	_dbPromise = null
+	_dbIsPersistent = false
+	_coordinationDbHealthy = false
 	if (_rawDb) {
 		try {
 			_rawDb.close()
 		} finally {
 			_rawDb = null
+			_dbIsPersistent = false
 		}
 	}
 	if (_db) {

@@ -87,7 +87,7 @@ export class ActModeRespondHandler implements IToolHandler, IPartialBlockHandler
 						let advisoryMetadata = await runAdvisoryAudit(config.taskId, taskPreview, response, taskPreview)
 						advisoryMetadata = await applyWorkspaceAuditPolicy(config.cwd, advisoryMetadata, config)
 						const previousAdvisory = config.taskState.lastAdvisoryAudit
-						recordAdvisoryAuditCache(config, response, taskPreview, advisoryMetadata)
+						await recordAdvisoryAuditCache(config, response, taskPreview, advisoryMetadata)
 						if (shouldEmitAdvisoryAuditChatEvent(advisoryMetadata, previousAdvisory)) {
 							try {
 								await config.callbacks.say(

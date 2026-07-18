@@ -99,6 +99,7 @@ export class SubagentBuilder {
 	private allowedTools: DietCodeDefaultTool[]
 	private readonly apiHandler: ReturnType<typeof buildApiHandler>
 	private parentStreamContext: string | null = null
+	private siblingLanesContext = ""
 
 	constructor(
 		private readonly baseConfig: TaskConfig,
@@ -131,6 +132,10 @@ export class SubagentBuilder {
 		this.parentStreamContext = context
 	}
 
+	setSiblingLanesContext(context: string): void {
+		this.siblingLanesContext = context
+	}
+
 	getAllowedTools(): DietCodeDefaultTool[] {
 		return this.allowedTools
 	}
@@ -155,6 +160,10 @@ export class SubagentBuilder {
 			? `\n\n# Parent Agent Context\n${this.parentStreamContext}\nUse the context above to prioritize your research within the broader task goals.`
 			: ""
 
+		const siblingLanesBlock = this.siblingLanesContext
+			? `\n\n# SIBLING LANES CONTEXT\n${this.siblingLanesContext}\nUse the context above to coordinate with other completed lanes and prevent redundant work.`
+			: ""
+
 		// Cross-Agent Intelligence (Blackboard)
 		const blackboard = this.baseConfig.taskState?.swarmBlackboard || []
 		const blackboardBlock =
@@ -162,7 +171,7 @@ export class SubagentBuilder {
 				? `\n\n# SWARM BLACKBOARD (Shared Intelligence)\n${blackboard.map((f) => `- ${f}`).join("\n")}\nCONSIDER the findings above. If your research contradicts or supports these findings, signal it explicitly.`
 				: ""
 
-		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${depthBlock}${architectureSignal}${parentContextBlock}${blackboardBlock}${SUBAGENT_SYSTEM_SUFFIX}`
+		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${depthBlock}${architectureSignal}${parentContextBlock}${siblingLanesBlock}${blackboardBlock}${SUBAGENT_SYSTEM_SUFFIX}`
 	}
 
 	buildNativeTools(context: SystemPromptContext) {

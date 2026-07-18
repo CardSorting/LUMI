@@ -69,6 +69,7 @@ export function mergeGovernanceFields<T extends Record<string, unknown>>(
 
 /** Brief-level auto-clearable detection for steering surfaces. */
 export function isAutoClearableBrief(brief: Record<string, unknown>): boolean {
+	if (brief.kanban_complete_allowed === true) return true
 	if (brief.auto_clearable_governance_only === true) return true
 	const gate = (brief.roadmap_gate || {}) as Record<string, unknown>
 	const blocking = ((gate.blocking_gates || []) as Array<{ id?: string }>) || []

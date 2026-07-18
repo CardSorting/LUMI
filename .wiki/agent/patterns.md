@@ -1,5 +1,32 @@
 # Execution Patterns
 
+## Database-First Lease Lifecycle
+
+1. Run admission checks without creating a competing authority.
+2. Enter `BEGIN IMMEDIATE`, allocate the next epoch/token as `bigint`, persist their decimal strings, and commit the SQLite lease.
+3. Create file, Broccoli, and memory projections using the exact lease identity.
+4. If projection creation fails, compare-and-delete only the lease just allocated and clean only matching projections.
+5. On release, compare-and-delete SQLite by resource, owner, epoch, token, and mode first.
+6. Remove exact matching projections afterward; log cleanup failure without reverting the database transition.
+
+## Snapshot-Consistent Deadlock Recovery
+
+1. Increment scheduler and lane versions on every relevant transition.
+2. Freeze the lane DAG and copy running, pending, ownership, timer, and capacity state.
+3. Build typed dependency/ownership edges and auxiliary timer/capacity edges.
+4. Run Tarjan SCC over hard edges.
+5. Exclude SCCs with a timer, lease-expiry, outside-owner, or capacity escape.
+6. Re-read both versions immediately before recovery; if either changed, discard and recompute.
+
+## Durable Completion CAS
+
+1. Evaluate completion against one state version and checkpoint.
+2. Build the schema-versioned canonical identity object and SHA-256 `decisionId`.
+3. Read an existing durable terminal row before expensive evaluation when possible.
+4. Under `BEGIN IMMEDIATE`, verify the live lease tuple, protocol/expiry, freshest generation, and unchanged task state version.
+5. Return identical or same-outcome existing rows according to idempotency policy; reject payload collisions and outcome conflicts.
+6. Insert and commit the terminal row before mutating in-memory terminal state or emitting final success.
+
 ## Workspace-Local Query Fast Path
 
 1. Validate required parameters.

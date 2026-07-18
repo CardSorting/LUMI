@@ -4,7 +4,7 @@
 > **When do I use it?** Before introducing new abstractions, changing completion contracts, or altering workspace data-flow spines.
 > **What is the source of truth?** Approved implementation plans, user-signed ADRs, and structural design conventions.
 
-Last audited: 2026-07-09
+Last audited: 2026-07-18
 
 ## ADR-001: Root continuity docs are the first agent entry point
 
@@ -73,6 +73,7 @@ Last audited: 2026-07-09
 - Do not add completion/finalization routing policy directly in handlers.
 - Tests should verify decision output and guard behavior.
 - Finalization documentation work happens after engineering verification via `run_finalization`.
+- Eligibility and terminal durability remain separate: a successful decision is not terminal until the SQLite `task_completions` CAS commits.
 
 ## ADR-005: Use focused validation before broad validation in constrained environments
 
@@ -168,5 +169,34 @@ Last audited: 2026-07-09
 - The knowledge layer can expand to capture new engineering dimensions (dependency maturity, code coverage, performance hotspots) without database migrations.
 - Producers (finalizers, observers) write normalized facts, while consumers (wiki projection, agent playbook, system prompt) retrieve query-driven views.
 
+## ADR-011: SQLite is the sole production coordination authority
+
+**Status:** Accepted
+
+**Context:** Treating memory, files, and SQLite as peer lock authorities makes database outages and stale projections ambiguous. Numeric fencing tokens also lose identity precision at large generations.
+
+**Decision:** Fix coordination mode at startup. Production uses `sqlite`; `local_test` is explicit and never selected as a fallback. Allocate epochs/tokens under `BEGIN IMMEDIATE`, store them as decimal `TEXT`, and treat memory/file/Broccoli state as projections of the SQLite lease. Isolate ownership overrides in `AdministrativeLockCleaner`.
+
+**Consequences:** Database outages retry or fail closed, exact old-owner tuples cannot release newer leases, projection cleanup cannot revert a committed database release, and emergency cleanup is explicit and logged.
+
+## ADR-012: Deadlock recovery requires a versioned typed wait-for snapshot
+
+**Status:** Accepted
+
+**Context:** Cycles and capacity pressure can resolve through timers, lease expiry, outside owners, or unrelated running work. A diagnosis becomes unsafe if scheduler state changes before recovery.
+
+**Decision:** Build typed wait edges from one immutable scheduler/lane snapshot, run Tarjan SCC on hard edges, require no valid escape transition, and re-check both state versions before recovery.
+
+**Consequences:** Ordinary contention/backoff does not trigger false recovery, true self/dependency/ownership cycles remain detectable, and stale diagnoses are discarded.
+
+## ADR-013: Terminal completion is a durable lease/state CAS
+
+**Status:** Accepted
+
+**Context:** In-memory duplicate suppression cannot survive restart or serialize competing completion attempts.
+
+**Decision:** Canonically hash task, evaluated state version, checkpoint, outcome, and decision schema version. Persist one `task_completions` row under `BEGIN IMMEDIATE` after verifying the live lease tuple, freshest generation, and unchanged task state version.
+
+**Consequences:** Restart delivery is idempotent, same-outcome duplicates are suppressed, competing outcomes conflict visibly, and stale owners cannot terminalize.
 
 

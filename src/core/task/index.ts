@@ -2290,6 +2290,7 @@ export class Task {
 
 		const promptContext: SystemPromptContext = {
 			cwd: this.cwd,
+			taskId: this.taskId,
 			ide,
 			providerInfo,
 			editorTabs,

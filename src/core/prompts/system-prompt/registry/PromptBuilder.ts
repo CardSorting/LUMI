@@ -4,7 +4,7 @@ import { DietCodeToolSet } from "../registry/DietCodeToolSet"
 import { type DietCodeToolSpec, resolveInstruction } from "../spec"
 import { STANDARD_PLACEHOLDERS } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
-import type { ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
+import type { ComponentRegistry, DietCodeToolSpecParameter, PromptVariant, SystemPromptContext } from "../types"
 
 // Pre-defined mapping of standard placeholders to avoid runtime object creation
 const STANDARD_PLACEHOLDER_KEYS = Object.values(STANDARD_PLACEHOLDERS)
@@ -24,7 +24,55 @@ export class PromptBuilder {
 		const componentSections = await this.buildComponents()
 		const placeholderValues = this.preparePlaceholders(componentSections)
 		const prompt = this.templateEngine.resolve(this.variant.baseTemplate, this.context, placeholderValues)
-		return this.postProcess(prompt)
+
+		let executionStateHeader = ""
+		if (this.context.mode === "act") {
+			const taskState = this.context.taskState
+			const workspaceRoots = this.context.workspaceRoots?.map((r) => r.path).join(", ") || this.context.cwd || "unknown"
+			const lanesTotal = taskState?.swarmRuntime?.lanesTotal || 0
+			const lanesComplete = taskState?.swarmRuntime?.lanesComplete || 0
+
+			// Derive next required action and blockers semantically
+			const activeBlockers: string[] = []
+			const activeLockClaim = taskState?.activeLockClaim
+			const durableClaim = (
+				activeLockClaim && "lockClaim" in activeLockClaim ? activeLockClaim.lockClaim : activeLockClaim
+			) as import("@shared/governance/lockTypes").LockClaim | undefined
+			if (activeLockClaim && !durableClaim?.fencingToken) {
+				activeBlockers.push("Lock claim missing fencing token")
+			}
+			const lanesHardBlocked = taskState?.swarmRuntime?.lanesHardBlocked ?? 0
+			if (lanesHardBlocked > 0) {
+				activeBlockers.push(`${lanesHardBlocked} lane(s) hard-blocked`)
+			}
+
+			let nextAction = "Continue task execution"
+			let completionCondition = "All objectives completed and verified"
+			if (lanesTotal > 0 && lanesComplete < lanesTotal) {
+				nextAction = `Complete remaining ${lanesTotal - lanesComplete} lane(s)`
+				completionCondition = `All ${lanesTotal} lanes completed`
+			}
+			if (taskState?.isTerminalState) {
+				nextAction = "Task is terminal — no further action"
+				completionCondition = "Already terminal"
+			}
+
+			executionStateHeader = [
+				"# EXECUTION STATE",
+				"",
+				`Mode: ACT`,
+				`Workspace: ${workspaceRoots}`,
+				`Task: ${this.context.taskId || "unknown"}`,
+				`Next required action: ${nextAction}`,
+				`Active hard blockers: ${activeBlockers.length > 0 ? activeBlockers.join("; ") : "none"}`,
+				`Lane progress: ${lanesComplete}/${lanesTotal} complete`,
+				`Completion condition: ${completionCondition}`,
+				"",
+				"",
+			].join("\n")
+		}
+
+		return this.postProcess(executionStateHeader + prompt)
 	}
 
 	private async buildComponents(): Promise<Record<string, string>> {
@@ -76,7 +124,7 @@ export class PromptBuilder {
 		}
 
 		// Add runtime placeholders with highest priority
-		const runtimePlaceholders = (this.context as any).runtimePlaceholders
+		const runtimePlaceholders = this.context.runtimePlaceholders
 		if (runtimePlaceholders) {
 			Object.assign(placeholders, runtimePlaceholders)
 		}
@@ -193,7 +241,7 @@ export class PromptBuilder {
 		return sections.filter(Boolean).join("\n")
 	}
 
-	private static buildParametersSection(params: any[], context: SystemPromptContext): string {
+	private static buildParametersSection(params: DietCodeToolSpecParameter[], context: SystemPromptContext): string {
 		if (!params.length) {
 			return "Parameters: None"
 		}
@@ -207,7 +255,7 @@ export class PromptBuilder {
 		return ["Parameters:", ...paramList].join("\n")
 	}
 
-	private static buildUsageSection(toolId: string, params: any[]): string {
+	private static buildUsageSection(toolId: string, params: DietCodeToolSpecParameter[]): string {
 		const usageSection = ["Usage:"]
 		const usageTag = `<${toolId}>`
 		const usageEndTag = `</${toolId}>`

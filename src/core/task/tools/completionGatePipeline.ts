@@ -23,6 +23,8 @@ import {
 	detectDuplicateCompletionSubmission,
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
+	resolveAuditStateIdentifier,
+	updateFindingLifecycle,
 	validateCompletionAttemptCooldown,
 	validateCompletionDemoCommand,
 	validateCompletionResultExcludesChecklist,
@@ -234,19 +236,18 @@ export function hashCompletionAuditInput(result: string, taskDescription: string
 }
 
 /** Record advisory audit for completion cache reuse (act-mode, deferred command audit). */
-export function recordAdvisoryAuditCache(
+/** Record advisory audit for completion cache reuse (act-mode, deferred command audit). */
+export async function recordAdvisoryAuditCache(
 	config: TaskConfig,
 	result: string,
 	taskDescription: string,
 	metadata: TaskAuditMetadata,
-): void {
+): Promise<void> {
 	config.taskState.lastAdvisoryAudit = metadata
-	config.taskState.lastAdvisoryAuditCacheKey = hashCompletionAuditInput(
-		result,
-		taskDescription,
-		getLatestCheckpointHashFromMessages(config),
-	)
+	const stateIdentifier = await resolveAuditStateIdentifier(config)
+	config.taskState.lastAdvisoryAuditCacheKey = hashCompletionAuditInput(result, taskDescription, stateIdentifier)
 	config.taskState.lastAdvisoryAuditCachedAt = Date.now()
+	config.taskState.auditMetadataVersion = (config.taskState.auditMetadataVersion || 0) + 1
 }
 
 async function resolveCompletionAuditMetadata(
@@ -254,7 +255,8 @@ async function resolveCompletionAuditMetadata(
 	params: { result: string; taskDescription: string },
 ): Promise<TaskAuditMetadata> {
 	const checkpointHash = getLatestCheckpointHashFromMessages(config)
-	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, checkpointHash)
+	const stateIdentifier = await resolveAuditStateIdentifier(config)
+	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, stateIdentifier)
 	const cachedAt = config.taskState.lastCompletionAuditCachedAt
 	const cachedKey = config.taskState.lastCompletionAuditCacheKey
 	const cached = config.taskState.lastCompletionAudit
@@ -282,6 +284,7 @@ async function resolveCompletionAuditMetadata(
 	if (cached && cachedKey === cacheKey && config.taskState.lastCompletionAuditGraphRevision === currentRevision) {
 		// Refresh the timestamp to extend the TTL window — the audit is still valid.
 		config.taskState.lastCompletionAuditCachedAt = Date.now()
+		config.taskState.lastCompletionAuditCheckpointHash = checkpointHash
 		return cached
 	}
 
@@ -291,6 +294,7 @@ async function resolveCompletionAuditMetadata(
 	if (advisory && advisoryKey === cacheKey && advisoryAt && Date.now() - advisoryAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
 		config.taskState.lastCompletionAuditCacheKey = cacheKey
 		config.taskState.lastCompletionAuditCachedAt = Date.now()
+		config.taskState.lastCompletionAuditCheckpointHash = checkpointHash
 		config.taskState.lastCompletionAuditGraphRevision = currentRevision
 		return advisory
 	}
@@ -307,7 +311,9 @@ async function resolveCompletionAuditMetadata(
 	config.taskState.pendingCompletionAuditPersistence = auditMetadata
 	config.taskState.lastCompletionAuditCacheKey = cacheKey
 	config.taskState.lastCompletionAuditCachedAt = Date.now()
+	config.taskState.lastCompletionAuditCheckpointHash = checkpointHash
 	config.taskState.lastCompletionAuditGraphRevision = currentRevision
+	config.taskState.auditMetadataVersion = (config.taskState.auditMetadataVersion || 0) + 1
 	return auditMetadata
 }
 
@@ -331,6 +337,7 @@ export async function evaluateCompletionAuditGate(
 	}
 
 	const checkpointHash = getLatestCheckpointHashFromMessages(config)
+	const stateIdentifier = await resolveAuditStateIdentifier(config)
 
 	// Fast-path: reuse cached audit ONLY when ALL of the following hold:
 	//   1. Cache key matches (includes checkpoint hash — workspace fingerprint)
@@ -345,7 +352,7 @@ export async function evaluateCompletionAuditGate(
 	//
 	// Mirrors CDN cache validation: both ETag (cache key) AND Last-Modified
 	// (graph revision) must match before serving from cache without revalidation.
-	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, checkpointHash)
+	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, stateIdentifier)
 	const cachedAt = config.taskState.lastCompletionAuditCachedAt
 	const cachedKey = config.taskState.lastCompletionAuditCacheKey
 	const cachedAudit = config.taskState.lastCompletionAudit
@@ -367,6 +374,7 @@ export async function evaluateCompletionAuditGate(
 			const gateOptions = gateContext.options
 			const gateDecision = evaluateAuditGate(cachedAudit, gateOptions)
 			if (!gateDecision.blocked) {
+				config.taskState.lastCompletionAuditCheckpointHash = checkpointHash
 				return {
 					status: "advisory_passed",
 					auditMetadata: cachedAudit,
@@ -384,6 +392,7 @@ export async function evaluateCompletionAuditGate(
 		const messages = config.messageState?.getDietCodeMessages?.() ?? []
 		const planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
 		const auditMetadata = await resolveCompletionAuditMetadata(config, params)
+		updateFindingLifecycle(config, auditMetadata, false)
 
 		const gateContext = await resolveCompletionGateContext(config, config.cwd, {
 			planBaselineMetadata: planBaseline,

@@ -140,6 +140,7 @@ export interface VersionMetadata {
 export interface SystemPromptContext {
 	readonly providerInfo: ApiProviderInfo
 	readonly cwd?: string
+	readonly taskId?: string
 	readonly ide: string
 	readonly editorTabs?: {
 		readonly open?: readonly string[]

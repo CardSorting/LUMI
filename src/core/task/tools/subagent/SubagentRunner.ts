@@ -43,6 +43,7 @@ import {
 	getCompletionGateOperationalState,
 	getCompletionGatePressureLevel,
 	getCompletionGateRetryPolicy,
+	getLatestCheckpointHashFromMessages,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
 import {
@@ -323,6 +324,12 @@ export class SubagentRunner {
 	private swarmGateOptions?: CompletionGateOptions
 	private activeCommandExecutions = 0
 	private abortingCommands = false
+	private siblingEnvelopes?: Map<string, SubagentExecutionEnvelope>
+	private laneIntents?: any[]
+	private laneDAG?: any
+	private laneIndex?: number
+	private swarmId?: string
+	private lockClaim?: any
 	private streamId?: string
 
 	private readonly baseConfig: TaskConfig
@@ -430,6 +437,10 @@ export class SubagentRunner {
 			prefetchedParentContext?: string | Promise<string | undefined>
 			swarmGateOptions?: CompletionGateOptions
 			onTranscriptFlush?: () => Promise<void>
+			siblingEnvelopes?: Map<string, SubagentExecutionEnvelope>
+			laneIntents?: any[]
+			laneDAG?: any
+			lockClaim?: any
 		},
 		streamId?: string,
 	): Promise<SubagentRunResult> {
@@ -438,6 +449,12 @@ export class SubagentRunner {
 		this.prefetchedParentContext = envelopeContext.prefetchedParentContext
 		this.swarmGateOptions = envelopeContext.swarmGateOptions
 		this.onTranscriptFlush = envelopeContext.onTranscriptFlush
+		this.siblingEnvelopes = envelopeContext.siblingEnvelopes
+		this.laneIntents = envelopeContext.laneIntents
+		this.laneDAG = envelopeContext.laneDAG
+		this.laneIndex = envelopeContext.index
+		this.swarmId = envelopeContext.swarmId
+		this.lockClaim = envelopeContext.lockClaim
 		this.transcriptRecorder = new SubagentTranscriptRecorder({
 			swarmId: envelopeContext.swarmId,
 			agentId: envelopeContext.agentId,
@@ -624,32 +641,73 @@ export class SubagentRunner {
 			const generatedSystemPrompt = await promptRegistry.get(context)
 
 			// Fluid Orchestration: Inject parent stream context for subagent awareness
-			const parentStreamId = (this.baseConfig as ConfigWithExtensions).getSessionStreamId?.()
-			if (parentStreamId) {
-				try {
-					const auditContext = buildSubagentAuditContext({
-						lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
-						lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
-						completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
-						lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
-						lastCompletionFailedStage: parentCompletionFailedStage,
-						completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
-						completionGatePressureLevel: parentGatePressureLevel,
-						completionGateObservabilityEnvelope: parentGateObservability,
-						completionGateRetryStatus: parentGateRetryStatus,
-						completionGateBlockHistoryCount: parentGateBlockHistoryCount,
-						completionGateSessionId: parentGateSessionId,
-						completionGateOperationalState: parentGateOperationalState,
-						gateOptions,
-					})
-					const compressed =
-						this.prefetchedParentContext !== undefined
-							? await this.prefetchedParentContext
-							: await orchestrator.getCompressedContext(parentStreamId).catch(() => undefined)
-					const combined = [auditContext, compressed].filter(Boolean).join("\n\n")
-					this.agent.setParentStreamContext(combined)
-				} catch (err) {
-					Logger.error("[SubagentRunner] Failed to fetch parent context:", err)
+			try {
+				const currentHash = getLatestCheckpointHashFromMessages(this.baseConfig)
+				const lastAuditHash = this.baseConfig.taskState.lastCompletionAuditCheckpointHash
+				const isStale = lastAuditHash !== undefined && currentHash !== lastAuditHash
+
+				const auditContext = buildSubagentAuditContext({
+					lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
+					lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
+					completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
+					lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
+					lastCompletionFailedStage: parentCompletionFailedStage,
+					completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
+					completionGatePressureLevel: parentGatePressureLevel,
+					completionGateObservabilityEnvelope: parentGateObservability,
+					completionGateRetryStatus: parentGateRetryStatus,
+					completionGateBlockHistoryCount: parentGateBlockHistoryCount,
+					completionGateSessionId: parentGateSessionId,
+					completionGateOperationalState: parentGateOperationalState,
+					gateOptions,
+					mode: mode as "plan" | "act",
+					isStale,
+				})
+				const parentStreamId = (this.baseConfig as ConfigWithExtensions).getSessionStreamId?.()
+				const compressed =
+					this.prefetchedParentContext !== undefined
+						? await this.prefetchedParentContext
+						: parentStreamId
+							? await orchestrator.getCompressedContext(parentStreamId).catch(() => undefined)
+							: undefined
+				const combined = [auditContext, compressed].filter(Boolean).join("\n\n")
+				this.agent.setParentStreamContext(combined)
+			} catch (err) {
+				Logger.error("[SubagentRunner] Failed to fetch parent context:", err)
+			}
+
+			// Sibling Swarm State Sharing
+			if (this.siblingEnvelopes && this.laneIndex !== undefined) {
+				const siblingContextParts: string[] = []
+				const dag = this.laneDAG
+				const currentIdx = this.laneIndex
+
+				for (const [agentId, envelope] of this.siblingEnvelopes.entries()) {
+					const sibIdx = envelope.lineage?.index
+					if (sibIdx === undefined || sibIdx === currentIdx) continue
+
+					const isDependency = dag ? dag.laneDependsOn(currentIdx, sibIdx) : false
+					const relationLabel = isDependency ? "Prerequisite" : "Advisory"
+
+					const touchedFilesList = (envelope.touchedFiles || [])
+						.map((f) => `- [${f}](file://${this.baseConfig.cwd}/${f})`)
+						.join("\n")
+
+					const resultText = envelope.verbatimOutput || "No output provided."
+					const excerptText = resultText.length > 1500 ? resultText.slice(0, 1500) + "\n... (truncated)" : resultText
+
+					siblingContextParts.push(
+						`#### [${relationLabel}] Lane ${sibIdx + 1} (${envelope.role || `Subagent ${sibIdx + 1}`})` +
+							`\n- **Prompt**: ${envelope.prompt}` +
+							(touchedFilesList ? `\n- **Files Modified**:\n${touchedFilesList}` : "") +
+							`\n- **Execution Result**:\n\`\`\`\n${excerptText}\n\`\`\``,
+					)
+				}
+
+				if (siblingContextParts.length > 0) {
+					this.agent.setSiblingLanesContext(
+						`The following sibling lanes in the current swarm have already completed:\n\n${siblingContextParts.join("\n\n")}`,
+					)
 				}
 			}
 
@@ -1172,6 +1230,9 @@ export class SubagentRunner {
 		}
 
 		subagentTaskState.recursionDepth = this.recursionDepth
+		subagentTaskState.swarmId = this.swarmId
+		subagentTaskState.laneIndex = this.laneIndex
+		subagentTaskState.activeLockClaim = this.lockClaim
 
 		return {
 			...this.baseConfig,

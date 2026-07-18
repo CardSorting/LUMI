@@ -28,6 +28,8 @@ SRE-style playbook for governed swarm receipts: triage incidents, interpret viol
 | When is retry safe? | `diagnostics.retrySafe === true` in incident console |
 | What blocks merge? | `mergeGate.violations` only; `advisoryWarnings` never block — see [violation catalog](#violation-catalog) |
 | Should I retry the swarm? | Follow `retryDisposition`; never infer retry scope from warning text |
+| What if SQLite is down? | Treat as `DATABASE_AUTHORITY_UNAVAILABLE`; retry at a safe boundary or fail closed |
+| Can I delete a stale-looking lock file? | No. Reconcile against SQLite, or use the isolated administrative cleaner with an override reason |
 
 ---
 
@@ -325,21 +327,32 @@ Patch rejections are recorded in `roadmapLinkage.patchReconciliation.rejectedPat
 
 Applies to **mutation lanes** with durable locks. Lock-skipped lanes: skip.
 
-1. **Incident console** — note `stale claims` / `stale leases` count
-2. **Re-admit swarm** — `admitSwarm` calls `recoverStale(workspace, "governed-lane:")`
-3. **Verify backends cleared:**
+1. **Incident console** — note stale claims, ownership conflicts, projection corruption, and database health.
+2. **Require SQLite availability** — reconciliation must read the authoritative lease. If unavailable, stop; do not inspect file age and infer ownership.
+3. **Capture one reconciliation snapshot** — SQLite lease plus memory, file, and Broccoli projections.
+4. **Validate every identity** — `ownerId`, `leaseEpoch`, `fencingToken`, and `authorityMode` must agree. A projection with a newer token, incompatible mode, malformed JSON, or `expiresAt < claimedAt` fails closed.
+5. **Apply the database decision first:**
+   - live SQLite lease: retain it and repair missing/stale projections;
+   - expired SQLite lease: delete it by the full identity tuple, then clean matching projections;
+   - no SQLite lease: remove only projections whose absence was confirmed against that snapshot.
+6. **Confirm** the claim timeline reports `released`, `recovered`, or a projection repair and re-check `isRetrySafe`.
 
-| Layer | Location | Auto-recover |
-|-------|----------|--------------|
-| In-process | Coordinator memory | `expiresAt` expiry |
-| File lock | `.broccolidb/governed/locks/` | 600s stale threshold |
-| Broccoli fence | `.broccolidb/governed/fencing/` | 600s stale threshold |
-| SwarmMutex | SQLite | Manual / service restart |
-| Roadmap lease | Roadmap service | Manual |
+The file fallback predicate is used only when a structurally valid record has no `expiresAt`: `heartbeatAt ?? claimedAt` plus the configured stale duration. A future `expiresAt` always wins over file age. Normal runtime never unlinks malformed records automatically.
 
-4. **Manual clear (last resort):** delete stale lock/fence files only if PID dead and mtime > 600s
-5. **Confirm** claim timeline shows `released` or `recovered`
-6. Re-check `isRetrySafe`
+### Administrative cleanup
+
+`src/core/governance/AdministrativeLockCleaner.ts` is the only ownership-override path. It is intentionally absent from `LockAuthority` and normal swarm flow.
+
+Use it only after preserving evidence and establishing that ordinary database-backed reconciliation cannot complete the operational recovery. The caller must provide a non-empty override reason. The cleaner logs each SQLite, memory, file, and Broccoli record it unlinks. Never replace this procedure with direct `rm` of lock files.
+
+### Database authority outage
+
+| Symptom | Required response |
+|---------|-------------------|
+| Connection/open/query failure | Surface `DATABASE_AUTHORITY_UNAVAILABLE` (`retry`) |
+| Reconciliation snapshot cannot read SQLite | Return no reclamation actions |
+| Existing file/memory projection appears free | Ignore it as authority; do not acquire locally |
+| Retry budget exhausted | Fail closed and preserve all records for later reconciliation |
 
 ---
 
@@ -366,7 +379,7 @@ Applies to **mutation lanes** with durable locks. Lock-skipped lanes: skip.
 | `file` | File lock |
 | `fence` | Broccoli fence |
 
-Partial acquire (file ok, fence fail) → **rejected**, SwarmMutex rolled back.
+Partial acquire (SQLite committed, file or fence projection failed) → **rejected**; the exact SQLite lease is ownership-checked and abandoned. A changed SQLite identity is never deleted.
 
 ---
 
@@ -440,6 +453,7 @@ Use `explainReplayMismatch()` output in incident console.
 |----------|-----------|-------------|
 | P3 | Single merge violation, clear fix | Harness author / retry |
 | P2 | Stale claims persist after recovery | Platform — lock backend health |
+| P2 | `DATABASE_AUTHORITY_UNAVAILABLE` persists | Platform — SQLite health; do not switch authority modes |
 | P2 | `split-brain lock authority detected` | Platform — forensic claim history |
 | P1 | Data loss suspected (authoritative receipt missing) | Stop merges; preserve `history.jsonl` |
 | P1 | Repeated fence fail-closed with DB up | BroccoliDB / workspace integrity |
@@ -456,6 +470,8 @@ Use `explainReplayMismatch()` output in incident console.
 6. **Retry** — `diagnostics.retrySafe` before re-run
 7. **Roadmap projection** — check accepted vs rejected patches before assuming kanban updated
 8. **Workspace commit** — `diagnostics.roadmapCommitStatus` must be `committed` for patch-driven updates
+9. **Authority health** — SQLite snapshot available; no dynamic local fallback
+10. **Projection integrity** — exact owner/epoch/token/mode match; malformed records preserved
 
 ---
 

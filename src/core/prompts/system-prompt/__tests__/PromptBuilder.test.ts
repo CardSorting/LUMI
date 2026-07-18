@@ -1,4 +1,5 @@
 import { expect } from "chai"
+import { TaskState } from "@/core/task/TaskState"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
@@ -79,6 +80,34 @@ describe("PromptBuilder", () => {
 			expect(result).to.include("RULES")
 			expect(result).to.include("SYSTEM INFORMATION")
 			expect(result).to.include("OS: macOS")
+		})
+
+		it("should expose only semantic execution state in ACT mode", async () => {
+			const taskState = new TaskState()
+			taskState.swarmRuntime = {
+				swarmId: "swarm-test",
+				startedAt: Date.now(),
+				lanesTotal: 4,
+				lanesComplete: 2,
+				lanesDegraded: 0,
+				lanesHardBlocked: 0,
+				advisoryNoiseSuppressed: 0,
+			}
+			taskState.consecutiveMistakeCount = 99
+			const builder = new PromptBuilder(
+				baseVariant,
+				{ ...mockContext, mode: "act", taskId: "task-test", taskState },
+				mockComponents,
+			)
+			const result = await builder.build()
+
+			expect(result).to.include("# EXECUTION STATE")
+			expect(result).to.include("Workspace: /test/project")
+			expect(result).to.include("Task: task-test")
+			expect(result).to.include("Next required action: Complete remaining 2 lane(s)")
+			expect(result).to.include("Lane progress: 2/4 complete")
+			expect(result).not.to.include("99")
+			expect(result).not.to.include("fencingToken")
 		})
 
 		it("should handle missing components gracefully", async () => {

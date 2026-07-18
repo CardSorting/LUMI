@@ -1,4 +1,4 @@
-# Confidence-Preserving Subagent Convergence
+# Governed Execution Schema and Confidence-Preserving Convergence
 
 The harness can now finish vague, exploratory, and genuinely inconclusive work without pretending that the uncertainty disappeared. It preserves what each lane knows, what it only suspects, and why. It retries only when another narrowly scoped check could change a consequential decision.
 
@@ -245,6 +245,14 @@ Cross-process lock files (workspace root):
 .broccolidb/governed/fencing/{sha256(resourceKey)}.json
 ```
 
+Authoritative production coordination is stored in SQLite, not in those files:
+
+- `swarm_lock_generations` — highest allocated lease epoch and fencing token per resource.
+- `swarm_locks` — current authoritative lease identity and expiry.
+- `task_completions` — one durable terminal result per task.
+
+File locks and Broccoli fences are projections of the corresponding SQLite lease.
+
 ---
 
 ## GovernedSwarmReceipt
@@ -305,7 +313,7 @@ Use `loadAuthoritativeGovernedReceipt()` or walk `history.jsonl` reverse for tru
 | `reasonLockSkipped` | string | — | classifier reason |
 | `claimId` | string | UUID | omitted / null |
 | `claimReleased` | boolean | tracks release | always `true` |
-| `fencingToken` | number | token | omitted |
+| `fencingToken` | decimal string | token copied from the authoritative SQLite lease | omitted |
 | `lockBackends` | `LockBackends` | backend map | `{}` or omitted |
 | `readSet` | string[] | optional | paths read |
 | `writeSet` | string[] | paths written | empty unless escalated |
@@ -510,11 +518,21 @@ Recorded at seal via `buildGovernedAuditIntegration()`.
 | `claimId` | UUID |
 | `resourceKey` | e.g. `governed-lane:{swarmId}:{index}` |
 | `ownerId` | agent ID |
-| `fencingToken` | Monotonic (Unified) or per-claim (InMemory) |
+| `leaseEpoch` | Required decimal string; exact authoritative lease generation |
+| `fencingToken` | Required monotonic decimal string; never parse through JavaScript `number` |
+| `authorityMode` | Required `sqlite` or `local_test`; incompatible records are rejected |
 | `roadmapLeaseTaskId` | Per-lane roadmap lease |
 | `acquiredAt` | ms timestamp |
 | `releasedAt` | set on release |
 | `backends` | `LockBackends` participation |
+
+Production identity is the complete tuple:
+
+```text
+resourceKey + ownerId + leaseEpoch + fencingToken + authorityMode
+```
+
+Release and projection cleanup must compare the full tuple. Matching only the owner or resource is insufficient because an old process may share those values with a newer lease generation.
 
 ### LockBackends
 
@@ -525,6 +543,99 @@ Recorded at seal via `buildGovernedAuditIntegration()`.
 | `roadmapLease` | Roadmap admission |
 | `fileLock` | Cross-process file lock |
 | `broccoliFence` | Fencing token file |
+
+### SQLite coordination rows
+
+`swarm_lock_generations` preserves monotonic counters even after the active lease row is removed:
+
+| Field | Type | Semantics |
+|-------|------|-----------|
+| `resourceKey` | `TEXT` | Primary key |
+| `highestLeaseEpoch` | `TEXT` | Highest allocated arbitrary-precision epoch |
+| `highestFencingToken` | `TEXT` | Highest allocated arbitrary-precision token |
+
+`swarm_locks` contains the current lease:
+
+| Field | Type | Semantics |
+|-------|------|-----------|
+| `resource` | `TEXT` | Primary key |
+| `ownerId` | `TEXT` | Current owner |
+| `expiresAt` / `createdAt` | integer timestamp | Lease time bounds |
+| `leaseEpoch` | `TEXT` | Current generation |
+| `fencingToken` | `TEXT` | Current fencing token |
+| `protocolVersion` | integer | Must equal `SWARM_LOCK_PROTOCOL_VERSION` |
+| `authorityMode` | `TEXT` | Must be `sqlite` in production |
+| `pid` | integer | Diagnostic process identity; never sufficient for ownership |
+
+Generation allocation and lease upsert occur under one `BEGIN IMMEDIATE` transaction. Production release uses a compare-and-delete on resource, owner, epoch, token, and mode.
+
+### Filesystem projection record
+
+Governed lock and Broccoli projection records carry the same owner, epoch, token, mode, timestamps, and PID as the authoritative lease. A projection is corrupt when required identity fields are missing or malformed, its mode is incompatible, or `expiresAt < claimedAt`.
+
+For a valid file record, expiry is evaluated as:
+
+```ts
+const referenceTime = record.heartbeatAt ?? record.claimedAt
+const isExpired = record.expiresAt !== undefined
+  ? now > record.expiresAt
+  : now > referenceTime + staleMs
+```
+
+Corrupt records are reported and preserved. They are not automatically unlinked.
+
+## Durable task completion
+
+`task_completions` is the authoritative terminal-result table:
+
+| Field | Type | Semantics |
+|-------|------|-----------|
+| `taskId` | `TEXT` | Primary key; one terminal row per task |
+| `decisionId` | `TEXT` | Unique canonical SHA-256 digest |
+| `status` | enum text | `succeeded`, `failed`, or `cancelled` |
+| `evaluatedStateVersion` | integer | Task state version evaluated by the decision |
+| `evaluatedCheckpointJson` | `TEXT` | Canonical checkpoint identity payload |
+| `decisionJson` | `TEXT` | Persisted terminal decision payload |
+| `ownerId` | `TEXT` | Lease owner that committed terminalization |
+| `leaseEpoch` | `TEXT` | Lease generation validated during CAS |
+| `fencingToken` | `TEXT` | Precision-safe fencing token validated during CAS |
+| `committedAt` | integer timestamp | Commit time |
+
+`decisionId` hashes canonical recursively sorted JSON with these explicit identity fields:
+
+```ts
+interface CompletionDecisionIdentityInput {
+  taskId: string
+  evaluatedStateVersion: number
+  checkpoint: string
+  outcome: string
+  decisionSchemaVersion: number
+}
+```
+
+The `BEGIN IMMEDIATE` terminal transaction validates the live lease tuple, protocol, expiry, freshest allocated generation, unchanged task state version, and any existing completion before insert. Existing-row semantics are:
+
+| Existing row vs proposal | Result |
+|--------------------------|--------|
+| Same decision ID and same payload | Idempotent cached result |
+| Different decision ID, same status | Existing result; duplicate suppressed |
+| Different status | Terminal conflict; fail closed |
+| Same decision ID, different payload | Corruption/collision; fail closed |
+
+## Scheduler wait-for snapshot
+
+Deadlock analysis consumes an immutable scheduler snapshot and typed edges:
+
+```ts
+type WaitEdge =
+  | { kind: "lane_dependency"; from: string; to: string }
+  | { kind: "resource_ownership"; from: string; to: string }
+  | { kind: "owned_by"; from: string; to: string }
+  | { kind: "timer"; from: string; deadline: number }
+  | { kind: "capacity"; from: string; poolId: string }
+```
+
+The snapshot records scheduler and lane state versions. Recovery may be applied only if both still match after Tarjan SCC analysis.
 
 ---
 
@@ -539,7 +650,7 @@ Mutation lanes only. Lock-skipped lanes produce **no entries**.
 | `laneId` | lane identifier |
 | `resourceKey` | governed resource |
 | `ownerId` | agent ID |
-| `fencingToken` | token at event time |
+| `fencingToken` | decimal-string token at event time |
 | `lockBackends` | backends at event time |
 | `timestamp` | ms |
 | `expiresAt` | optional TTL |

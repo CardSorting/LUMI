@@ -118,7 +118,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 				planAuditMetadata = await applyWorkspaceAuditPolicy(config.cwd, planAuditMetadata, config)
 				config.taskState.lastPlanAuditMetadata = planAuditMetadata
 				const { recordAdvisoryAuditCache } = await import("../completionGatePipeline")
-				recordAdvisoryAuditCache(config, response, taskPreview, planAuditMetadata)
+				await recordAdvisoryAuditCache(config, response, taskPreview, planAuditMetadata)
 			} catch (error) {
 				Logger.warn("[PlanModeRespondHandler] Plan audit metadata generation failed:", error)
 			}

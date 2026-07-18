@@ -1,6 +1,6 @@
 # Agent Fast Orientation
 
-Last validated: 2026-07-15
+Last validated: 2026-07-18
 
 ## Current Snapshot
 
@@ -8,6 +8,10 @@ Last validated: 2026-07-15
 - Tool dispatch and execution policy: `src/core/task/ToolExecutor.ts` and `src/core/task/tools/`.
 - Workspace-local query authority: `src/core/task/tools/executionAuthority.ts`.
 - Completion diagnostics: `src/core/task/tools/completionGatePipeline.ts`.
+- Durable completion: `src/core/task/tools/handlers/AttemptCompletionHandler.ts` and SQLite `task_completions` in `src/infrastructure/db/Config.ts`.
+- Production lease authority: `src/core/governance/LockAuthority.ts` and `src/core/swarm/SwarmMutexService.ts`.
+- Projection safety: `src/shared/governance/fileLock.ts` and `src/core/governance/BroccoliFencingAdapter.ts`.
+- Scheduler liveness: `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` plus versioned snapshots in `SubagentToolHandler.ts` and `LaneDAG.ts`.
 - Roadmap lifecycle and advisory journal: `src/services/roadmap/`.
 - Durable audit evidence: `src/shared/audit/completionAudit.ts` and `src/infrastructure/ai/Orchestrator.ts`.
 - Task latency trace: `src/core/task/latency/TaskLatencyTracker.ts`.
@@ -33,6 +37,7 @@ Last validated: 2026-07-15
 ```sh
 npx tsc --noEmit --pretty false
 TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts
 npm run test:unit
 npm run lint
 npm run roadmap:audit

@@ -1,5 +1,14 @@
 # Common Pitfalls
 
+- Do not switch production coordination to memory when SQLite fails. `local_test` is a startup mode, not a recovery mode.
+- Do not infer lock ownership from PID, mtime, owner ID alone, or the existence/absence of a projection file. Compare the complete owner/epoch/token/mode identity against SQLite.
+- Do not convert `leaseEpoch` or `fencingToken` to JavaScript `number`; use the decimal string or `bigint`.
+- Do not unlink malformed or clock-skewed lock/fence records automatically. Preserve them and fail closed.
+- Do not call administrative cleanup from normal orchestration. `AdministrativeLockCleaner` is an explicit, logged override path only.
+- Do not classify every dependency cycle or exhausted pool as deadlock. Check timers, lease expiry, outside owners, and capacity escapes from a consistent snapshot.
+- Do not apply deadlock recovery after scheduler or lane state changes; discard the stale diagnosis and recompute.
+- Do not mark task state terminal before the `task_completions` CAS commits.
+- Do not use an ad hoc JSON hash as a completion decision ID; use the schema-versioned canonical digest.
 - Do not add another pre-tool gate for workspace-local queries; required parameters and `.dietcodeignore` already provide the relevant boundary.
 - Do not cache completed reads across a file mutation. Reset `IoRequestCoalescer` for the task.
 - Do not acquire a backend bulkhead slot before coalescing. Identical waiters would consume the whole class budget while one backend runs.

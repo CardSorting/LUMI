@@ -1,5 +1,24 @@
 # Key Findings
 
+## 2026-07-18 Lease Reconciliation and Terminalization Pass
+
+- Production coordination has one authority: SQLite. `local_test` is explicit and immutable; connection/query failure surfaces `DATABASE_AUTHORITY_UNAVAILABLE` and never falls back to memory or files.
+- Lease epochs and fencing tokens are generated atomically in `swarm_lock_generations`, stored as decimal `TEXT`, and carried through TypeScript as strings. Tests cover tokens above `Number.MAX_SAFE_INTEGER`.
+- Acquisition persists SQLite first and then creates file, Broccoli, and memory projections. Release performs an exact-tuple SQLite delete first; later projection cleanup failure is logged without restoring the database row.
+- File and Broccoli release parse records before unlinking and validate owner, epoch, token, and mode. Future `expiresAt` wins over age; malformed JSON and clock skew are structured corruption and fail closed.
+- Normal reconciliation requires a database-available snapshot. The isolated `AdministrativeLockCleaner` is the only ownership override and requires a logged reason.
+- Deadlock analysis uses typed wait edges and Tarjan SCCs from immutable scheduler/lane snapshots. Timers, expiring leases, resolvable outside owners, and unrelated capacity holders prevent false deadlock classification. Recovery is discarded if either state version changed.
+- Completion decisions use a schema-versioned canonical SHA-256 identity and commit one `task_completions` row under `BEGIN IMMEDIATE`, verifying the live lease, freshest generation, and unchanged task state version.
+- Restart delivery is idempotent; same-outcome duplicates are suppressed; terminal conflicts and same-ID/different-payload collisions fail closed.
+- ACT prompts now expose only workspace/task, next required action, hard blockers, aggregate lane progress, and completion condition. Raw tokens, counters, and advisory warnings remain outside the model decision surface.
+
+### Verification evidence
+
+- Focused coordination/liveness/completion and governed execution regression set: 210 passing.
+- Broad unit suite: 2,373 passing, 4 expected pending.
+- `npx tsc --noEmit --pretty false`, `npm run lint`, protobuf lint, handler-import checks, and `git diff --check`: passed.
+- Restored the Electron-native `better-sqlite3` build with `npm run rebuild:electron:better-sqlite3` after Node-based database tests.
+
 ## 2026-07-15 Subagent Concurrency and Scoped Cancellation Pass
 
 - Scoped command cancellation via `ownerId` prevents cross-contamination of concurrent subprocesses. `CommandExecutor` independent tracking ensures cancellations target the correct processes and preserves cancellation authority across terminal acquisition races.

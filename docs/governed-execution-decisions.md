@@ -34,26 +34,26 @@ Full architecture: [governed-subagent-execution.md](governed-subagent-execution.
 
 **Context:** Mutation ownership must survive process restarts, cross-process workers, and stale primary scenarios without split-brain writes.
 
-**Decision:** Single `LockAuthority` interface with `UnifiedLockAuthority` stacking:
+**Decision:** Single `LockAuthority` interface with an immutable startup mode:
 
-1. In-process registry (fast path, TTL)
-2. Roadmap lease (admission control)
-3. SwarmMutex SQLite (durable mutex)
-4. File lock (`wx` exclusive create)
-5. Broccoli fence (fencing token file)
-
-Partial acquire rolls back and fails closed. Fencing token assigned before durable layers.
+- `sqlite` is the only production authority. `SwarmMutexService` allocates the lease epoch and fencing token and persists the lease in one `BEGIN IMMEDIATE` transaction.
+- `local_test` is explicit test-only authority. Database failure never changes a running process from `sqlite` to `local_test`.
+- Roadmap admission runs before ownership. After SQLite commit, the runtime creates file, Broccoli, and in-process projections from the exact durable identity.
+- A projection failure abandons the SQLite lease by full identity. Release deletes SQLite first by `resource + ownerId + leaseEpoch + fencingToken`, then cleans projections without reverting the committed database transition.
+- Lease epochs and fencing tokens are arbitrary-precision decimal strings stored as SQLite `TEXT`.
 
 **Consequences:**
 
 - Familiar lease + fencing token pattern (Kleppmann).
-- `recoverStale` clears in-process, file, fence — not SwarmMutex or roadmap rows.
+- Reconciliation requires an available SQLite snapshot and treats files, Broccoli records, and memory as repairable projections.
+- Malformed projections, clock skew, mode mismatch, and database outage fail closed.
 - `mem_release` uses in-process release only (no workspace durable release).
 
 **Alternatives considered:**
 
 - File lock only → insufficient for in-process collision detection.
 - Separate authorities per layer → split-brain risk.
+- Dynamic SQLite-to-memory fallback → old owners and new owners could both believe they are authoritative.
 
 ---
 
@@ -398,6 +398,54 @@ Full prompt and operator checklist: [governed-execution-authority.md](governed-e
 - Workflow retry policies with maximum attempts and non-retryable failure classes.
 - Saga-style compensation/recovery before retrying ownership failures.
 - Structured reason codes instead of control flow based on log strings.
+
+---
+
+## ADR-017: Database-backed authority and projection-only reconciliation
+
+**Status:** Accepted
+
+**Context:** Layered locks were previously described as peers and stale files could be deleted using age/PID heuristics. That permits authority ambiguity during database outages, owner replacement, malformed projection records, and tokens beyond JavaScript's safe integer range.
+
+**Decision:**
+
+- SQLite is the sole production lease authority; local authority exists only in explicit `local_test` mode.
+- Allocate generations and persist leases atomically under `BEGIN IMMEDIATE`.
+- Store epochs and fencing tokens as decimal `TEXT`; compare with strings or `bigint` only.
+- Treat memory, file locks, and Broccoli fences as exact-identity projections.
+- Reconcile only from a database-available snapshot. Never reclaim on database absence.
+- Isolate ownership overrides in `AdministrativeLockCleaner`, requiring a reason and per-record logging.
+
+**Consequences:** Production fails closed during database outages, old owners cannot release new leases, projection cleanup failures cannot roll back an authoritative release, and manual cleanup is auditable rather than part of normal orchestration.
+
+---
+
+## ADR-018: Snapshot-consistent typed wait-for graph
+
+**Status:** Accepted
+
+**Context:** A cycle in dependency metadata is not necessarily a deadlock. Timers, expiring leases, outside owners, and unrelated capacity holders can resolve blocked edges. Acting on a scheduler snapshot after lanes change can also recover the wrong work.
+
+**Decision:** Build a typed `WaitEdge` graph from one immutable scheduler/lane snapshot. Run Tarjan SCC over hard dependency and ownership edges, classify timer/capacity edges as escape evidence, and declare deadlock only when an SCC has no valid escape transition. Re-check both scheduler and lane state versions immediately before recovery.
+
+**Consequences:** Backoff and ordinary contention are not mislabeled as deadlock, self-loops and true ownership cycles are detected, and recovery actions cannot be applied from a stale diagnosis.
+
+---
+
+## ADR-019: Durable completion terminalization
+
+**Status:** Accepted
+
+**Context:** In-memory completion suppression cannot survive a host restart and cannot arbitrate simultaneous terminal attempts from multiple processes. A decision also needs a stable identity independent of JSON property order.
+
+**Decision:**
+
+- Derive `decisionId` from canonical, recursively sorted JSON containing task ID, evaluated state version, checkpoint, outcome, and decision schema version; hash with SHA-256.
+- Persist one terminal row per task in `task_completions`.
+- Commit under `BEGIN IMMEDIATE` only after verifying owner, lease epoch, fencing token, protocol, expiry, freshest allocated generation, and unchanged task state version.
+- Return identical decisions idempotently, suppress same-outcome duplicates, reject terminal outcome conflicts, and fail closed when one decision ID maps to a different payload.
+
+**Consequences:** Completion survives restart, multi-connection races have one winner, stale owners cannot terminalize, and collision/corruption signals remain distinguishable from harmless duplicate delivery.
 
 ---
 

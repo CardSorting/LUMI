@@ -8,6 +8,7 @@ import {
 	DietCodeSubagentUsageInfo,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
+import { CoordinationError, CoordinationErrorCode, RETRY_POLICY } from "@shared/governance/CoordinationErrors"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
 import type {
@@ -18,6 +19,7 @@ import type {
 	LaneExecutionReceipt,
 	WorkLaneClaim,
 } from "@shared/subagent/governedExecution"
+import { buildOrchestrationLeaseTaskId } from "@shared/subagent/governedExecution"
 import { laneStateShouldDegradeOnTimeout, mapEntryStatusToLaneState } from "@shared/subagent/laneStateMachine"
 import pTimeout from "p-timeout"
 import { v4 as uuidv4 } from "uuid"
@@ -68,7 +70,7 @@ import {
 	DEFAULT_SUBAGENT_MAX_ATTEMPTS,
 	emptySubagentRunStats,
 	errorMessage,
-	isRetryableSubagentFailure,
+	getRecoveryDecision,
 	SUBAGENT_ABORT_GRACE_MS,
 	SUBAGENT_ATTEMPT_TIMEOUT_MS,
 	SUBAGENT_AUDIT_PREFLIGHT_TIMEOUT_MS,
@@ -90,6 +92,7 @@ import { constrainSubagentToolsForLane, SUBAGENT_DEFAULT_ALLOWED_TOOLS, Subagent
 import { persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
 import { SubagentRunner, type SubagentRunResult } from "../subagent/SubagentRunner"
 import { buildParentToolResult, buildSwarmSummaryOverlay } from "../subagent/SwarmReportBuilder"
+import { detectDeadlocks } from "../subagent/TarjanDeadlockDetector"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -420,14 +423,63 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			resumePlan?.recoveryReceipt?.resumeAttemptId,
 			executionPathMetrics,
 		)
-		const swarmAdmission = await governedCoordinator.admitSwarm(config.taskId)
+		const orchestrationLeaseTaskId = buildOrchestrationLeaseTaskId(swarmId)
+		const roadmapService = RoadmapService.getInstance()
+		const runtimeState = await roadmapService.getOrHydrateRuntimeState(config.cwd)
+		if (runtimeState.locks?.[orchestrationLeaseTaskId]) {
+			const leaseOwner = runtimeState.locks[orchestrationLeaseTaskId].owner_agent
+			if (leaseOwner !== config.taskId) {
+				Logger.info(
+					`[SubagentToolHandler] Reclaiming stale orchestration lease '${orchestrationLeaseTaskId}' from owner '${leaseOwner}'.`,
+				)
+				await roadmapService.releaseOrchestrationLease(config.cwd, leaseOwner, orchestrationLeaseTaskId)
+			}
+		}
+
+		// Initialize global task-level recovery budget
+		if (!config.taskState.recoveryBudget) {
+			config.taskState.recoveryBudget = {
+				taskId: config.taskId,
+				maxAttempts: 15,
+				attemptsUsed: 0,
+				maxElapsedMs: 15 * 60 * 1000,
+				startedAt: Date.now(),
+				maxNoProgressAttempts: 5,
+				noProgressAttempts: 0,
+				lastProgressVersion: 0,
+			}
+		}
+
+		let swarmAdmission = await governedCoordinator.admitSwarm(config.taskId, "subagent_swarm", swarmId)
+		let orchestrationLease = swarmAdmission.admitted
+			? await governedCoordinator.acquireSwarmOrchestrationLease(swarmId, config.taskId)
+			: { acquired: false, error: "admit denied" }
+
+		if (!swarmAdmission.admitted || !orchestrationLease.acquired) {
+			const maxAdmissionAttempts = 5
+			for (let attempt = 1; attempt <= maxAdmissionAttempts; attempt++) {
+				const backoff = swarmAdmission.backoffMs || 1000
+				Logger.warn(
+					`[SubagentToolHandler] Swarm admission or lease denied. Retrying in ${backoff}ms (attempt ${attempt}/${maxAdmissionAttempts})...`,
+				)
+				await delay(backoff)
+
+				swarmAdmission = await governedCoordinator.admitSwarm(config.taskId, "subagent_swarm", swarmId)
+				if (swarmAdmission.admitted) {
+					orchestrationLease = await governedCoordinator.acquireSwarmOrchestrationLease(swarmId, config.taskId)
+					if (orchestrationLease.acquired) {
+						break
+					}
+				}
+			}
+		}
+
 		if (!swarmAdmission.admitted) {
 			return formatResponse.toolError(
 				`Swarm admission rejected (roadmap pressure). Retry after ${swarmAdmission.backoffMs}ms.`,
 			)
 		}
 
-		const orchestrationLease = await governedCoordinator.acquireSwarmOrchestrationLease(swarmId, config.taskId)
 		if (!orchestrationLease.acquired) {
 			return formatResponse.toolError(orchestrationLease.error || "Swarm admission rejected (orchestration lease denied).")
 		}
@@ -625,6 +677,9 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				return runner
 			}
 			const activeRunners = new Map<number, SubagentRunner>()
+			const retryingLanes = new Set<number>()
+			const retryDeadlines = new Map<number, number>()
+			let schedulerStateVersion = 0
 			let swarmStopReason: string | undefined
 			const swarmStopController = new AbortController()
 			const abortAllRunners = async (): Promise<void> => {
@@ -669,7 +724,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				})
 			}
 
-			const results: PromiseSettledResult<SubagentRunResult>[] = new Array(prompts.length)
+			const results: PromiseSettledResult<SubagentRunResult>[] = Array.from({ length: prompts.length })
 			const executionSlots = new AuthorityAwareExecutionPool(
 				DEFAULT_SUBAGENT_CONCURRENCY,
 				computeFastIoReservedSlots(DEFAULT_SUBAGENT_CONCURRENCY),
@@ -819,6 +874,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						}
 
 						activeLaneExecutions++
+						schedulerStateVersion++
 						let runner: SubagentRunner | undefined
 						let attemptLatestStats = emptySubagentRunStats()
 						let attemptLastCost = 0
@@ -831,10 +887,12 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						try {
 							const laneClaimResult = await governedCoordinator.acquireLane(swarmId, current.id, index, laneIntent)
 							if (!laneClaimResult.success || !laneClaimResult.claim) {
-								current.status = "failed"
-								current.error = laneClaimResult.error || "Work lane claim rejected (ownership ambiguous)."
-								finalError = new Error(current.error)
-								break
+								const code = laneClaimResult.code || CoordinationErrorCode.OWNERSHIP_AMBIGUOUS
+								throw new CoordinationError(
+									code,
+									laneClaimResult.error || "Work lane claim rejected.",
+									RETRY_POLICY[code],
+								)
 							}
 							activeClaim = laneClaimResult.claim
 
@@ -934,6 +992,10 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 										onTranscriptFlush: async () => {
 											queueStatusUpdate("running", true)
 										},
+										siblingEnvelopes: agentEnvelopes,
+										laneIntents,
+										laneDAG: governedCoordinator.getLaneDAG(),
+										lockClaim: activeClaim,
 									},
 									undefined,
 								)
@@ -998,11 +1060,58 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 								? { ...attemptResult, status: "failed", error: failure, stats: accumulatedStats }
 								: failedRunResult(failure, accumulatedStats)
 
-							const canRetry =
+							const decision = getRecoveryDecision(attemptError ?? failure, attempt)
+							let canRetry =
 								attempt < DEFAULT_SUBAGENT_MAX_ATTEMPTS &&
 								!swarmStopReason &&
 								!config.taskState.abort &&
-								isRetryableSubagentFailure(failure)
+								(decision.action === "retry" || decision.action === "reconcile_then_retry")
+
+							if (canRetry && config.taskState.recoveryBudget) {
+								const budget = config.taskState.recoveryBudget
+								if (Date.now() - budget.startedAt > budget.maxElapsedMs) {
+									Logger.error(`[SubagentToolHandler] Recovery budget timeout exceeded.`)
+									canRetry = false
+								} else {
+									budget.attemptsUsed++
+									if (budget.attemptsUsed > budget.maxAttempts) {
+										Logger.error(
+											`[SubagentToolHandler] Global recovery attempts budget exhausted (${budget.attemptsUsed}/${budget.maxAttempts}).`,
+										)
+										canRetry = false
+									} else {
+										const currentProgress = {
+											workspaceContentVersion: config.taskState.workspaceContentVersion || 0,
+											auditMetadataVersion: config.taskState.auditMetadataVersion || 0,
+											completedLaneCount: config.taskState.swarmRuntime
+												? config.taskState.swarmRuntime.lanesComplete
+												: 0,
+											activeBlockerCount: 0,
+										}
+
+										const lastProgress = config.taskState.lastProgressMarker
+										const sameProgress =
+											lastProgress &&
+											lastProgress.workspaceContentVersion === currentProgress.workspaceContentVersion &&
+											lastProgress.auditMetadataVersion === currentProgress.auditMetadataVersion &&
+											lastProgress.completedLaneCount === currentProgress.completedLaneCount
+
+										if (sameProgress) {
+											budget.noProgressAttempts++
+											if (budget.noProgressAttempts > budget.maxNoProgressAttempts) {
+												Logger.error(
+													`[SubagentToolHandler] Max consecutive no-progress attempts exceeded.`,
+												)
+												canRetry = false
+											}
+										} else {
+											budget.noProgressAttempts = 0
+											config.taskState.lastProgressMarker = currentProgress
+										}
+									}
+								}
+							}
+
 							if (!canRetry) {
 								break
 							}
@@ -1013,13 +1122,21 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 							shouldRetry = true
 							executionPathMetrics.retryDecisions++
-							retryDelayMs = calculateRetryDelayMs(attempt)
+							retryDelayMs = decision.delayMs ?? calculateRetryDelayMs(attempt)
+
+							if (decision.action === "reconcile_then_retry") {
+								Logger.info(`[SubagentToolHandler] Action is reconcile_then_retry. Reclaiming swarm leases...`)
+								await governedCoordinator
+									.admitSwarm(config.taskId, "subagent_swarm", swarmId)
+									.catch(() => undefined)
+							}
 						} finally {
 							if (runner && activeRunners.get(index) === runner) {
 								activeRunners.delete(index)
 							}
 							releaseExecutionSlot()
 							activeLaneExecutions--
+							schedulerStateVersion++
 							schedulerWake.notify()
 						}
 
@@ -1030,12 +1147,23 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							current.status = "running"
 							current.error = undefined
 							queueStatusUpdate("running", true)
-							if (retryDelayMs > 0) {
-								await delay(retryDelayMs, undefined, { signal: swarmStopController.signal }).catch((error) => {
-									if ((error as Error).name !== "AbortError") {
-										throw error
-									}
-								})
+							retryingLanes.add(index)
+							retryDeadlines.set(index, Date.now() + retryDelayMs)
+							schedulerStateVersion++
+							try {
+								if (retryDelayMs > 0) {
+									await delay(retryDelayMs, undefined, { signal: swarmStopController.signal }).catch(
+										(error) => {
+											if ((error as Error).name !== "AbortError") {
+												throw error
+											}
+										},
+									)
+								}
+							} finally {
+								retryingLanes.delete(index)
+								retryDeadlines.delete(index)
+								schedulerStateVersion++
 							}
 						}
 					}
@@ -1165,6 +1293,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							failPendingLane(index, reason)
 						}
 						pending.clear()
+						schedulerStateVersion++
 					}
 
 					let propagatedFailure: boolean
@@ -1177,6 +1306,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							)
 							if (failedDependencies.length > 0) {
 								pending.delete(index)
+								schedulerStateVersion++
 								failPendingLane(index, `Lane blocked by failed dependencies: ${failedDependencies.join(", ")}`)
 								propagatedFailure = true
 							}
@@ -1195,6 +1325,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							break
 						}
 						pending.delete(index)
+						schedulerStateVersion++
 						const job = runSubagent(index)
 							.catch((error) => {
 								const reason = `Lane execution infrastructure failed: ${errorMessage(error)}`
@@ -1229,9 +1360,82 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							})
 							.finally(() => {
 								running.delete(index)
+								schedulerStateVersion++
 								schedulerWake.notify()
 							})
 						running.set(index, job)
+						schedulerStateVersion++
+					}
+
+					// Monotonic ProgressSnapshot tracking
+					const completedLaneCount = prompts
+						.map((_, i) => i)
+						.filter((i) => governedCoordinator.getLaneDAG().getNode(i)?.state === "sealed").length
+					const runningLaneCount = running.size
+					const readyLaneCount = governedCoordinator
+						.getLaneDAG()
+						.getReadyLanes()
+						.filter((i) => pending.has(i)).length
+					const blockedLaneCount = [...pending].filter(
+						(i) => governedCoordinator.getLaneDAG().getNode(i)?.state === "blocked",
+					).length
+					const retryingLaneCount = retryingLanes.size
+
+					const progressSnapshot = {
+						stateVersion: schedulerStateVersion,
+						laneStateVersion: governedCoordinator.getLaneDAG().getStateVersion(),
+						completedLaneCount,
+						runningLaneCount,
+						readyLaneCount,
+						retryingLaneCount,
+						blockedLaneCount,
+						lastProgressAt: Date.now(),
+					}
+					Logger.info(`[SwarmScheduler] ProgressSnapshot: ${JSON.stringify(progressSnapshot)}`)
+					if (pending.size > 0 && running.size === 0) {
+						const dag = governedCoordinator.getLaneDAG()
+						const laneSnapshot = dag.immutableSnapshot()
+						const observedSchedulerVersion = schedulerStateVersion
+						const deadlockRes = detectDeadlocks({
+							pendingLanes: Object.freeze([...pending]),
+							runningLaneIndices: new Set(running.keys()),
+							timersActive: new Set(retryingLanes),
+							activeLaneExecutions,
+							maxInFlightLanes,
+							dag: { getNode: (index) => laneSnapshot.nodes.get(index) },
+							stateVersion: observedSchedulerVersion,
+							laneStateVersion: laneSnapshot.version,
+							observedAt: Date.now(),
+							timerDeadlines: new Map(retryDeadlines),
+						})
+
+						if (deadlockRes.hasDeadlock) {
+							if (
+								schedulerStateVersion !== observedSchedulerVersion ||
+								dag.getStateVersion() !== laneSnapshot.version
+							) {
+								Logger.info(
+									"[SwarmScheduler] Scheduler changed after deadlock snapshot; discarding recovery decision.",
+								)
+								continue
+							}
+							Logger.error(`[SwarmScheduler] Deadlock declared! Causal Wait-For Graph: ${deadlockRes.explanation}`)
+
+							for (const index of pending) {
+								const node = dag.getNode(index)
+								const dependencyStates = (node?.dependsOn || []).map(
+									(dependency) => `${dependency}:${dag.getNode(dependency)?.state || "missing"}`,
+								)
+								failPendingLane(
+									index,
+									`Lane dependency deadlock (Tarjan cycle detected: ${deadlockRes.explanation})${dependencyStates.length ? ` (${dependencyStates.join(", ")})` : ""}`,
+								)
+							}
+							pending.clear()
+							schedulerStateVersion++
+							break
+						}
+						Logger.info(`[SwarmScheduler] Wait-For graph evaluated: ${deadlockRes.explanation}`)
 					}
 
 					const needsSchedulerWake = pending.size > 0 && activeLaneExecutions >= maxInFlightLanes && running.size > 0
@@ -1241,37 +1445,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						await Promise.race(running.values())
 					} else if (pending.size > 0 && activeLaneExecutions >= maxInFlightLanes) {
 						await schedulerWake.wait()
-					}
-
-					do {
-						propagatedFailure = false
-						for (const index of [...pending]) {
-							const node = governedCoordinator.getLaneDAG().getNode(index)
-							const failedDependencies = (node?.dependsOn || []).filter(
-								(dependency) => governedCoordinator.getLaneDAG().getNode(dependency)?.state === "failed",
-							)
-							if (failedDependencies.length > 0) {
-								pending.delete(index)
-								failPendingLane(index, `Lane blocked by failed dependencies: ${failedDependencies.join(", ")}`)
-								propagatedFailure = true
-							}
-						}
-					} while (propagatedFailure)
-
-					if (pending.size > 0 && running.size === 0) {
-						for (const index of pending) {
-							const node = governedCoordinator.getLaneDAG().getNode(index)
-							const dependencyStates = (node?.dependsOn || []).map(
-								(dependency) =>
-									`${dependency}:${governedCoordinator.getLaneDAG().getNode(dependency)?.state || "missing"}`,
-							)
-							failPendingLane(
-								index,
-								`Lane dependency deadlock${dependencyStates.length ? ` (${dependencyStates.join(", ")})` : ""}`,
-							)
-						}
-						pending.clear()
-						break
 					}
 				}
 			}

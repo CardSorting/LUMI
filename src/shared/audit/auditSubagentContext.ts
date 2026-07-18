@@ -20,6 +20,8 @@ export interface SubagentAuditContextInput {
 	completionGateSessionId?: string
 	completionGateOperationalState?: string
 	gateOptions?: CompletionGateOptions
+	mode?: "plan" | "act"
+	isStale?: boolean
 }
 
 /** Machine-readable gate signals for subagent `criticalSignals` — mirrors CI status checks. */
@@ -108,7 +110,38 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 		completionGatePressureLevel,
 		completionGateObservabilityEnvelope,
 		completionGateRetryStatus,
+		mode,
+		isStale,
 	} = input
+
+	if (mode === "act") {
+		const lines = ["<parent_audit_context>", "Active Execution State Summary:"]
+
+		if (isStale) {
+			lines.push("- Workspace state: MODIFIED (prior completion audit findings are stale and may have been remediated)")
+		} else if (lastCompletionAudit) {
+			lines.push(`- Last audit score: ${lastCompletionAudit.hardening_score ?? "?"}/100`)
+			const { critical } = partitionViolationsBySeverity(lastCompletionAudit.violations)
+			if (critical.length > 0) {
+				lines.push(`- Unresolved critical violations: ${critical.slice(0, 3).map(formatViolationLabel).join(", ")}`)
+			}
+		}
+
+		if (completionGatePressureLevel && completionGatePressureLevel !== "stable") {
+			lines.push(`- Execution pressure: ${completionGatePressureLevel}`)
+		}
+
+		lines.push(
+			"",
+			"EXECUTION DIRECTIVES:",
+			"1. You are authorized to proceed with executing the task.",
+			"2. Continue executing while a valid next action exists. Do not return to planning or request additional validation unless a named hard blocker prevents progress.",
+			"3. When all required work and verification conditions are satisfied, call `attempt_completion`. Advisory warnings do not block completion.",
+			"</parent_audit_context>",
+		)
+		return lines.join("\n")
+	}
+
 	if (
 		!lastCompletionAudit &&
 		!lastAdvisoryAudit &&

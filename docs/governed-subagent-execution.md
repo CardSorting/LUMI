@@ -41,8 +41,8 @@ The harness composes familiar distributed-systems primitives. Names below match 
 
 | Pattern | Where it appears | Familiar reference |
 |---------|------------------|-------------------|
-| **Lease / TTL lock** | In-process claim `expiresAt` (default 600s); file lock stale recovery | Chubby / etcd lease |
-| **Fencing token** | Monotonic `fencingToken` + broccoli fence file; release/verify require match | Kleppmann — *Designing Data-Intensive Applications* |
+| **Lease / TTL lock** | SQLite `swarm_locks` is authoritative; memory/file/Broccoli records are projections | Chubby / etcd lease |
+| **Fencing token** | Monotonic arbitrary-precision `TEXT` token allocated under `BEGIN IMMEDIATE`; exact-tuple release/verify | Kleppmann — *Designing Data-Intensive Applications* |
 | **Optimistic concurrency** | Execute in parallel → `runMergeGate` reconciles write sets before commit | OCC / merge-before-commit |
 | **Saga (lite)** | Acquire → execute → release → seal; unreleased claims block merge | Microservices sagas |
 | **Admission control** | Roadmap `scheduleAdmission` at swarm admit (+ per-lane lease at acquire) | API rate limiting / backpressure |
@@ -51,6 +51,8 @@ The harness composes familiar distributed-systems primitives. Names below match 
 | **Read/write set separation** | `readSet` vs `writeSet`; collisions scoped to writes | Transaction isolation (read uncommitted OK across lanes) |
 | **Compare-and-swap (file)** | `fs.open(lockPath, 'wx')` exclusive create | Atomic file create |
 | **CQRS / projection** | Per-lane `agentRoadmap` + `proposedWorkspacePatch` → coordinator commit | Read model / write model split |
+| **Wait-for graph** | Typed scheduler snapshot + Tarjan SCC + escape-transition analysis | Database deadlock detection |
+| **Transactional outbox/idempotency** | `task_completions` CAS row survives restart and suppresses duplicate terminal delivery | Durable workflow terminalization |
 
 ---
 
@@ -149,6 +151,10 @@ sequenceDiagram
     H->>C: releaseLane
   end
 
+  H->>H: snapshot typed wait-for graph
+  H->>H: Tarjan SCC + escape checks
+  H->>H: re-check scheduler and lane versions
+
   H->>C: sealReceipt or sealCrashReceipt
   C->>M: runMergeGate
   C->>C: runRoadmapPatchReconciliation
@@ -172,10 +178,12 @@ All mutation claims flow through `LockAuthority` (`src/core/governance/LockAutho
 
 | Implementation | Use |
 |----------------|-----|
-| `UnifiedLockAuthority` | Production — layered backends (see below) |
-| `InMemoryLockAuthority` | Unit tests |
+| `UnifiedLockAuthority("sqlite")` | Production — SQLite is authoritative; other backends are projections |
+| `UnifiedLockAuthority("local_test")` / `InMemoryLockAuthority` | Explicit unit-test/local harnesses only |
 
 `mem_claim` / `mem_release` use the same authority via `governLock.ts`. Lane locks use `releaseGovernedLock()` (workspace-aware durable release). `mem_release` uses in-process release only.
+
+Authority mode is immutable for the process and recorded on every claim/projection. Database failure raises `DATABASE_AUTHORITY_UNAVAILABLE`; production never falls back to local claims. `forceReleaseSwarm` is not part of `LockAuthority`; ownership overrides live only in the isolated `AdministrativeLockCleaner` utility.
 
 **Lock-necessity:** only lanes that intend to mutate acquire claims. Classifier runs **before** `acquireLane()`.
 
@@ -503,15 +511,15 @@ Per-lane row: `patches:N`, `local:N`, truncated `agentRoadmapId`, evidence count
 
 ## Lock authority stack
 
-`UnifiedLockAuthority.acquire()` layers (fail-closed; partial acquire rolls back):
+`UnifiedLockAuthority.acquire()` separates authority from projections:
 
-| Order | Backend | Key | Stale recovery |
-|-------|---------|-----|----------------|
-| 1 | In-process registry | `inProcess` | `expiresAt` expiry |
-| 2 | Roadmap lease | `roadmapLease` | Not in `recoverStale` |
-| 3 | SwarmMutex (SQLite) | `swarmMutex` | Not in `recoverStale` |
-| 4 | File lock | `fileLock` | 600s via `recoverStaleGovernedFileLocks` |
-| 5 | Broccoli fence | `broccoliFence` | 600s via `recoverStaleBroccoliFences` |
+| Order | Layer | Role | Failure behavior |
+|-------|-------|------|------------------|
+| 0 | Roadmap admission | Admission/backpressure, not lease authority | Reject before ownership |
+| 1 | SwarmMutex SQLite | **Authoritative** epoch/token allocation and lease persistence | `BEGIN IMMEDIATE`; retry or fail closed |
+| 2 | File lock | Exact-identity cross-process projection | Abandon authoritative lease if creation fails |
+| 3 | Broccoli fence | Exact-identity fencing projection | Abandon authoritative lease if creation fails |
+| 4 | In-process registry | Fast exact-identity projection | Abandon authoritative lease on identity conflict |
 
 **Resource keys:**
 
@@ -528,9 +536,21 @@ Per-lane row: `patches:N`, `local:N`, truncated `agentRoadmapId`, evidence count
 .broccolidb/governed/fencing/{sha256(resourceKey)}.json
 ```
 
-**Failure reasons** (`LockFailureReason`): `collision`, `split_brain`, `stale_owner`, `owner_mismatch`, `fencing_mismatch`, `missing_fencing_token`, `durable_backend_unavailable`, `ambiguous_roadmap_admission`, `not_held`.
+**Failure reasons** (`LockFailureReason`) include `collision`, `split_brain`, `stale_owner`, `owner_mismatch`, `fencing_mismatch`, `missing_fencing_token`, `durable_backend_unavailable`, `authority_mode_mismatch`, `coordination_state_corrupt`, `ambiguous_roadmap_admission`, and `not_held`.
 
-Partial acquire (e.g. file ok, fence failed) rolls back SwarmMutex and records `rejected` in claim history — never silent success.
+Partial acquire records `rejected`, deletes only the exact SQLite lease identity it allocated, and removes only matching projections. Release performs the SQLite compare-and-delete first; projection cleanup failure is recorded and never restores the database row.
+
+### Reconciliation
+
+`reconcileSwarmLease()` requires an available SQLite snapshot. It can retain a live lease, reclaim an expired lease, remove confirmed orphan projections, or repair stale/missing projections. It cannot reclaim when SQLite is unavailable and cannot auto-delete malformed or clock-skewed projection records.
+
+Filesystem fallback expiry uses a valid record's `expiresAt` when present; only otherwise does it use `heartbeatAt ?? claimedAt` plus `staleMs`. PID and mtime are diagnostic data, not ownership authority.
+
+### Scheduler liveness
+
+`SubagentToolHandler` builds a `SchedulerSnapshot` from a frozen `LaneDAG` snapshot, running/pending sets, resource ownership, retry deadlines, capacity holders, and state versions. `TarjanDeadlockDetector` runs SCC analysis only over hard lane/resource edges and rejects false deadlocks when a timer, expiring lease, resolvable outside owner, or unrelated capacity holder can break the wait.
+
+Recovery is guarded by a second scheduler/lane version comparison. If either version changed, the diagnosis is discarded and recomputed.
 
 ---
 
@@ -633,11 +653,11 @@ Implement handler refactor. Do not write workspace roadmap directly.
 
 ## Process workers (boundary)
 
-`broccolidb/worker_cli.ts` is a **subset** of the full harness:
+`broccolidb/worker_cli.ts` is a **compatibility/test subset** outside the production governed coordinator authority path:
 
 | Aspect | LUMI coordinator | worker_cli |
 |--------|------------------|------------|
-| Lock layers | 5-backend stack | File lock only |
+| Lock layers | SQLite authority + roadmap admission + file/Broccoli/memory projections | File lock only |
 | Resource key | `governed-lane:{swarmId}:{index}` | `governed-lane:{swarmId}:{laneId}` |
 | Fencing | Authority monotonic token | `Date.now()` |
 | Receipt | `GovernedSwarmReceipt` v3 | v1 at `.broccolidb/governed/receipts/{workerId}.json` |
@@ -655,7 +675,7 @@ Honest integration gaps (as of schema v3):
 | **Orchestration lease** | Wired via `acquireSwarmOrchestrationLease` after pressure admission; released on seal/crash |
 | **Roadmap completion mutation** | Default `advisory_only`; patch commit + optional `roadmap_completion_update=enabled` on sealed success |
 | **Crash seal path** | `sealCrashReceipt()` invoked on handler timeout/abort with inferred crash phase |
-| **Roadmap recoverStale** | `recoverStale` only clears in-process, file, fence — not roadmap lease pruning |
+| **Roadmap lease cleanup** | Roadmap admission remains a separate service concern; it does not replace SQLite ownership authority |
 | **Replay checksum scope** | Lock-necessity and projection fields not in canonical hash |
 | **worker_cli parity** | Separate receipt schema and resource key format |
 | **Patch commit scope** | Coordinator applies subset of patch types to runtime state; complex dependency/ownership graphs logged to `decision_log` |
@@ -751,8 +771,10 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | Types + helpers | `src/shared/subagent/governedExecution.ts` | Schema v3, incident derivation, retry safety |
 | Projection types | `src/shared/subagent/roadmapProjection.ts` | Patches, events, reconciliation, commit result |
 | Lock authority | `src/core/governance/LockAuthority.ts` | Unified acquire/release/verify/recover |
+| Administrative cleanup | `src/core/governance/AdministrativeLockCleaner.ts` | Explicit, logged ownership override; never normal runtime flow |
 | Public lock API | `src/core/governance/governLock.ts` | `mem_claim` integration |
 | Fencing | `src/core/governance/BroccoliFencingAdapter.ts` | Durable fence files |
+| Durable mutex | `src/core/swarm/SwarmMutexService.ts` | SQLite lease/generation CAS transactions |
 | Coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | Lifecycle orchestration |
 | Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` | Roadmap linkage + audit preflight/post-seal |
 | Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` | Classifier + read/write split + prompt tags |
@@ -767,6 +789,8 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | Replay | `src/core/task/tools/subagent/ReplayValidator.ts` | Deterministic checksum |
 | Store | `src/core/task/tools/subagent/GovernedExecutionStore.ts` | Persist + authoritative load |
 | Handler | `src/core/task/tools/handlers/SubagentToolHandler.ts` | `use_subagents` integration |
+| Deadlock detector | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` | Typed wait-for graph, SCCs, and escape transitions |
+| Durable completion | `src/core/task/tools/handlers/AttemptCompletionHandler.ts` | Canonical decision ID and terminal CAS |
 | UI | `webview-ui/.../GovernedReceiptPanel.tsx` | Incident console |
 
 ---
@@ -778,6 +802,9 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | `governedExecutionLockNecessity.test.ts` | Classifier, acquire skip/acquire, read overlap OK, mutation without lock fails, lock-skipped no orphan |
 | `governedExecutionHardening.test.ts` | LockAuthority, DAG overlap ordering, file lock, worker_cli smoke |
 | `governedExecutionReliability.test.ts` | Crash phases, fence fail-closed, retry lineage, `isRetrySafe`, checksum stability |
+| `LockAuthorityReconciliation.test.ts` | Exact-tuple release, DB-first ordering, corruption/outage fail-closed, bigint precision |
+| `TarjanDeadlockDetector.test.ts` | True cycles, self-loops, timer/lease/capacity escapes, snapshot versions |
+| `TaskCompletionTerminalization.test.ts` | Restart idempotency, multi-connection contention, terminal conflicts, state/lease CAS |
 | `governedExecutionIntegration.test.ts` | Roadmap DAG, pressure score, audit boundaries, receipt linkage fields |
 | `governedExecutionClosure.test.ts` | Orchestration lease, completion policy, crash seal, broccoli boundary |
 | `governedExecutionRoadmapProjection.test.ts` | Projection model, reconciliation, coordinator commit |
@@ -799,6 +826,9 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | Per-lane `roadmap:*` lock at acquire | Removed — `requiresRoadmapMutationLock()` is false | Trust projection + coordinator commit |
 | Ignoring `rejected patches: N` in console | Workspace truth unchanged | Read `rejectedPatchReasons` |
 | Retry without checking stale projection | Stale `mark_complete` → `stale_conflict` | Re-admit swarm for fresh snapshot |
+| Delete a lock file because its PID looks dead | Can unlink a newer owner's projection | Reconcile from SQLite; use the administrative cleaner only with an override reason |
+| Convert a fencing token to `number` | Loses identity precision above `Number.MAX_SAFE_INTEGER` | Keep decimal strings or use `bigint` |
+| Fall back to memory when SQLite fails | Creates two production authorities | Surface `DATABASE_AUTHORITY_UNAVAILABLE` and retry/fail closed |
 
 Cheatsheet: [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md).
 

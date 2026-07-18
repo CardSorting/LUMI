@@ -197,4 +197,18 @@ describe("SubagentBuilder", () => {
 		assert.equal(getConverterStub.callCount, 1)
 		assert.deepEqual(result, [{ converted: DietCodeDefaultTool.LIST_FILES }])
 	})
+
+	it("injects sibling lanes context into system prompt when set", () => {
+		sinon.stub(AgentConfigLoader, "getInstance").returns({
+			getCachedConfig: () => undefined,
+		} as unknown as AgentConfigLoader)
+		sinon.stub(api, "buildApiHandler").returns({ getModel: sinon.stub(), createMessage: sinon.stub() } as never)
+
+		const builder = new SubagentBuilder(createTaskConfig("act", "anthropic"))
+		builder.setSiblingLanesContext("lane 1 finished writing tests")
+
+		const prompt = builder.buildSystemPrompt("generated prompt")
+		assert.match(prompt, /# SIBLING LANES CONTEXT/)
+		assert.match(prompt, /lane 1 finished writing tests/)
+	})
 })

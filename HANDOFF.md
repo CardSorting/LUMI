@@ -1,83 +1,92 @@
 # Handoff Transfer
 
-> **What is this?** A volatile transfer brief containing working-tree status, recent git drift, and immediate next steps.
-> **When do I use it?** During agent handoff boundaries to pick up exactly where the prior session paused.
-> **What is the source of truth?** The output of `git status`, local modified files, and the prior agent's session thoughts.
+> **What is this?** A volatile transfer brief containing current implementation, documentation, validation, and workspace-state facts.
+> **When do I use it?** At an agent handoff boundary before changing coordination, scheduling, or completion behavior.
+> **What is the source of truth?** The current working tree and the implementation paths linked below.
 
-Last updated: 2026-07-09
+Last updated: 2026-07-18
 
 ## Current Task
 
-Upgrade the agent harness into a Workspace Intelligence System by adding a first-class cognitive model subsystem that runs during finalization, classifies knowledge, detects drift, and persists structured intelligence artifacts.
+The production-grade lease reconciliation and execution-hardening pass is implemented and its directly affected documentation has been reconciled. The strategy now has three explicit boundaries:
 
-## Current Working Tree
+1. SQLite is the sole production coordination authority; memory and filesystem records are projections.
+2. Deadlock recovery is based on a versioned typed wait-for snapshot and escape-aware SCC analysis.
+3. Task completion becomes terminal only through a durable lease/state CAS.
 
-Expected changed files from the continuity work:
+## Implementation State
 
-| Path | Status | Notes |
-|---|---|---|
-| `src/core/prompts/system-prompt/components/integrity_wiki.ts` | Modified | Adds Agent Playbook Method requirements to wiki prompt |
-| `src/core/task/tools/finalization/AutonomousDocumentationFinalizer.ts` | Modified | Generates `.wiki/agent/*`, invokes Workspace Intelligence, stamps category counts |
-| `src/core/task/tools/finalization/__tests__/finalizationRunner.test.ts` | Modified | Adds finalization playbook and workspace-intelligence artifact tests |
-| `src/core/workspace-intelligence/` | Added | Engine, store, schema, and exports for classified workspace intelligence |
-| `src/shared/completion/finalizationEvidence.ts` | Modified | Adds workspace-intelligence receipt evidence fields |
-| `.agents/skills/agent-playbook-method/SKILL.md` | Added | Workspace skill for playbook/wiki updates |
-| `AGENT_PLAYBOOK.md` | Added | Current-state agent operating brief |
-| `WIKI.md` | Added | Stable workspace wiki |
-| `TROUBLESHOOTING.md` | Added | Negative knowledge and failure matrix |
-| `DECISIONS.md` | Added | Root decision log |
-| `HANDOFF.md` | Added | This transfer file |
+| Surface | Current behavior | Primary files |
+|---------|------------------|---------------|
+| Authority mode | Immutable `sqlite` production mode or explicit `local_test`; no dynamic fallback | `src/core/governance/LockAuthority.ts`, `src/shared/governance/lockTypes.ts` |
+| Lease allocation/release | `BEGIN IMMEDIATE`, monotonic string epoch/token, exact-tuple CAS delete | `src/core/swarm/SwarmMutexService.ts` |
+| Projections | File, Broccoli, and memory validate full identity; corrupt records fail closed | `src/shared/governance/fileLock.ts`, `src/core/governance/BroccoliFencingAdapter.ts` |
+| Administrative override | Separate reason-required cleaner outside runtime authority | `src/core/governance/AdministrativeLockCleaner.ts` |
+| Reconciliation | Database-available snapshot required; repair/reclaim decisions are ownership checked | `src/core/governance/LockAuthority.ts` |
+| Deadlock analysis | Typed wait edges, Tarjan SCC, timer/lease/owner/capacity escapes, version re-check | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts`, `SubagentToolHandler.ts`, `LaneDAG.ts` |
+| Terminal completion | Canonical SHA-256 decision identity and durable `task_completions` CAS | `src/core/task/tools/handlers/AttemptCompletionHandler.ts`, `src/infrastructure/db/Config.ts` |
+| ACT prompt | Semantic next action, hard blockers, lane progress, completion condition only | `src/core/prompts/system-prompt/registry/PromptBuilder.ts` |
 
-The next agent should run `git status --short` before making further changes.
+The working tree also contains earlier user changes across policy, audit, roadmap, subagent, and completion files. Preserve them; do not reset or rewrite unrelated modifications.
 
-## Validation Already Run
+## Documentation Updated
 
-| Command | Result | Notes |
-|---|---|---|
-| Focused finalization mocha spec with `--no-config` | Passed, `7 passing` | Proves playbook generation and intelligence model persistence |
-| `npx tsc --noEmit --pretty false --project tsconfig.json` | Passed | Production TypeScript check |
-| `npx biome check ... --diagnostic-level=error` on touched code | Passed | Checked workspace-intelligence, finalization, tests, and shared evidence type |
-| Broad mocha attempt | Failed after `2172 passing`, `4 pending`, `2 failing` | Both failures were sandbox EPERM writes to `/Users/bozoegg/.dietcode/session/roadmap-progress.jsonl` |
+Only the surfaces that describe this strategy were changed:
 
-## What The Previous Agent Knows
+- `docs/governed-execution-authority.md`
+- `docs/governed-execution-schema.md`
+- `docs/governed-execution-decisions.md`
+- `docs/governed-execution-runbook.md`
+- `docs/governed-subagent-execution.md`
+- `docs/WORKING_WITH_SUBAGENTS.md`
+- `docs/completion-lifecycle-decision-engine.md`
+- `src/core/prompts/system-prompt/README.md`
+- Root and `.wiki/agent/` continuity pages that describe these contracts
 
-- The finalizer writes root `.wiki/index.md` managed section plus `.wiki/agent/playbook.md`, `agent-memory.md`, `key-findings.md`, `troubleshooting.md`, `common-pitfalls.md`, and `patterns.md`.
-- The finalizer now invokes `WorkspaceIntelligenceEngine` and writes `.wiki/intelligence/workspace-intelligence.json` plus `.wiki/intelligence/workspace-intelligence.md`.
-- `FinalizationEvidence` now includes `workspaceIntelligenceUpdated`, `workspaceIntelligenceArtifacts`, and `workspaceKnowledgeCategories`.
-- It uses workspace evidence from manifests, `package.json` scripts, declared workspaces, top-level entries, `ROADMAP.md`, and session impact summary.
-- Workspace Intelligence additionally detects provider keys, tool counts, continuity-doc presence, architecture surfaces, drift findings, high-risk surfaces, assumptions, and known unknowns.
-- It preserves existing wiki content by replacing only managed sections marked with `LUMI:agent-playbook:*`.
-- The focused tests create temp workspaces for playbook generation and intelligence model persistence.
-- Provider-count and root README version drift were corrected in this pass. Code/UI currently list five providers, including `cline-pass`.
+Provider, feature, BroccoliDB, and unrelated user documentation was intentionally left unchanged.
+
+## Validation Evidence
+
+| Command/suite | Result |
+|---------------|--------|
+| Focused coordination/liveness/completion and governed regression suite | 210 passing |
+| Broad unit suite | 2,373 passing; 4 expected pending |
+| `npx tsc --noEmit --pretty false` | Passed |
+| `npm run lint` | Passed, including protobuf lint and handler-import checks |
+| `git diff --check` | Passed before the documentation pass |
+| `npm run rebuild:electron:better-sqlite3` | Passed; Electron-native module restored after Node DB tests |
+| Agent-doc links and branding | Passed |
+| Docs README and root README links | Passed |
+| Root README metadata, metrics, and links | Passed after updating release identity to `5.5.2` |
+| Aggregate docs check | README checks pass; blocked only by the existing Mintlify broken-link backlog |
+| Mintlify broken links | Reports 145 pre-existing links in 37 unrelated files; none of the changed governed-execution docs were listed |
+
+Use `--no-config` for focused Mocha commands. `.mocharc.json` otherwise adds the entire recursive test suite. Do not run broad suites concurrently because governed tests share process-global authority state.
+
+## Durable Constraints
+
+- Never fall back from SQLite authority to memory/filesystem state in production.
+- Never compare fencing identity through JavaScript `number`.
+- Never unlink a malformed projection automatically.
+- Never expose administrative force cleanup through `LockAuthority` or normal orchestration.
+- Never classify a cycle as deadlock until all typed escape transitions are checked.
+- Never apply scheduler recovery after either snapshot version changes.
+- Never publish terminal in-memory state before the durable completion transaction commits.
+- Keep the Electron `better-sqlite3` build restored after Node-native database testing.
 
 ## Recommended Next Actions
 
-1. Run documentation checks after root docs are linked:
-   - `npm run docs:check-agent-links`
-   - `npm run docs:check-root-readme-links`
-2. Keep provider count/version references synchronized if provider or package metadata changes again.
-3. Consider a dedicated roadmap repair pass for `ROADMAP.md`.
-4. Consider expanding Workspace Intelligence to task-start/tool-execution observation after deciding storage volume, privacy, and lifecycle hooks.
-5. Consider expanding finalizer tests to cover managed-section replacement and preservation of human-authored wiki content.
-6. If broad tests are required, rerun in an environment with write access to `~/.dietcode/session` or adjust roadmap progress storage for tests.
-
-## Risk Notes
-
-| Risk | Mitigation |
-|---|---|
-| Root docs duplicate maintained docs | Keep root docs concise and link to deeper files |
-| `.wiki` remains stale | Use root docs as current operating layer until `.wiki` is refreshed by finalization |
-| Workspace Intelligence is finalization-only today | Treat earlier lifecycle observation as an explicit future architecture decision |
-| Provider metrics remain inconsistent | Treat implementation as truth and update docs deliberately |
-| Broad test failure gets mistaken for regression | Preserve EPERM details in troubleshooting and final response |
+1. If implementation changes further, rerun the three focused hardening suites before broad validation.
+2. Resolve the unrelated Mintlify broken-link backlog only in a separately scoped documentation pass.
+3. Commit only after separating this pass from any unrelated pre-existing workspace changes according to maintainer preference.
 
 ## Final Review Checklist
 
-- [x] Playbook reflects current active work.
-- [x] Wiki separates stable architecture from temporary state.
-- [x] Troubleshooting records reproduced validation failures and non-causes.
-- [x] Decisions explain why, not only what.
-- [x] Handoff gives next agent exact working-tree and validation context.
-- [x] Workspace Intelligence is represented in code, receipt evidence, tests, and root architecture docs.
-- [ ] Roadmap stale bootstrap content has been repaired.
-- [x] Provider/version drift found in README and maintained docs has been reconciled.
+- [x] Production authority and failure behavior documented.
+- [x] Exact lease/projection identity and precision rules documented.
+- [x] Normal reconciliation and administrative override separated.
+- [x] Typed deadlock graph and snapshot consistency documented.
+- [x] Durable completion identity, CAS, idempotency, and conflict behavior documented.
+- [x] ACT execution-state prompt contract documented.
+- [x] Agent playbook, memory, findings, troubleshooting, pitfalls, patterns, and index updated.
+- [x] Documentation/link checks rerun after this documentation pass; unrelated baseline failures recorded above.

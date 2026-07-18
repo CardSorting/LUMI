@@ -221,7 +221,7 @@ describe("governed execution reliability", () => {
 			const acquired = await authority.acquire("r1", "agent-1")
 			assert.equal(acquired.ok, true)
 			if (!acquired.ok) return
-			const forged = { ...acquired.claim!, fencingToken: 0 }
+			const forged = { ...acquired.claim!, fencingToken: "" }
 			const release = await authority.release(forged)
 			assert.equal(release.ok, false)
 			if (!release.ok) assert.equal(release.reason, "missing_fencing_token")
@@ -229,7 +229,7 @@ describe("governed execution reliability", () => {
 
 		it("recovers stale file locks by PID age", async () => {
 			tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "stale-file-"))
-			await acquireGovernedFileLock(tempDir, "governed-lane:s:0", "worker-a", 1, 1)
+			await acquireGovernedFileLock(tempDir, "governed-lane:s:0", "worker-a", 1, 1, "s", "0", 1)
 			await new Promise((resolve) => setTimeout(resolve, 5))
 			const recovered = await recoverStaleGovernedFileLocks(tempDir, "governed-lane:", 1)
 			assert.ok(recovered.length > 0)
@@ -239,17 +239,25 @@ describe("governed execution reliability", () => {
 			tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "fence-fail-"))
 			sinon.stub(broccoliFence, "acquireBroccoliFence").resolves({ ok: false, error: "fence unavailable" })
 			const { UnifiedLockAuthority } = await import("@/core/governance/LockAuthority")
-			sinon.stub(await import("@/infrastructure/db/Config"), "getDb").rejects(new Error("no db"))
-			const authority = new UnifiedLockAuthority()
-			const result = await authority.acquire("governed-lane:s:0", "agent-a", {
-				workspace: tempDir,
-				crossProcess: true,
-				requireDurability: false,
-			})
-			assert.equal(result.ok, false)
-			if (!result.ok) assert.equal(result.reason, "split_brain")
-			const second = await acquireGovernedFileLock(tempDir, "governed-lane:s:0", "agent-b", 2)
-			assert.equal(second.ok, true)
+			const dbConfig = await import("@/infrastructure/db/Config")
+			const previousDbPath = dbConfig.getDbPath()
+			dbConfig.setDbPath(path.join(tempDir, "fence-fail.db"))
+			await dbConfig.getCoordinationDb()
+			try {
+				const authority = new UnifiedLockAuthority("sqlite")
+				const result = await authority.acquire("governed-lane:s:0", "agent-a", {
+					workspace: tempDir,
+					crossProcess: true,
+					requireDurability: true,
+				})
+				assert.equal(result.ok, false)
+				if (!result.ok) assert.equal(result.reason, "split_brain")
+				const second = await acquireGovernedFileLock(tempDir, "governed-lane:s:0", "agent-b", 2)
+				assert.equal(second.ok, true)
+			} finally {
+				await dbConfig.destroyDb()
+				dbConfig.setDbPath(previousDbPath)
+			}
 			await fs
 				.rm(path.join(tempDir, ".broccolidb", "governed", "locks"), { recursive: true, force: true })
 				.catch(() => undefined)

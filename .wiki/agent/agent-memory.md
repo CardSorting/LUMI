@@ -17,6 +17,12 @@
 - Swarm resumes must check and validate that a candidate governed authority receipt is sealed and has valid integrity with a matching checksum before reusing historical agent work; unsealed or missing receipt evidence requires the lane to restart.
 - Subagents apply repetition detection (`MAX_CONSECUTIVE_IDENTICAL_CALLS = 3`) to self-correct with a nudge to re-evaluate or ask a follow-up, and signal a toxic hotspot to the parent swarm.
 - Subagent completion or failure envelopes must only be published after durably flushing the transcript. Flushes must be atomic (writing to a temporary file and renaming) to prevent JSONL corruption/duplication under deferred write-behind scheduling.
+- Production coordination authority is immutable `sqlite`. A database failure raises `DATABASE_AUTHORITY_UNAVAILABLE`; never adopt memory or filesystem state as fallback authority.
+- Lease identity is `resource + ownerId + leaseEpoch + fencingToken + authorityMode`. Epochs and tokens are decimal strings/`bigint`, never JavaScript `number`.
+- Memory, governed lock files, and Broccoli fences are projections. Reconciliation requires a database-available snapshot; malformed or clock-skewed records fail closed and remain on disk.
+- `AdministrativeLockCleaner` is the only ownership override. It requires an explicit reason and is not callable through normal `LockAuthority` orchestration.
+- Deadlock recovery requires a typed immutable scheduler snapshot, an SCC with no timer/lease/owner/capacity escape, and unchanged scheduler plus lane versions at apply time.
+- Task completion is terminal only after the `task_completions` `BEGIN IMMEDIATE` CAS verifies the current lease generation and unchanged task state version.
 
 ## Validation Coupling
 
@@ -27,3 +33,6 @@
 - When touching roadmap lifecycle or progress, run `RoadmapCompletionGate.test.ts` and `RoadmapToolJournal.test.ts`.
 - When touching sibling scheduling, run the dependency, scheduler, performance, invocation-context, task-batch, tool-call processor, and parent-I/O suites under `--no-config`.
 - When touching subagent concurrency, resume logic, repetition checks, or transcript recording, run `SubagentRunner.test.ts` and `executionHarnessGaps.test.ts` under `--timeout 10000`.
+- When touching coordination authority or projections, run `LockAuthorityReconciliation.test.ts` and the governed execution hardening/reliability suites.
+- When touching scheduler wait state or lane transitions, run `TarjanDeadlockDetector.test.ts` and `SubagentToolHandler.test.ts`.
+- When touching completion identity, lease binding, or terminal persistence, run `TaskCompletionTerminalization.test.ts` plus completion lifecycle/gate tests.

@@ -64,5 +64,10 @@ export async function getRulesSection(variant: PromptVariant, context: SystemPro
 				: `\n- GOVERNED EXECUTION AUTHORITY: Receipts, gate snapshots, and audit traces record history — they do not alone authorize halting the swarm. Only you (parent coordinator) decide merge, seal, and continuation. Do not stop delegated work solely because a lane receipt or stale audit suggests blockage; re-check current state and prefer repair/continuation over recursive escalation. Progress is evidence; repeated validation without state change is failure.`
 			: ""
 
-	return resolved + WIKI_RULES + GOVERNED_AUTHORITY_RULES
+	let actModeRules = ""
+	if (context.mode === "act") {
+		actModeRules = `\n- EXECUTION RULE: Continue executing while a valid next action exists. Do not return to planning or request additional validation unless a named hard blocker prevents progress.\n- COMPLETION RULE: When all required work and verification conditions are satisfied, call \`attempt_completion\`. Advisory warnings do not block completion.`
+	}
+
+	return resolved + WIKI_RULES + GOVERNED_AUTHORITY_RULES + actModeRules
 }

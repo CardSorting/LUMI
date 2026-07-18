@@ -59,7 +59,7 @@ describe("audit invalidation and false-positive prevention", () => {
 			violations: [],
 			blockCount: 0,
 		} as TaskAuditMetadata
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
 
 		// Stub to ensure it's NOT called (cache hit)
 		const auditStub = sinon.stub(completionAudit, "runCompletionAudit").rejects(new Error("should not run"))
@@ -135,14 +135,14 @@ describe("audit invalidation and false-positive prevention", () => {
 		;(config as unknown as { messageState: { getDietCodeMessages: () => unknown[] } }).messageState = {
 			getDietCodeMessages: () => [],
 		}
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
 		const keyWithoutHash = taskState.lastAdvisoryAuditCacheKey
 
 		// Record advisory with a checkpoint hash
 		;(config as unknown as { messageState: { getDietCodeMessages: () => unknown[] } }).messageState = {
 			getDietCodeMessages: () => [{ lastCheckpointHash: "chk-1" }],
 		}
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
 		const keyWithHash = taskState.lastAdvisoryAuditCacheKey
 
 		// Keys should differ — checkpoint hash is part of the cache key

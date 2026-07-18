@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto"
-import { acquireGovernedFileLock, recoverStaleGovernedFileLocks, releaseGovernedFileLock } from "@shared/governance/fileLock"
-import type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
-import { SwarmMutexService } from "@/core/swarm/SwarmMutexService"
-import { getDb } from "@/infrastructure/db/Config"
-import { RoadmapService } from "@/services/roadmap/RoadmapService"
+import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import {
-	acquireBroccoliFence,
-	recoverStaleBroccoliFences,
-	releaseBroccoliFence,
-	verifyBroccoliFence,
-} from "./BroccoliFencingAdapter"
+	acquireGovernedFileLock,
+	readGovernedFileLock,
+	releaseGovernedFileLock,
+	verifyGovernedFileLock,
+} from "@shared/governance/fileLock"
+import type { CoordinationAuthorityMode, LockBackends, LockClaim } from "@shared/governance/lockTypes"
+import { Logger } from "@shared/services/Logger"
+import { type DurableSwarmLease, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
+import { getCoordinationDb } from "@/infrastructure/db/Config"
+import { RoadmapService } from "@/services/roadmap/RoadmapService"
+import { acquireBroccoliFence, readBroccoliFence, releaseBroccoliFence, verifyBroccoliFence } from "./BroccoliFencingAdapter"
 
-export type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
+export type { CoordinationAuthorityMode, LockBackends, LockClaim } from "@shared/governance/lockTypes"
 
 export type LockFailureReason =
 	| "collision"
@@ -23,9 +25,19 @@ export type LockFailureReason =
 	| "missing_fencing_token"
 	| "durable_backend_unavailable"
 	| "ambiguous_roadmap_admission"
+	| "authority_mode_mismatch"
+	| "coordination_state_corrupt"
 	| "not_held"
 
-export type LockAcquireResult = { ok: true; claim: LockClaim } | { ok: false; reason: LockFailureReason; error: string }
+export type LockAcquireResult =
+	| { ok: true; claim: LockClaim }
+	| {
+			ok: false
+			reason: LockFailureReason
+			error: string
+			code?: CoordinationErrorCode
+			retryClass?: "retry" | "reconcile_then_retry" | "abort_owner" | "fail_closed"
+	  }
 
 export type LockReleaseResult = { ok: true } | { ok: false; reason: LockFailureReason; error: string }
 
@@ -34,7 +46,66 @@ export interface StaleRecoveryReport {
 	errors: string[]
 }
 
+export interface SwarmLeaseIdentity {
+	workspaceId: string
+	swarmId: string
+	laneId?: string
+	ownerId: string
+	leaseEpoch: string
+	fencingToken: string
+}
+
+export type ReconciliationStatus =
+	| "retain"
+	| "repair_projection"
+	| "reclaim"
+	| "already_released"
+	| "fail_closed"
+	| "expired_owner_reclaimed"
+	| "ownership_conflict"
+	| "active_owner_retained"
+
+export interface ReconciliationRepair {
+	backend: "memory" | "database" | "filesystem" | "broccoli"
+	action: "write" | "delete"
+}
+
+export interface LeaseReconciliationResult {
+	resourceKey: string
+	status: ReconciliationStatus
+	previousOwner?: SwarmLeaseIdentity
+	currentOwner?: SwarmLeaseIdentity
+	reason: string
+}
+
+export interface LeaseObservation {
+	ownerId: string
+	leaseEpoch: string
+	fencingToken: string
+	expiresAt: number
+	pid?: number
+	authorityMode: CoordinationAuthorityMode
+}
+
+export interface ReconciliationSnapshot {
+	memory?: LeaseObservation
+	database?: LeaseObservation
+	filesystem?: LeaseObservation
+	broccoli?: LeaseObservation
+	observedAt: number
+	dbAvailable: boolean
+	corruptions?: string[]
+}
+
+export interface ReconciliationDecision {
+	status: ReconciliationStatus
+	authoritativeLease?: LeaseObservation
+	repairs: ReconciliationRepair[]
+	reason: string
+}
+
 export interface LockAuthority {
+	readonly authorityMode: CoordinationAuthorityMode
 	acquire(
 		resourceKey: string,
 		ownerId: string,
@@ -47,31 +118,196 @@ export interface LockAuthority {
 			requireDurability?: boolean
 		},
 	): Promise<LockAcquireResult>
-	release(claim: LockClaim): Promise<LockReleaseResult>
+	release(claim: LockClaim, workspace?: string): Promise<LockReleaseResult>
 	verify(claim: LockClaim, workspace?: string): Promise<{ valid: boolean; reason?: LockFailureReason }>
 	recoverStale(workspace: string, resourcePrefix?: string): Promise<StaleRecoveryReport>
+	reconcileSwarmLease(
+		workspace: string,
+		swarmId: string,
+		laneCount: number,
+		requestorOwnerId: string,
+		expectedLeaseEpoch?: string,
+		fencingToken?: string,
+	): Promise<LeaseReconciliationResult[]>
+	assertCurrentFencingToken(resourceKey: string, suppliedToken: string, workspace?: string): Promise<void>
 }
+
+type InProcessLease = LeaseObservation
 
 function emptyBackends(): LockBackends {
 	return { inProcess: false, swarmMutex: false, roadmapLease: false, fileLock: false, broccoliFence: false }
 }
 
-async function isSwarmMutexAvailable(): Promise<boolean> {
+function resolveStartupCoordinationAuthorityMode(): CoordinationAuthorityMode {
+	const explicit = process.env.LUMI_COORDINATION_AUTHORITY_MODE
+	if (explicit === "sqlite" || explicit === "local_test") return explicit
+	if (process.env.LUMI_LOCAL_ONLY === "true" || process.env.TS_NODE_PROJECT?.includes("unit-test")) return "local_test"
+	return "sqlite"
+}
+
+/** Immutable process-start authority selection. It is never recomputed after module initialization. */
+export const COORDINATION_AUTHORITY_MODE: CoordinationAuthorityMode = resolveStartupCoordinationAuthorityMode()
+
+export function configuredCoordinationAuthorityMode(): CoordinationAuthorityMode {
+	return COORDINATION_AUTHORITY_MODE
+}
+
+/** @deprecated Prefer the immutable authorityMode property on a LockAuthority instance. */
+export function isLocalOnlyMode(): boolean {
+	return configuredCoordinationAuthorityMode() === "local_test"
+}
+
+export function isPidAlive(pid: number): boolean {
 	try {
-		await getDb()
+		process.kill(pid, 0)
 		return true
-	} catch {
-		return false
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "EPERM"
 	}
 }
 
-/**
- * Unified mutation-ownership authority — sole public claim/release path for governed lanes.
- * Layers: in-process registry → SwarmMutex → roadmap lease → file lock → broccoli fence.
- */
+export function mapLockFailureReasonToCode(reason: string): CoordinationErrorCode {
+	switch (reason) {
+		case "collision":
+		case "duplicate_claim":
+			return CoordinationErrorCode.LOCK_BUSY
+		case "split_brain":
+			return CoordinationErrorCode.SPLIT_BRAIN_DETECTED
+		case "stale_owner":
+			return CoordinationErrorCode.LEASE_EXPIRED
+		case "owner_mismatch":
+			return CoordinationErrorCode.OWNERSHIP_CHANGED
+		case "fencing_mismatch":
+			return CoordinationErrorCode.FENCING_TOKEN_REJECTED
+		case "ambiguous_roadmap_admission":
+			return CoordinationErrorCode.OWNERSHIP_AMBIGUOUS
+		case "authority_mode_mismatch":
+			return CoordinationErrorCode.AUTHORITY_MODE_MISMATCH
+		case "not_held":
+			return CoordinationErrorCode.LOCK_RELEASE_FAILED
+		case "durable_backend_unavailable":
+			return CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE
+		default:
+			return CoordinationErrorCode.COORDINATION_STATE_CORRUPT
+	}
+}
+
+function sameIdentity(left: LeaseObservation, right: LeaseObservation): boolean {
+	return (
+		left.ownerId === right.ownerId &&
+		left.leaseEpoch === right.leaseEpoch &&
+		left.fencingToken === right.fencingToken &&
+		left.authorityMode === right.authorityMode
+	)
+}
+
+function compareProjection(projection: LeaseObservation, database: LeaseObservation): "same" | "older" | "newer" | "corrupt" {
+	if (projection.authorityMode !== database.authorityMode) return "corrupt"
+	const projectionToken = BigInt(projection.fencingToken)
+	const databaseToken = BigInt(database.fencingToken)
+	if (projectionToken < databaseToken) return "older"
+	if (projectionToken > databaseToken) return "newer"
+	return sameIdentity(projection, database) ? "same" : "corrupt"
+}
+
+export function decideReconciliation(
+	snapshot: ReconciliationSnapshot,
+	_requestorOwnerId: string,
+	now: number,
+): ReconciliationDecision {
+	if (!snapshot.dbAvailable) {
+		return {
+			status: "fail_closed",
+			repairs: [],
+			reason: "SQLite authority is unavailable; no lease or projection may be reclaimed.",
+		}
+	}
+	if (snapshot.corruptions?.length) {
+		return { status: "fail_closed", repairs: [], reason: `Corrupt coordination records: ${snapshot.corruptions.join("; ")}` }
+	}
+
+	const database = snapshot.database
+	const projections: Array<[ReconciliationRepair["backend"], LeaseObservation | undefined]> = [
+		["memory", snapshot.memory],
+		["filesystem", snapshot.filesystem],
+		["broccoli", snapshot.broccoli],
+	]
+	if (!database) {
+		const repairs = projections
+			.filter(([, projection]) => projection !== undefined)
+			.map(([backend]) => ({ backend, action: "delete" as const }))
+		return repairs.length
+			? { status: "reclaim", repairs, reason: "Orphaned projections exist without an authoritative SQLite lease." }
+			: { status: "already_released", repairs: [], reason: "Lease is already fully released." }
+	}
+	if (database.authorityMode !== "sqlite") {
+		return { status: "fail_closed", repairs: [], reason: `Incompatible database authority mode '${database.authorityMode}'.` }
+	}
+	if (now > database.expiresAt) {
+		return {
+			status: "reclaim",
+			authoritativeLease: database,
+			repairs: [
+				{ backend: "database", action: "delete" },
+				...projections.filter(([, value]) => value).map(([backend]) => ({ backend, action: "delete" as const })),
+			],
+			reason: "Authoritative SQLite lease expired.",
+		}
+	}
+
+	const repairs: ReconciliationRepair[] = []
+	for (const [backend, projection] of projections) {
+		if (!projection) {
+			repairs.push({ backend, action: "write" })
+			continue
+		}
+		const comparison = compareProjection(projection, database)
+		if (comparison === "newer" || comparison === "corrupt") {
+			return {
+				status: "fail_closed",
+				repairs: [],
+				reason: `${backend} projection has ${comparison} identity relative to SQLite.`,
+			}
+		}
+		if (comparison === "older") repairs.push({ backend, action: "write" })
+	}
+	return repairs.length
+		? {
+				status: "repair_projection",
+				authoritativeLease: database,
+				repairs,
+				reason: "Missing or stale projections must be repaired from SQLite.",
+			}
+		: { status: "retain", authoritativeLease: database, repairs: [], reason: "Active SQLite lease is consistent." }
+}
+
+function observationFromDurableLease(lease: DurableSwarmLease): LeaseObservation {
+	return {
+		ownerId: lease.ownerId,
+		leaseEpoch: lease.leaseEpoch,
+		fencingToken: lease.fencingToken,
+		expiresAt: lease.expiresAt,
+		pid: lease.pid,
+		authorityMode: lease.authorityMode,
+	}
+}
+
+function databaseFailure(error: unknown, operation: string): CoordinationError {
+	if (error instanceof CoordinationError) return error
+	return new CoordinationError(
+		CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
+		`SQLite coordination authority unavailable during ${operation}.`,
+		"retry",
+		undefined,
+		error,
+	)
+}
+
+/** Unified production authority. SQLite is authoritative; memory and files are projections only. */
 export class UnifiedLockAuthority implements LockAuthority {
-	private static inProcessClaims = new Map<string, { ownerId: string; fencingToken: number; expiresAt: number }>()
-	private static fencingCounter = 0
+	static readonly inProcessClaims = new Map<string, InProcessLease>()
+
+	constructor(public readonly authorityMode: CoordinationAuthorityMode = configuredCoordinationAuthorityMode()) {}
 
 	async acquire(
 		resourceKey: string,
@@ -85,20 +321,13 @@ export class UnifiedLockAuthority implements LockAuthority {
 			requireDurability?: boolean
 		},
 	): Promise<LockAcquireResult> {
+		if (this.authorityMode === "local_test") return this.acquireLocal(resourceKey, ownerId, options)
+
 		const timeoutMs = options?.timeoutMs ?? 300_000
 		const crossProcess = options?.crossProcess ?? resourceKey.startsWith("governed-lane:")
 		const requireDurability = options?.requireDurability ?? crossProcess
 		const workspace = options?.workspace
 		const backends = emptyBackends()
-
-		const existing = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
-		if (existing) {
-			if (existing.expiresAt < Date.now()) {
-				UnifiedLockAuthority.inProcessClaims.delete(resourceKey)
-			} else if (existing.ownerId !== ownerId) {
-				return { ok: false, reason: "collision", error: `Resource '${resourceKey}' held by '${existing.ownerId}'.` }
-			}
-		}
 
 		if (options?.roadmapEnabled && options.roadmapLeaseTaskId && workspace) {
 			try {
@@ -115,290 +344,672 @@ export class UnifiedLockAuthority implements LockAuthority {
 					}
 				}
 				backends.roadmapLease = true
-			} catch {
-				return { ok: false, reason: "ambiguous_roadmap_admission", error: "Roadmap admission unavailable." }
-			}
-		}
-
-		if (await isSwarmMutexAvailable()) {
-			try {
-				await SwarmMutexService.claim(resourceKey, ownerId, timeoutMs)
-				backends.swarmMutex = true
 			} catch (error) {
-				return {
-					ok: false,
-					reason: "collision",
-					error: error instanceof Error ? error.message : "Swarm mutex collision.",
-				}
+				return { ok: false, reason: "ambiguous_roadmap_admission", error: String(error) }
 			}
-		} else if (requireDurability) {
-			return { ok: false, reason: "durable_backend_unavailable", error: "Swarm mutex unavailable." }
 		}
 
-		const fencingToken = ++UnifiedLockAuthority.fencingCounter
-
-		if (crossProcess && workspace) {
-			const fileResult = await acquireGovernedFileLock(workspace, resourceKey, ownerId, fencingToken, timeoutMs)
-			if (!fileResult.ok) {
-				await this.rollbackPartialAcquire(resourceKey, ownerId, backends, workspace)
-				return { ok: false, reason: "collision", error: fileResult.error || "File lock collision." }
-			}
-			backends.fileLock = true
-
-			const fenceResult = await acquireBroccoliFence(workspace, resourceKey, ownerId, fencingToken)
-			if (!fenceResult.ok) {
-				await releaseGovernedFileLock(workspace, resourceKey, ownerId).catch(() => undefined)
-				await this.rollbackPartialAcquire(resourceKey, ownerId, backends, workspace)
-				return { ok: false, reason: "split_brain", error: fenceResult.error }
-			}
-			backends.broccoliFence = true
-		} else if (requireDurability && crossProcess && !workspace) {
-			await this.rollbackPartialAcquire(resourceKey, ownerId, backends, workspace)
-			return { ok: false, reason: "durable_backend_unavailable", error: "Workspace required for durable locks." }
+		if (requireDurability && crossProcess && !workspace) {
+			return { ok: false, reason: "durable_backend_unavailable", error: "Workspace required for durable projections." }
 		}
 
-		const foreignInProcess = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
-		if (foreignInProcess && foreignInProcess.ownerId !== ownerId && foreignInProcess.expiresAt >= Date.now()) {
-			await this.rollbackPartialAcquire(resourceKey, ownerId, backends, workspace)
-			return { ok: false, reason: "split_brain", error: `In-process split-brain on '${resourceKey}'.` }
-		}
-
-		UnifiedLockAuthority.inProcessClaims.set(resourceKey, {
-			ownerId,
-			fencingToken,
-			expiresAt: Date.now() + timeoutMs,
-		})
-		backends.inProcess = true
-
-		const claim: LockClaim = {
-			claimId: randomUUID(),
-			resourceKey,
-			ownerId,
-			fencingToken,
-			roadmapLeaseTaskId: options?.roadmapLeaseTaskId,
-			acquiredAt: Date.now(),
-			backends,
-		}
-
-		return { ok: true, claim }
-	}
-
-	async release(claim: LockClaim): Promise<LockReleaseResult> {
-		if (!claim.fencingToken) {
-			return { ok: false, reason: "missing_fencing_token", error: "Claim missing fencing token." }
-		}
-
-		const current = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
-		if (current && current.ownerId !== claim.ownerId) {
+		let lease: DurableSwarmLease
+		try {
+			lease = await SwarmMutexService.acquireLease(resourceKey, ownerId, timeoutMs)
+			backends.swarmMutex = true
+		} catch (error) {
+			const coordination = databaseFailure(error, "acquisition")
+			const collision = coordination.code === CoordinationErrorCode.LOCK_BUSY
 			return {
 				ok: false,
-				reason: "owner_mismatch",
-				error: `Release owner mismatch: held by '${current.ownerId}', claim from '${claim.ownerId}'.`,
+				reason: collision
+					? "collision"
+					: coordination.code === CoordinationErrorCode.AUTHORITY_MODE_MISMATCH
+						? "authority_mode_mismatch"
+						: coordination.code === CoordinationErrorCode.COORDINATION_STATE_CORRUPT
+							? "coordination_state_corrupt"
+							: "durable_backend_unavailable",
+				error: coordination.message,
+				code: coordination.code,
+				retryClass: coordination.retryClass,
 			}
 		}
-		if (current && current.fencingToken !== claim.fencingToken) {
-			return { ok: false, reason: "fencing_mismatch", error: "Release fencing token mismatch." }
-		}
 
-		const errors: string[] = []
-
-		if (claim.backends.swarmMutex) {
+		const projectionErrors: string[] = []
+		if (crossProcess && workspace) {
+			const [swarmId = "default", laneId] = resourceKey.split(":").slice(1)
 			try {
-				await SwarmMutexService.release(claim.resourceKey, claim.ownerId)
-			} catch {
-				errors.push("Swarm mutex release rejected.")
+				const file = await acquireGovernedFileLock(
+					workspace,
+					resourceKey,
+					ownerId,
+					lease.fencingToken,
+					lease.leaseEpoch,
+					swarmId,
+					laneId,
+					timeoutMs,
+					this.authorityMode,
+				)
+				if (!file.ok) projectionErrors.push(file.error)
+				else backends.fileLock = true
+			} catch (error) {
+				projectionErrors.push(`File projection failed: ${String(error)}`)
+			}
+
+			if (projectionErrors.length === 0) {
+				try {
+					const broccoli = await acquireBroccoliFence(
+						workspace,
+						resourceKey,
+						ownerId,
+						lease.fencingToken,
+						lease.leaseEpoch,
+						swarmId,
+						laneId,
+						this.authorityMode,
+					)
+					if (!broccoli.ok) projectionErrors.push(broccoli.error)
+					else backends.broccoliFence = true
+				} catch (error) {
+					projectionErrors.push(`Broccoli projection failed: ${String(error)}`)
+				}
 			}
 		}
 
-		if (claim.backends.fileLock) {
-			// workspace not stored on claim — caller must pass via resource key pattern or we skip
-			// Governed lanes always release via coordinator which has workspace
+		const currentMemory = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+		if (currentMemory && !sameIdentity(currentMemory, observationFromDurableLease(lease))) {
+			projectionErrors.push("In-process projection contains a different lease identity.")
 		}
 
-		if (current?.ownerId === claim.ownerId) {
-			UnifiedLockAuthority.inProcessClaims.delete(claim.resourceKey)
+		if (projectionErrors.length > 0) {
+			await this.abandonLeaseAfterProjectionFailure(lease, workspace, backends)
+			return { ok: false, reason: "split_brain", error: projectionErrors.join(" ") }
 		}
 
-		claim.releasedAt = Date.now()
-
-		if (errors.length > 0) {
-			return { ok: false, reason: "owner_mismatch", error: errors.join(" ") }
+		UnifiedLockAuthority.inProcessClaims.set(resourceKey, observationFromDurableLease(lease))
+		backends.inProcess = true
+		return {
+			ok: true,
+			claim: {
+				claimId: randomUUID(),
+				resourceKey,
+				ownerId,
+				fencingToken: lease.fencingToken,
+				leaseEpoch: lease.leaseEpoch,
+				authorityMode: this.authorityMode,
+				roadmapLeaseTaskId: options?.roadmapLeaseTaskId,
+				acquiredAt: lease.createdAt,
+				backends,
+			},
 		}
-		return { ok: true }
 	}
 
-	async releaseWithWorkspace(claim: LockClaim, workspace: string): Promise<LockReleaseResult> {
-		const base = await this.release(claim)
-		if (!base.ok) {
-			return base
+	async release(claim: LockClaim, workspace?: string): Promise<LockReleaseResult> {
+		if (!claim.fencingToken || !claim.leaseEpoch) {
+			return { ok: false, reason: "missing_fencing_token", error: "Claim missing lease identity." }
+		}
+		if (claim.authorityMode !== this.authorityMode) {
+			return { ok: false, reason: "authority_mode_mismatch", error: "Claim authority mode is incompatible." }
+		}
+		if (this.authorityMode === "local_test") return this.releaseLocal(claim)
+
+		let releaseResult: Awaited<ReturnType<typeof SwarmMutexService.release>>
+		try {
+			releaseResult = await SwarmMutexService.release(
+				claim.resourceKey,
+				claim.ownerId,
+				claim.leaseEpoch,
+				claim.fencingToken,
+			)
+		} catch (error) {
+			const coordination = databaseFailure(error, "release")
+			return { ok: false, reason: "durable_backend_unavailable", error: coordination.message }
+		}
+		if (releaseResult.status === "not_owner") {
+			return { ok: false, reason: "owner_mismatch", error: "SQLite lease identity changed before release." }
 		}
 
-		if (claim.backends.broccoliFence) {
-			const fenceResult = await releaseBroccoliFence(workspace, claim.resourceKey, claim.ownerId, claim.fencingToken)
-			if (!fenceResult.ok) {
-				return { ok: false, reason: "fencing_mismatch", error: fenceResult.error }
-			}
+		const cleanupErrors: string[] = []
+		const memory = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
+		if (memory) {
+			if (
+				memory.ownerId === claim.ownerId &&
+				memory.leaseEpoch === claim.leaseEpoch &&
+				memory.fencingToken === claim.fencingToken &&
+				memory.authorityMode === claim.authorityMode
+			)
+				UnifiedLockAuthority.inProcessClaims.delete(claim.resourceKey)
+			else cleanupErrors.push("In-process projection identity changed.")
 		}
-
-		if (claim.backends.fileLock) {
-			await releaseGovernedFileLock(workspace, claim.resourceKey, claim.ownerId)
+		if (workspace && claim.backends.fileLock) {
+			const file = await releaseGovernedFileLock(
+				workspace,
+				claim.resourceKey,
+				claim.ownerId,
+				claim.leaseEpoch,
+				claim.fencingToken,
+				claim.authorityMode,
+			)
+			if (file.status === "not_owner" || file.status === "corrupt") cleanupErrors.push(`File projection: ${file.status}`)
 		}
-
+		if (workspace && claim.backends.broccoliFence) {
+			const broccoli = await releaseBroccoliFence(
+				workspace,
+				claim.resourceKey,
+				claim.ownerId,
+				claim.fencingToken,
+				claim.leaseEpoch,
+				claim.authorityMode,
+			)
+			if (!broccoli.ok) cleanupErrors.push(broccoli.error)
+		}
+		claim.releasedAt = Date.now()
+		if (cleanupErrors.length) {
+			Logger.warn(`[LockAuthority] SQLite release committed; projection cleanup failures: ${cleanupErrors.join("; ")}`)
+		}
 		return { ok: true }
 	}
 
 	async verify(claim: LockClaim, workspace?: string): Promise<{ valid: boolean; reason?: LockFailureReason }> {
-		const inProcess = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
-		if (!inProcess || inProcess.ownerId !== claim.ownerId || inProcess.fencingToken !== claim.fencingToken) {
+		if (claim.authorityMode !== this.authorityMode) return { valid: false, reason: "authority_mode_mismatch" }
+		if (this.authorityMode === "local_test") {
+			const current = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
+			return current && current.ownerId === claim.ownerId && current.fencingToken === claim.fencingToken
+				? { valid: true }
+				: { valid: false, reason: "split_brain" }
+		}
+
+		let lease: DurableSwarmLease | undefined
+		try {
+			lease = await SwarmMutexService.getLease(claim.resourceKey)
+		} catch {
+			return { valid: false, reason: "durable_backend_unavailable" }
+		}
+		if (!lease || lease.expiresAt < Date.now()) return { valid: false, reason: "stale_owner" }
+		if (lease.ownerId !== claim.ownerId || lease.leaseEpoch !== claim.leaseEpoch || lease.fencingToken !== claim.fencingToken)
 			return { valid: false, reason: "split_brain" }
+		const memory = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
+		if (memory && !sameIdentity(memory, observationFromDurableLease(lease))) return { valid: false, reason: "split_brain" }
+		if (claim.backends.fileLock && workspace) {
+			const file = await verifyGovernedFileLock(
+				workspace,
+				claim.resourceKey,
+				claim.ownerId,
+				claim.fencingToken,
+				claim.leaseEpoch,
+				claim.authorityMode,
+			)
+			if (!file.valid) return { valid: false, reason: file.reason === "stale" ? "stale_owner" : "split_brain" }
 		}
-
 		if (claim.backends.broccoliFence && workspace) {
-			const fence = await verifyBroccoliFence(workspace, claim.resourceKey, claim.ownerId, claim.fencingToken)
-			if (!fence.valid) {
-				return { valid: false, reason: fence.reason === "split_brain" ? "split_brain" : "stale_owner" }
-			}
+			const broccoli = await verifyBroccoliFence(
+				workspace,
+				claim.resourceKey,
+				claim.ownerId,
+				claim.fencingToken,
+				claim.leaseEpoch,
+				claim.authorityMode,
+			)
+			if (!broccoli.valid) return { valid: false, reason: broccoli.reason === "stale" ? "stale_owner" : "split_brain" }
 		}
-
 		return { valid: true }
 	}
 
-	async recoverStale(workspace: string, resourcePrefix?: string): Promise<StaleRecoveryReport> {
-		const recovered: string[] = []
-		const errors: string[] = []
-		const now = Date.now()
+	async recoverStale(_workspace: string, _resourcePrefix?: string): Promise<StaleRecoveryReport> {
+		if (this.authorityMode === "local_test") {
+			const recovered: string[] = []
+			for (const [key, claim] of UnifiedLockAuthority.inProcessClaims) {
+				if (claim.authorityMode === "local_test" && claim.expiresAt < Date.now()) {
+					UnifiedLockAuthority.inProcessClaims.delete(key)
+					recovered.push(key)
+				}
+			}
+			return { recovered, errors: [] }
+		}
+		try {
+			await getCoordinationDb()
+			return { recovered: [], errors: [] }
+		} catch (error) {
+			throw databaseFailure(error, "stale recovery")
+		}
+	}
 
-		for (const [resourceKey, claim] of UnifiedLockAuthority.inProcessClaims.entries()) {
-			if (resourcePrefix && !resourceKey.startsWith(resourcePrefix)) {
+	async reconcileSwarmLease(
+		workspace: string,
+		swarmId: string,
+		laneCount: number,
+		requestorOwnerId: string,
+		_expectedLeaseEpoch?: string,
+		_fencingToken?: string,
+	): Promise<LeaseReconciliationResult[]> {
+		if (this.authorityMode === "local_test") {
+			return Array.from({ length: laneCount }, (_, index) => {
+				const resourceKey = `governed-lane:${swarmId}:${index}`
+				const claim = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+				return claim
+					? {
+							resourceKey,
+							status: "active_owner_retained" as const,
+							reason: `Local-test lease retained for '${claim.ownerId}'.`,
+						}
+					: { resourceKey, status: "already_released" as const, reason: "No local-test lease." }
+			})
+		}
+
+		try {
+			await getCoordinationDb()
+		} catch (error) {
+			throw databaseFailure(error, "reconciliation snapshot")
+		}
+
+		const results: LeaseReconciliationResult[] = []
+		for (let index = 0; index < laneCount; index++) {
+			const resourceKey = `governed-lane:${swarmId}:${index}`
+			let durable: DurableSwarmLease | undefined
+			try {
+				durable = await SwarmMutexService.getLease(resourceKey)
+			} catch (error) {
+				throw databaseFailure(error, "reconciliation lease read")
+			}
+			const database = durable ? observationFromDurableLease(durable) : undefined
+			const memory = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+			const corruptions: string[] = []
+
+			const fileRead = await readGovernedFileLock(workspace, resourceKey)
+			let filesystem: LeaseObservation | undefined
+			if (fileRead.status === "corrupt") corruptions.push(`filesystem:${fileRead.reason}`)
+			else if (fileRead.status === "present") {
+				filesystem = {
+					ownerId: fileRead.record.ownerId,
+					leaseEpoch: fileRead.record.leaseEpoch,
+					fencingToken: fileRead.record.fencingToken,
+					expiresAt: fileRead.record.expiresAt ?? fileRead.record.claimedAt,
+					pid: fileRead.record.pid,
+					authorityMode: fileRead.record.authorityMode,
+				}
+			}
+
+			const broccoliRead = await readBroccoliFence(workspace, resourceKey)
+			let broccoli: LeaseObservation | undefined
+			if (broccoliRead.status === "corrupt") corruptions.push(`broccoli:${broccoliRead.reason}`)
+			else if (broccoliRead.status === "present") {
+				broccoli = {
+					ownerId: broccoliRead.record.ownerId,
+					leaseEpoch: broccoliRead.record.leaseEpoch,
+					fencingToken: broccoliRead.record.fencingToken,
+					expiresAt: broccoliRead.record.expiresAt,
+					pid: broccoliRead.record.pid,
+					authorityMode: broccoliRead.record.authorityMode,
+				}
+			}
+
+			const snapshot: ReconciliationSnapshot = {
+				memory,
+				database,
+				filesystem,
+				broccoli,
+				observedAt: Date.now(),
+				dbAvailable: true,
+				corruptions,
+			}
+			const decision = decideReconciliation(snapshot, requestorOwnerId, snapshot.observedAt)
+			if (decision.status === "fail_closed") {
+				results.push({ resourceKey, status: "fail_closed", reason: decision.reason })
 				continue
 			}
-			if (claim.expiresAt < now) {
-				UnifiedLockAuthority.inProcessClaims.delete(resourceKey)
-				recovered.push(resourceKey)
+
+			if (decision.status === "reclaim") {
+				if (database) {
+					const released = await SwarmMutexService.release(
+						resourceKey,
+						database.ownerId,
+						database.leaseEpoch,
+						database.fencingToken,
+					)
+					if (released.status === "not_owner") {
+						results.push({
+							resourceKey,
+							status: "ownership_conflict",
+							reason: "SQLite lease changed after snapshot.",
+						})
+						continue
+					}
+				}
+				const cleanupErrors = await this.cleanObservedProjections(workspace, resourceKey, memory, filesystem, broccoli)
+				results.push({
+					resourceKey,
+					status: cleanupErrors.length ? "ownership_conflict" : "expired_owner_reclaimed",
+					reason: cleanupErrors.length ? cleanupErrors.join("; ") : decision.reason,
+				})
+				continue
+			}
+
+			if (decision.status === "repair_projection" && database) {
+				const errors = await this.repairProjections(
+					workspace,
+					resourceKey,
+					swarmId,
+					String(index),
+					database,
+					snapshot,
+					decision.repairs,
+				)
+				results.push({
+					resourceKey,
+					status: errors.length ? "fail_closed" : "repair_projection",
+					reason: errors.length ? errors.join("; ") : decision.reason,
+				})
+				continue
+			}
+
+			results.push({
+				resourceKey,
+				status: decision.status === "retain" ? "active_owner_retained" : "already_released",
+				reason: decision.reason,
+			})
+		}
+		return results
+	}
+
+	async assertCurrentFencingToken(resourceKey: string, suppliedToken: string, workspace?: string): Promise<void> {
+		if (!/^\d+$/.test(suppliedToken)) {
+			throw new CoordinationError(
+				CoordinationErrorCode.FENCING_TOKEN_REJECTED,
+				"Fencing token is malformed.",
+				"abort_owner",
+			)
+		}
+		if (this.authorityMode === "local_test") {
+			const current = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+			if (!current || current.fencingToken !== suppliedToken || current.authorityMode !== "local_test") {
+				throw new CoordinationError(
+					CoordinationErrorCode.FENCING_TOKEN_REJECTED,
+					"Fencing token is not the current local-test token.",
+					"abort_owner",
+				)
+			}
+			return
+		}
+
+		let lease: DurableSwarmLease | undefined
+		try {
+			lease = await SwarmMutexService.getLease(resourceKey)
+		} catch (error) {
+			throw databaseFailure(error, "fencing validation")
+		}
+		if (!lease || lease.fencingToken !== suppliedToken || lease.expiresAt < Date.now()) {
+			throw new CoordinationError(
+				CoordinationErrorCode.FENCING_TOKEN_REJECTED,
+				`Fencing token '${suppliedToken}' is not the current live SQLite token for '${resourceKey}'.`,
+				"abort_owner",
+			)
+		}
+		if (workspace) {
+			const file = await readGovernedFileLock(workspace, resourceKey)
+			if (
+				file.status === "corrupt" ||
+				(file.status === "present" && BigInt(file.record.fencingToken) > BigInt(suppliedToken))
+			) {
+				throw new CoordinationError(
+					CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
+					`Filesystem projection is corrupt or newer than SQLite for '${resourceKey}'.`,
+					"fail_closed",
+				)
 			}
 		}
-
-		try {
-			const fileRecovered = await recoverStaleGovernedFileLocks(workspace, resourcePrefix)
-			recovered.push(...fileRecovered)
-		} catch (error) {
-			errors.push(`File lock recovery: ${error}`)
-		}
-
-		try {
-			const fenceRecovered = await recoverStaleBroccoliFences(workspace, resourcePrefix)
-			recovered.push(...fenceRecovered)
-		} catch (error) {
-			errors.push(`Broccoli fence recovery: ${error}`)
-		}
-
-		return { recovered: [...new Set(recovered)], errors }
 	}
 
-	private async rollbackPartialAcquire(
+	private async acquireLocal(
 		resourceKey: string,
 		ownerId: string,
-		backends: LockBackends,
-		_workspace?: string,
-	): Promise<void> {
-		if (backends.swarmMutex) {
-			await SwarmMutexService.release(resourceKey, ownerId).catch(() => undefined)
-		}
-	}
-}
-
-/** Test-only authority without SQLite / roadmap dependencies. */
-export class InMemoryLockAuthority implements LockAuthority {
-	private static claims = new Map<string, LockClaim>()
-	private static counter = 0
-
-	async acquire(
-		resourceKey: string,
-		ownerId: string,
-		_options?: { timeoutMs?: number; crossProcess?: boolean; requireDurability?: boolean },
+		options?: { timeoutMs?: number; crossProcess?: boolean; requireDurability?: boolean; roadmapLeaseTaskId?: string },
 	): Promise<LockAcquireResult> {
-		const existing = InMemoryLockAuthority.claims.get(resourceKey)
-		if (existing && !existing.releasedAt) {
-			if (existing.ownerId === ownerId) {
-				return { ok: true, claim: existing }
-			}
-			return { ok: false, reason: "collision", error: `Held by '${existing.ownerId}'.` }
+		const existing = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+		if (existing && existing.expiresAt > Date.now()) {
+			return { ok: false, reason: "collision", error: `Resource '${resourceKey}' is held by '${existing.ownerId}'.` }
 		}
-
-		const fencingToken = ++InMemoryLockAuthority.counter
-		const claim: LockClaim = {
-			claimId: randomUUID(),
-			resourceKey,
+		const token = InMemoryLockAuthority.nextToken()
+		const observation: LeaseObservation = {
 			ownerId,
-			fencingToken,
-			acquiredAt: Date.now(),
-			backends: { inProcess: true, swarmMutex: false, roadmapLease: false, fileLock: false, broccoliFence: false },
+			leaseEpoch: token,
+			fencingToken: token,
+			expiresAt: Date.now() + (options?.timeoutMs ?? 300_000),
+			pid: process.pid,
+			authorityMode: "local_test",
 		}
-		InMemoryLockAuthority.claims.set(resourceKey, claim)
-		return { ok: true, claim }
+		UnifiedLockAuthority.inProcessClaims.set(resourceKey, observation)
+		return {
+			ok: true,
+			claim: {
+				claimId: randomUUID(),
+				resourceKey,
+				ownerId,
+				fencingToken: token,
+				leaseEpoch: token,
+				authorityMode: "local_test",
+				roadmapLeaseTaskId: options?.roadmapLeaseTaskId,
+				acquiredAt: Date.now(),
+				backends: { inProcess: true, swarmMutex: false, roadmapLease: false, fileLock: false, broccoliFence: false },
+			},
+		}
 	}
 
-	async release(claim: LockClaim): Promise<LockReleaseResult> {
-		if (!claim.fencingToken) {
-			return { ok: false, reason: "missing_fencing_token", error: "Missing fencing token." }
-		}
-		const current = InMemoryLockAuthority.claims.get(claim.resourceKey)
-		if (!current || current.releasedAt) {
-			return { ok: false, reason: "not_held", error: `No active claim for '${claim.resourceKey}'.` }
-		}
+	private async releaseLocal(claim: LockClaim): Promise<LockReleaseResult> {
+		const current = UnifiedLockAuthority.inProcessClaims.get(claim.resourceKey)
+		if (!current) return { ok: false, reason: "not_held", error: "No active local-test lease." }
 		if (current.ownerId !== claim.ownerId) {
-			return { ok: false, reason: "owner_mismatch", error: `Expected '${current.ownerId}', got '${claim.ownerId}'.` }
+			return { ok: false, reason: "owner_mismatch", error: "Local-test lease owner changed." }
 		}
-		if (current.fencingToken !== claim.fencingToken) {
-			return { ok: false, reason: "fencing_mismatch", error: "Fencing token mismatch." }
+		if (current.leaseEpoch !== claim.leaseEpoch || current.fencingToken !== claim.fencingToken) {
+			return { ok: false, reason: "fencing_mismatch", error: "Local-test lease generation changed." }
 		}
-		current.releasedAt = Date.now()
-		InMemoryLockAuthority.claims.delete(claim.resourceKey)
+		UnifiedLockAuthority.inProcessClaims.delete(claim.resourceKey)
+		claim.releasedAt = Date.now()
 		return { ok: true }
 	}
 
-	async verify(claim: LockClaim): Promise<{ valid: boolean; reason?: LockFailureReason }> {
-		const current = InMemoryLockAuthority.claims.get(claim.resourceKey)
-		if (!current || current.ownerId !== claim.ownerId || current.fencingToken !== claim.fencingToken) {
-			return { valid: false, reason: "split_brain" }
+	private async abandonLeaseAfterProjectionFailure(
+		lease: DurableSwarmLease,
+		workspace: string | undefined,
+		backends: LockBackends,
+	): Promise<void> {
+		if (workspace && backends.broccoliFence) {
+			await releaseBroccoliFence(
+				workspace,
+				lease.resource,
+				lease.ownerId,
+				lease.fencingToken,
+				lease.leaseEpoch,
+				lease.authorityMode,
+			).catch(() => undefined)
 		}
-		return { valid: true }
+		if (workspace && backends.fileLock) {
+			await releaseGovernedFileLock(
+				workspace,
+				lease.resource,
+				lease.ownerId,
+				lease.leaseEpoch,
+				lease.fencingToken,
+				lease.authorityMode,
+			).catch(() => undefined)
+		}
+		try {
+			const released = await SwarmMutexService.release(lease.resource, lease.ownerId, lease.leaseEpoch, lease.fencingToken)
+			if (released.status === "not_owner")
+				Logger.error(`[LockAuthority] Failed to abandon lease '${lease.resource}': identity changed.`)
+		} catch (error) {
+			Logger.error(`[LockAuthority] Failed to abandon lease '${lease.resource}' after projection failure.`, error)
+		}
 	}
 
-	async recoverStale(_workspace: string, resourcePrefix?: string): Promise<StaleRecoveryReport> {
-		const recovered: string[] = []
-		const staleMs = 1
-		const now = Date.now()
-		for (const [key, claim] of InMemoryLockAuthority.claims.entries()) {
-			if (resourcePrefix && !key.startsWith(resourcePrefix)) {
-				continue
+	private async cleanObservedProjections(
+		workspace: string,
+		resourceKey: string,
+		memory?: LeaseObservation,
+		filesystem?: LeaseObservation,
+		broccoli?: LeaseObservation,
+	): Promise<string[]> {
+		const errors: string[] = []
+		if (memory) {
+			const current = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+			if (current && sameIdentity(current, memory)) UnifiedLockAuthority.inProcessClaims.delete(resourceKey)
+			else if (current) errors.push("Memory projection changed after snapshot.")
+		}
+		if (filesystem) {
+			const result = await releaseGovernedFileLock(
+				workspace,
+				resourceKey,
+				filesystem.ownerId,
+				filesystem.leaseEpoch,
+				filesystem.fencingToken,
+				filesystem.authorityMode,
+			)
+			if (result.status === "not_owner" || result.status === "corrupt") errors.push(`Filesystem cleanup: ${result.status}`)
+		}
+		if (broccoli) {
+			const result = await releaseBroccoliFence(
+				workspace,
+				resourceKey,
+				broccoli.ownerId,
+				broccoli.fencingToken,
+				broccoli.leaseEpoch,
+				broccoli.authorityMode,
+			)
+			if (!result.ok) errors.push(`Broccoli cleanup: ${result.error}`)
+		}
+		return errors
+	}
+
+	private async repairProjections(
+		workspace: string,
+		resourceKey: string,
+		swarmId: string,
+		laneId: string,
+		authoritative: LeaseObservation,
+		snapshot: ReconciliationSnapshot,
+		repairs: ReconciliationRepair[],
+	): Promise<string[]> {
+		const errors: string[] = []
+		for (const repair of repairs) {
+			if (repair.backend === "memory") {
+				const current = UnifiedLockAuthority.inProcessClaims.get(resourceKey)
+				if (current && snapshot.memory && !sameIdentity(current, snapshot.memory)) {
+					errors.push("Memory projection changed during repair.")
+					continue
+				}
+				UnifiedLockAuthority.inProcessClaims.set(resourceKey, { ...authoritative })
 			}
-			if (now - claim.acquiredAt > staleMs) {
-				InMemoryLockAuthority.claims.delete(key)
-				recovered.push(key)
+			if (repair.backend === "filesystem") {
+				if (snapshot.filesystem) {
+					const removed = await releaseGovernedFileLock(
+						workspace,
+						resourceKey,
+						snapshot.filesystem.ownerId,
+						snapshot.filesystem.leaseEpoch,
+						snapshot.filesystem.fencingToken,
+						snapshot.filesystem.authorityMode,
+					)
+					if (removed.status === "not_owner" || removed.status === "corrupt") {
+						errors.push(`Filesystem projection changed during repair (${removed.status}).`)
+						continue
+					}
+				}
+				const written = await acquireGovernedFileLock(
+					workspace,
+					resourceKey,
+					authoritative.ownerId,
+					authoritative.fencingToken,
+					authoritative.leaseEpoch,
+					swarmId,
+					laneId,
+					Math.max(1, authoritative.expiresAt - Date.now()),
+					authoritative.authorityMode,
+				)
+				if (!written.ok) errors.push(written.error)
+			}
+			if (repair.backend === "broccoli") {
+				if (snapshot.broccoli) {
+					const removed = await releaseBroccoliFence(
+						workspace,
+						resourceKey,
+						snapshot.broccoli.ownerId,
+						snapshot.broccoli.fencingToken,
+						snapshot.broccoli.leaseEpoch,
+						snapshot.broccoli.authorityMode,
+					)
+					if (!removed.ok) {
+						errors.push(removed.error)
+						continue
+					}
+				}
+				const written = await acquireBroccoliFence(
+					workspace,
+					resourceKey,
+					authoritative.ownerId,
+					authoritative.fencingToken,
+					authoritative.leaseEpoch,
+					swarmId,
+					laneId,
+					authoritative.authorityMode,
+				)
+				if (!written.ok) errors.push(written.error)
 			}
 		}
-		return { recovered, errors: [] }
+		return errors
+	}
+}
+
+/** Test-only authority without SQLite or filesystem projections. */
+export class InMemoryLockAuthority implements LockAuthority {
+	readonly authorityMode = "local_test" as const
+	private readonly delegate = new UnifiedLockAuthority("local_test")
+	private static counter = 0n
+
+	static nextToken(): string {
+		InMemoryLockAuthority.counter += 1n
+		return InMemoryLockAuthority.counter.toString()
+	}
+
+	acquire(...args: Parameters<LockAuthority["acquire"]>): ReturnType<LockAuthority["acquire"]> {
+		return this.delegate.acquire(...args)
+	}
+	release(...args: Parameters<LockAuthority["release"]>): ReturnType<LockAuthority["release"]> {
+		return this.delegate.release(...args)
+	}
+	verify(...args: Parameters<LockAuthority["verify"]>): ReturnType<LockAuthority["verify"]> {
+		return this.delegate.verify(...args)
+	}
+	recoverStale(...args: Parameters<LockAuthority["recoverStale"]>): ReturnType<LockAuthority["recoverStale"]> {
+		return this.delegate.recoverStale(...args)
+	}
+	reconcileSwarmLease(
+		...args: Parameters<LockAuthority["reconcileSwarmLease"]>
+	): ReturnType<LockAuthority["reconcileSwarmLease"]> {
+		return this.delegate.reconcileSwarmLease(...args)
+	}
+	assertCurrentFencingToken(
+		...args: Parameters<LockAuthority["assertCurrentFencingToken"]>
+	): ReturnType<LockAuthority["assertCurrentFencingToken"]> {
+		return this.delegate.assertCurrentFencingToken(...args)
 	}
 
 	static reset(): void {
-		InMemoryLockAuthority.claims.clear()
-		InMemoryLockAuthority.counter = 0
+		for (const [key, claim] of UnifiedLockAuthority.inProcessClaims) {
+			if (claim.authorityMode === "local_test") UnifiedLockAuthority.inProcessClaims.delete(key)
+		}
+		InMemoryLockAuthority.counter = 0n
 	}
 }
 
-export function createLockAuthority(options?: { inMemory?: boolean }): LockAuthority {
-	return options?.inMemory ? new InMemoryLockAuthority() : new UnifiedLockAuthority()
+export function createLockAuthority(options?: { inMemory?: boolean; mode?: CoordinationAuthorityMode }): LockAuthority {
+	const mode = options?.mode ?? (options?.inMemory ? "local_test" : configuredCoordinationAuthorityMode())
+	return mode === "local_test" ? new InMemoryLockAuthority() : new UnifiedLockAuthority("sqlite")
 }
 
-/** Release with workspace-aware durable backends (file lock + broccoli fence). */
 export async function releaseGovernedLock(
 	authority: LockAuthority,
 	claim: LockClaim,
 	workspace: string,
 ): Promise<LockReleaseResult> {
-	if (authority instanceof UnifiedLockAuthority) {
-		return authority.releaseWithWorkspace(claim, workspace)
-	}
-	return authority.release(claim)
+	return authority.release(claim, workspace)
 }

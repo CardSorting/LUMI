@@ -104,8 +104,9 @@ export interface LaneExecutionReceipt {
 	toolStepCount?: number
 	sealedAt: number
 	acquiredAt?: number
+	fencingToken?: string | number
+	leaseEpoch?: string | number
 	releasedAt?: number
-	fencingToken?: number
 	lockBackends?: LockBackends
 	placeholderWarnings?: string[]
 	auditResult?: "passed" | "failed"
@@ -149,7 +150,7 @@ export interface ClaimHistoryEntry {
 	laneId: string
 	resourceKey: string
 	ownerId: string
-	fencingToken: number
+	fencingToken: string | number
 	event: ClaimHistoryEvent
 	timestamp: number
 	lockBackends?: LockBackends
@@ -408,8 +409,9 @@ export interface GovernedResourceOwner {
 	resourceKey: string
 	ownerId: string
 	laneId?: string
+	fencingToken: string | number
+	leaseEpoch?: string | number
 	claimId?: string
-	fencingToken: number
 	lockBackends?: LockBackends
 	status: "active" | "released" | "stale" | "recovered"
 }

@@ -1,4 +1,5 @@
 import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
+import { CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type {
 	ClaimHistoryEntry,
@@ -33,7 +34,7 @@ import {
 } from "@shared/subagent/governedExecution"
 import { v4 as uuidv4 } from "uuid"
 import type { LockAuthority } from "@/core/governance/LockAuthority"
-import { createLockAuthority, releaseGovernedLock } from "@/core/governance/LockAuthority"
+import { createLockAuthority, mapLockFailureReasonToCode, releaseGovernedLock } from "@/core/governance/LockAuthority"
 import type { GatePreflightReadinessIssue } from "@/core/task/tools/completionGatePipeline"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
@@ -97,7 +98,7 @@ export class GovernedSwarmCoordinator {
 	constructor(
 		private readonly workspace: string,
 		private readonly roadmapEnabled: boolean,
-		laneCount: number,
+		private readonly laneCount: number,
 		dependencies?: Map<number, number[]>,
 		lockAuthority?: LockAuthority,
 		attemptId?: string,
@@ -121,7 +122,10 @@ export class GovernedSwarmCoordinator {
 		return [...this.claimHistory]
 	}
 
-	async admitSwarm(parentAgentId: string, operation = "subagent_swarm"): Promise<GovernedAdmissionResult> {
+	async admitSwarm(parentAgentId: string, operation = "subagent_swarm", swarmId?: string): Promise<GovernedAdmissionResult> {
+		if (swarmId) {
+			await this.lockAuthority.reconcileSwarmLease(this.workspace, swarmId, this.laneCount, parentAgentId)
+		}
 		await this.lockAuthority.recoverStale(this.workspace, "governed-lane:")
 
 		if (!this.roadmapEnabled) {
@@ -258,7 +262,7 @@ export class GovernedSwarmCoordinator {
 		agentId: string,
 		index: number,
 		intent?: LaneLockIntent,
-	): Promise<{ success: boolean; claim?: WorkLaneClaim; error?: string; lockSkipped?: boolean }> {
+	): Promise<{ success: boolean; claim?: WorkLaneClaim; error?: string; lockSkipped?: boolean; code?: CoordinationErrorCode }> {
 		const laneId = buildLaneId(swarmId, index)
 		const node = this.laneDag.getNode(index)
 		const resolvedIntent: LaneLockIntent = intent ?? { executionMode: "mutation" }
@@ -311,16 +315,17 @@ export class GovernedSwarmCoordinator {
 			})
 
 			if (!result.ok) {
+				const code = mapLockFailureReasonToCode(result.reason)
 				this.claimHistory.push({
 					laneId,
 					resourceKey,
 					ownerId: agentId,
-					fencingToken: 0,
+					fencingToken: "0",
 					event: "rejected",
 					timestamp: Date.now(),
 					error: result.error,
 				})
-				return { success: false, error: result.error }
+				return { success: false, error: result.error, code }
 			}
 			if (this.executionPathMetrics) {
 				this.executionPathMetrics.lockAcquisitions++
@@ -328,6 +333,7 @@ export class GovernedSwarmCoordinator {
 
 			const verify = await this.lockAuthority.verify(result.claim, this.workspace)
 			if (!verify.valid) {
+				const code = mapLockFailureReasonToCode(verify.reason || "split_brain")
 				const releaseResult = await releaseGovernedLock(this.lockAuthority, result.claim, this.workspace)
 				this.claimHistory.push(
 					lockClaimToHistoryEntry(
@@ -342,7 +348,7 @@ export class GovernedSwarmCoordinator {
 				} else {
 					this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "rejected", releaseResult.error))
 				}
-				return { success: false, error: `Claim verification failed (${verify.reason}).` }
+				return { success: false, error: `Claim verification failed (${verify.reason}).`, code }
 			}
 
 			this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "acquired"))

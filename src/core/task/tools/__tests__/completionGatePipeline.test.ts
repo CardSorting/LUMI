@@ -131,11 +131,16 @@ describe("completionGatePipeline", () => {
 		diagnostics.every((issue) => issue.severity === "info" || issue.severity === "warning").should.be.true()
 	})
 
-	it("recordAdvisoryAuditCache stores metadata for completion reuse", () => {
+	it("recordAdvisoryAuditCache stores metadata for completion reuse", async () => {
 		const config = configWithState(taskState)
 		const metadata = { hardening_score: 92, violations: [] } as TaskAuditMetadata
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", metadata)
-		config.taskState.lastAdvisoryAudit!.hardening_score!.should.equal(92)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", metadata)
+		const audit = config.taskState.lastAdvisoryAudit
+		if (audit && audit.hardening_score !== undefined) {
+			audit.hardening_score.should.equal(92)
+		} else {
+			throw new Error("lastAdvisoryAudit or hardening_score is undefined")
+		}
 		should.exist(config.taskState.lastAdvisoryAuditCacheKey)
 		should.exist(config.taskState.lastAdvisoryAuditCachedAt)
 	})
@@ -154,7 +159,7 @@ describe("completionGatePipeline", () => {
 			violations: [],
 			blockCount: 0,
 		} as TaskAuditMetadata
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
 		const completionStub = sinon.stub(completionAudit, "runCompletionAudit").rejects(new Error("should not run"))
 
 		const result = await evaluateCompletionAuditGate(config, {
@@ -166,7 +171,12 @@ describe("completionGatePipeline", () => {
 		completionStub.called.should.be.false()
 		result.status.should.equal("advisory_passed")
 		if (result.status === "advisory_passed") {
-			result.auditMetadata.hardening_score!.should.equal(95)
+			const score = result.auditMetadata.hardening_score
+			if (score !== undefined) {
+				score.should.equal(95)
+			} else {
+				throw new Error("hardening_score is undefined")
+			}
 		}
 	})
 
@@ -184,7 +194,7 @@ describe("completionGatePipeline", () => {
 			hardening_grade: "F",
 			violations: ["result_empty"],
 		} as TaskAuditMetadata
-		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		await recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
 
 		const result = await evaluateCompletionAuditGate(config, {
 			result: VALID_RESULT,
@@ -243,7 +253,11 @@ describe("completionGatePipeline", () => {
 		})
 		const roadmap = issues.find((issue) => issue.stage === "roadmap")
 		should.exist(roadmap)
-		roadmap!.severity!.should.equal("info")
+		if (roadmap && roadmap.severity !== undefined) {
+			roadmap.severity.should.equal("info")
+		} else {
+			throw new Error("roadmap issue or severity is undefined")
+		}
 		setRoadmapConfigOverride(null)
 	})
 

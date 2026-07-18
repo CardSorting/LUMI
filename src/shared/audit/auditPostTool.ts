@@ -82,7 +82,7 @@ export async function deferCommandOutputAdvisoryAudit(
 		metadata = await applyWorkspaceAuditPolicy(policyContext.cwd, metadata, policyContext.settings)
 	}
 	if (config) {
-		recordAdvisoryAuditCache(config, excerpt, taskDescription, metadata)
+		await recordAdvisoryAuditCache(config, excerpt, taskDescription, metadata)
 	}
 	return metadata
 }

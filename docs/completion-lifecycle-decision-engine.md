@@ -100,8 +100,9 @@ The decision engine solves the first three. The action guard solves the fourth.
                 ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Handler (execution)                        │
-│  Preflight checks → audit gate → completion emission         │
-│  (orchestration and message formatting only)                 │
+│  Preflight checks → audit gate → durable terminal CAS        │
+│  → completion emission                                       │
+│  (orchestration, persistence, and message formatting only)   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,7 +113,8 @@ The decision engine solves the first three. The action guard solves the fourth.
 | **Finite state machine** | Lifecycle transitions are explicit states with deterministic routing |
 | **Circuit breaker / half-open probe** (Hystrix, Envoy) | closed → tripped → half_open (one probe per checkpoint) |
 | **CDN cache validation** | All four validity dimensions must match (AND, not OR) |
-| **Idempotency-key duplicate suppression** | Result fingerprint + workspace checkpoint hash |
+| **Idempotency-key duplicate suppression** | Canonical SHA-256 `decisionId` + durable `task_completions` row |
+| **Compare-and-swap terminalization** | Lease generation + fencing token + task state version under `BEGIN IMMEDIATE` |
 | **Single policy engine** | Handlers collect context, engine decides, handlers execute |
 | **Capability-based security** | The decision carries a capability token (`nextAllowedAction`) that the guard checks |
 | **API gateway authorization** | The guard validates the requested method against the route's allowed methods |
@@ -132,6 +134,8 @@ The decision engine solves the first three. The action guard solves the fourth.
 | `src/core/task/tools/completion/completionSnapshotBuilder.ts` | Adapter — normalizes `TaskConfig`/`TaskState` into immutable snapshot |
 | `src/core/task/tools/handlers/AttemptCompletionHandler.ts` | Thin adapter — calls guard, then orchestrates preflight/audit/emission |
 | `src/core/task/tools/handlers/RunFinalizationToolHandler.ts` | Thin adapter — calls guard, then delegates to `FinalizationRunner` |
+| `src/infrastructure/db/Config.ts` | SQLite `task_completions`, `swarm_locks`, and generation schema |
+| `src/core/swarm/SwarmMutexService.ts` | Authoritative lease/generation transactions used by terminal CAS |
 
 ---
 
@@ -335,9 +339,64 @@ Handlers do not read task state for eligibility decisions. The flow is:
 2. **`buildCompletionSnapshot(config)`** normalizes `TaskConfig`/`TaskState` into an immutable snapshot.
 3. **`CompletionLifecycleDecisionEngine.evaluate(snapshot)`** returns one canonical decision.
 4. **`CompletionActionGuard`** validates the requested tool against the decision's action contract.
-5. **Handler** executes the decision (orchestration and message formatting only).
+5. **Handler** evaluates preflight/audit and constructs the terminal record.
+6. **Terminal CAS** verifies the live lease and unchanged state version, then persists or returns the existing result.
+7. **Handler** projects the committed outcome into in-memory state and message output.
 
 This is the ONLY place that reads mutable task state for completion decisions: `completionSnapshotBuilder.ts`.
+
+The decision engine answers whether completion is eligible. It does not itself make the outcome durable. `AttemptCompletionHandler` owns the separate terminalization boundary described below.
+
+---
+
+## Durable terminalization boundary
+
+Completion is not considered terminal merely because evaluation returned success or because in-memory task state changed. The durable source of terminal truth is one SQLite `task_completions` row per task.
+
+### Canonical decision identity
+
+`decisionId` is a SHA-256 digest of recursively sorted canonical JSON with an explicit schema version:
+
+```ts
+interface CompletionDecisionIdentityInput {
+  taskId: string
+  evaluatedStateVersion: number
+  checkpoint: string
+  outcome: string
+  decisionSchemaVersion: number
+}
+```
+
+The identity excludes incidental JSON insertion order and non-identity metadata. Changing task, state version, checkpoint, outcome, or decision schema changes the digest.
+
+### Transaction contract
+
+The handler uses one `BEGIN IMMEDIATE` transaction to:
+
+1. Read the authoritative `swarm_locks` row for the completion resource.
+2. Verify owner ID, lease epoch, fencing token, authority mode, protocol version, and expiry.
+3. Verify `swarm_lock_generations` still names the same freshest epoch and token.
+4. Re-read the current task state version through the transaction callback and compare it with the evaluated version.
+5. Read an existing `task_completions` row, if any.
+6. Apply idempotency/conflict rules or insert the terminal row.
+7. Commit before updating in-memory terminal state.
+
+Lease epochs and fencing tokens are decimal strings stored as SQLite `TEXT`; the terminal path never narrows them to JavaScript `number`.
+
+### Duplicate and conflict semantics
+
+| Existing durable row | Result |
+|----------------------|--------|
+| Same `decisionId`, identical payload | Return cached result idempotently |
+| Different `decisionId`, same terminal outcome | Return existing result and log duplicate suppression |
+| Different terminal outcome | Reject as terminal conflict |
+| Same `decisionId`, different payload/checkpoint | Fail closed as corruption or digest collision |
+
+This ordering makes a crash after commit safe: restart reads and returns the terminal row. A crash before commit cannot publish an authoritative terminal outcome. Simultaneous processes serialize at `BEGIN IMMEDIATE`; exactly one row becomes authoritative.
+
+### Database outage
+
+Completion uses the same immutable coordination mode as mutation leases. In production, failure to open or query SQLite raises `DATABASE_AUTHORITY_UNAVAILABLE` with retry class `retry`. It never falls back to in-memory completion state.
 
 ---
 
@@ -362,7 +421,7 @@ Gates not in the registry are unknown and treated as non-participating. Retired 
 
 ---
 
-## What changed across the three hardening passes
+## What changed across the hardening passes
 
 ### Pass 1: False-positive prevention (v2.8.1)
 
@@ -392,6 +451,14 @@ Gates not in the registry are unknown and treated as non-participating. Retired 
 - Every rejected action now includes `decision.kind`, `nextAllowedAction`, and a one-line correction.
 - Rejected actions never mutate counters, create audit state, or trigger retries.
 
+### Pass 4: Durable completion CAS terminalization
+
+- Added `task_completions` as the terminal source of truth.
+- Added schema-versioned canonical `decisionId` generation.
+- Bound terminal commit to the current SQLite owner, epoch, fencing token, protocol, expiry, freshest generation, and task state version.
+- Added restart-safe idempotency, same-outcome duplicate suppression, terminal conflict rejection, and collision/corruption detection.
+- Preserved arbitrary-precision lease identity as SQLite `TEXT` and TypeScript strings.
+
 ---
 
 ## Test coverage
@@ -404,6 +471,7 @@ Gates not in the registry are unknown and treated as non-participating. Retired 
 | `__tests__/completionLifecycleHardening.test.ts` | 21 | Graph revision tracking, no-op retry suppression, breather reconciliation, canonical phase derivation |
 | `__tests__/contradictoryStatePrevention.test.ts` | 9 | Contradictory-state invariants on decisions and task state |
 | `__tests__/auditInvalidation.test.ts` | 3 | Audit cache reuse, no hidden fallback, checkpoint hash in cache key |
+| `__tests__/TaskCompletionTerminalization.test.ts` | focused suite | Canonical digest, restart idempotency, multi-connection contention, stale token/state rejection, bigint precision, DB outage |
 
 Run completion-related tests:
 

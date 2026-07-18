@@ -1,4 +1,11 @@
 import { createHash } from "node:crypto"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
+
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { telemetryService } from "@services/telemetry"
@@ -19,10 +26,13 @@ import {
 	isWithinReconciliationDebounce,
 	mapLifecycleToCanonicalPhase,
 } from "@shared/completion/canonicalSnapshot"
-import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
+import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+
 import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
+
 import { parseFocusChainListCounts } from "../focus-chain/utils"
 import {
 	getGovernanceParalysisTracker,
@@ -1813,4 +1823,133 @@ export function buildDoubleCheckReverifyMessage(extras?: { taskSection?: string;
 		(extras?.auditPreviewSection ?? "") +
 		"\n\nIf everything checks out, call attempt_completion again with your final result."
 	)
+}
+
+export async function computeWorkspaceContentDigest(workspace: string, memoryVersion: number): Promise<string> {
+	let gitStatus = ""
+	try {
+		const { stdout } = await execAsync("git status --porcelain", { cwd: workspace, timeout: 2000 })
+		gitStatus = stdout.trim()
+	} catch {
+		// git command not found or not a repo
+	}
+
+	let policyContent = ""
+	try {
+		const policyPath = path.join(workspace, ".audit", "gate-policy.json")
+		policyContent = await fs.readFile(policyPath, "utf8").catch(() => "")
+	} catch {}
+
+	return createHash("sha256").update(gitStatus).update(policyContent).update(String(memoryVersion)).digest("hex")
+}
+
+export async function resolveAuditStateIdentifier(config: TaskConfig): Promise<string> {
+	const checkpointHash = getLatestCheckpointHashFromMessages(config) || ""
+	const memoryVersion = config.taskState.workspaceStateVersion || 0
+	const contentDigest = await computeWorkspaceContentDigest(config.cwd, memoryVersion)
+	return `${checkpointHash}:${contentDigest}`
+}
+
+export type FindingState = "ACTIVE" | "REMEDIATED" | "STALE" | "SUPERSEDED" | "REVALIDATED" | "WAIVED"
+
+export interface FindingTransition {
+	findingId: string
+	previousState?: FindingState
+	newState: FindingState
+	reason: string
+	stateVersion: number
+	remediationReference?: string
+	timestamp: number
+	responsibleComponent: string
+}
+
+export interface AuditFindingRecord {
+	findingId: string
+	currentState?: FindingState
+	transitions: FindingTransition[]
+}
+
+export function transitionFinding(
+	config: TaskConfig,
+	findingId: string,
+	newState: FindingState,
+	reason: string,
+	component: string,
+	remediationRef?: string,
+): void {
+	if (!config.taskState.auditFindingHistory) {
+		config.taskState.auditFindingHistory = []
+	}
+	const stateVersion = config.taskState.workspaceStateVersion || 0
+	let record = config.taskState.auditFindingHistory.find((r: AuditFindingRecord) => r.findingId === findingId)
+	let isNew = false
+	if (!record) {
+		record = {
+			findingId,
+			transitions: [],
+		}
+		config.taskState.auditFindingHistory.push(record)
+		isNew = true
+	}
+
+	const previousState = isNew ? undefined : record.currentState
+	if (!isNew && previousState === newState) {
+		return
+	}
+
+	record.currentState = newState
+	record.transitions.push({
+		findingId,
+		previousState,
+		newState,
+		reason,
+		stateVersion,
+		remediationReference: remediationRef,
+		timestamp: Date.now(),
+		responsibleComponent: component,
+	})
+	Logger.info(
+		`[FindingLifecycle] Transitioned finding '${findingId}' from ${previousState} to ${newState} (version ${stateVersion})`,
+	)
+}
+
+export function updateFindingLifecycle(config: TaskConfig, newAudit: TaskAuditMetadata, isStale: boolean): void {
+	const currentViolations = newAudit.violations || []
+	const suppressed = newAudit.suppressed_violations || []
+
+	if (!config.taskState.auditFindingHistory) {
+		config.taskState.auditFindingHistory = []
+	}
+	const history = config.taskState.auditFindingHistory as AuditFindingRecord[]
+
+	// 1. Mark existing active findings as REMEDIATED or STALE if they are no longer in newAudit
+	for (const record of history) {
+		if (record.currentState === "ACTIVE" || record.currentState === "REVALIDATED") {
+			const isStillPresent = currentViolations.includes(record.findingId)
+			if (!isStillPresent) {
+				const nextState = isStale ? "STALE" : "REMEDIATED"
+				transitionFinding(
+					config,
+					record.findingId,
+					nextState,
+					isStale ? "Workspace state modified" : "Remediated by workspace changes",
+					"completionGatePipeline",
+				)
+			}
+		}
+	}
+
+	// 2. Track new active findings and waived findings
+	for (const finding of currentViolations) {
+		const record = history.find((r: AuditFindingRecord) => r.findingId === finding)
+		const isSuppressed = suppressed.includes(finding)
+
+		if (isSuppressed) {
+			transitionFinding(config, finding, "WAIVED", "Waived via suppression policy", "completionGatePipeline")
+		} else if (!record) {
+			transitionFinding(config, finding, "ACTIVE", "Discovered in completion audit", "completionGatePipeline")
+		} else if (record.currentState !== "ACTIVE" && record.currentState !== "REVALIDATED") {
+			transitionFinding(config, finding, "REVALIDATED", "Re-appeared in subsequent audit", "completionGatePipeline")
+		}
+	}
 }

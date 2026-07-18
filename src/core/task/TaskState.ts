@@ -1,6 +1,8 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
+import type { LockClaim } from "@shared/governance/lockTypes"
+import type { WorkLaneClaim } from "@shared/subagent/governedExecution"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import type { HookExecution } from "./types/HookExecution"
 
@@ -168,6 +170,9 @@ export class TaskState {
 	/** Cache key for last completion audit — avoids redundant auditTask on unchanged results. */
 	lastCompletionAuditCacheKey?: string
 	lastCompletionAuditCachedAt?: number
+	lastCompletionAuditCheckpointHash?: string
+	workspaceStateVersion?: number
+	auditFindingHistory?: any[]
 	actModeAuditCounter?: number
 	completionGateBlockCount?: number
 	/** Fingerprint of the last gate-blocked completion result — detects no-op retries. */
@@ -242,6 +247,41 @@ export class TaskState {
 	/** Checkpoint hash used for the last half-open circuit breaker probe attempt.
 	 * Prevents multiple probes on the same workspace checkpoint. */
 	lastProbeCheckpointHash?: string
+
+	public recoveryBudget?: {
+		taskId: string
+		maxAttempts: number
+		attemptsUsed: number
+		maxElapsedMs: number
+		startedAt: number
+		maxNoProgressAttempts: number
+		noProgressAttempts: number
+		lastProgressVersion: number
+	}
+	public lastProgressMarker?: {
+		workspaceContentVersion: number
+		auditMetadataVersion: number
+		completedLaneCount: number
+		activeBlockerCount: number
+	}
+	public workspaceContentVersion = 0
+	public auditMetadataVersion = 0
+	public executionQualityCounters = {
+		invalidToolCalls: 0,
+		repeatedIdenticalFailures: 0,
+		prematureCompletionAttempts: 0,
+		recoverableCompletionBlocks: 0,
+		integrityFailures: 0,
+		noProgressIterations: 0,
+	}
+
+	public swarmId?: string
+	public laneIndex?: number
+	public activeLockClaim?: LockClaim | WorkLaneClaim
+
+	public isTerminalState = false
+	public lastCompletionDecisionId?: string
+	public lastCompletionDecisionResult?: string
 
 	// Workspace Intelligence
 	workspaceIntelligenceSummary?: string

@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-5.0.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-5.5.2-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -90,7 +90,7 @@ code --install-extension CardSorting.lumi
 | **Homepage** | [dietcode.io](https://dietcode.io) |
 | **Changelog** | [changelogv3.md](changelogv3.md) |
 
-Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. Multi-lane **governed swarms** (`use_subagents`) produce durable receipts, conditional mutation locks, and a merge gate so parallel agents do not false-positive collide on reads.
+Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. Multi-lane **governed swarms** (`use_subagents`) use SQLite-backed production leases, durable receipts, typed deadlock analysis, and a merge gate so parallel agents can share read work without weakening mutation safety.
 
 Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) (agent) · [docs/papers/knowledge-philosophy.md](docs/papers/knowledge-philosophy.md) (knowledge) · Stack map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md)
 
@@ -175,6 +175,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
+- **Restart-safe completion** — terminal outcomes commit through an ownership- and state-checked SQLite transaction
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
 - **Six providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass, Grok/X Subscription
 
@@ -248,7 +249,9 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [Golden Cartridge whitepaper](docs/papers/golden-cartridge-whitepaper.md) | Technical overlay architecture, cache, and validation |
 | [Golden Cartridge reference](docs/tools-reference/golden-cartridge.mdx) | Specialized tool parameter schemas and verbs |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
+| [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
+| [Completion lifecycle](docs/completion-lifecycle-decision-engine.md) | Deterministic decisions and durable terminal CAS |
 | [Memory & reasoning](docs/MEMORY_AND_REASONING.md) | BroccoliDB cognitive layer |
 | [Spider forensic engine](docs/architecture/spider-v20-forensic-engine.md) | BroccoliDB analysis substrate |
 | [Security best practices](docs/SECURITY_BEST_PRACTICES.md) | Trust boundaries and hardening |
@@ -301,6 +304,18 @@ flowchart TD
 ```
 
 Low or unknown confidence never invalidates a valid lane. Advisory findings remain tentative, contradictory interpretations retain their assumptions, and repeated reads of the same evidence do not count as progress. Receipt, checksum, mutation-authority, lock, and provenance failures still fail closed.
+
+### Production execution safety
+
+| Boundary | Guarantee |
+|----------|-----------|
+| **Lease authority** | SQLite is the sole production authority; database failure retries or fails closed instead of falling back to memory or files |
+| **Fencing identity** | Lease epochs and fencing tokens remain arbitrary-precision decimal strings and are released only by the exact owner/epoch/token tuple |
+| **Filesystem projections** | Governed lock and Broccoli fence files are verified projections; malformed records are preserved for reconciliation rather than deleted automatically |
+| **Deadlock recovery** | Typed wait-for edges are analyzed from an immutable scheduler snapshot; timers, expiring leases, outside owners, and capacity escapes prevent false deadlock recovery |
+| **Terminal completion** | One durable `task_completions` row is committed only while the lease generation and evaluated task state remain current |
+
+Operational details: [authority model](docs/governed-execution-authority.md) · [schema](docs/governed-execution-schema.md) · [runbook](docs/governed-execution-runbook.md)
 
 | Mode | Lock | Use |
 |------|------|-----|
@@ -452,9 +467,11 @@ flowchart TB
 
   subgraph durability ["Durability boundaries"]
     TASK <--> BDB[BroccoliDB: cognitive memory, graph, snapshots, runtime state]
+    SWARM <--> LEASES[SQLite lease generations and authoritative ownership]
     EVIDENCE --> RECEIPTS[Task-local transcripts and governed receipts]
     GOVERNANCE --> RECEIPTS
     CONVERGE --> RECEIPTS
+    COMPLETE --> TERMINAL[Durable task completion CAS]
   end
 
   COMPLETE --> UI
@@ -467,7 +484,9 @@ flowchart TB
 | **Tool execution** | Typed dispatch, lifecycle hooks, MCP calls, approval enforcement | Direct tools and subagent swarms enter through the same governed tool boundary |
 | **Governed lanes** | Lane scheduling, declared execution intent, mutation claims, evidence collection | Produces execution records; it does not decide merge eligibility or manufacture consensus |
 | **Execution governance** | Receipt integrity, authority, locks, mutation legality, replay legality, and merge eligibility | Fail-closed execution firewall; confidence cannot override a governance failure |
+| **Coordination authority** | SQLite lease generations, fencing tokens, exact-tuple release, and projection reconciliation | Production never adopts memory or filesystem state as fallback authority |
 | **Convergence and synthesis** | Finding confidence, ambiguity, contradictions, bounded probes, uncertainty, and the parent result | Consumes governance-approved execution; low confidence changes synthesis, not execution validity |
+| **Terminal completion** | Canonical completion identity and the `task_completions` CAS transaction | In-memory state changes only after the durable lease/state commit succeeds |
 | **VS Code host** | Filesystem, terminals, diagnostics, tabs, and checkpoints | Physical IDE operations are isolated behind the Protobuf host bridge |
 | **Task artifacts** | Append-only transcripts, execution envelopes, immutable attempt receipts, replay checksums | Authoritative swarm execution history lives under the task directory, not in cognitive memory |
 | **BroccoliDB** | Cognitive memory, runtime graph, snapshots, structural analysis, and fencing substrate | Advisory knowledge and substrate state; not the governed swarm receipt store |
@@ -523,6 +542,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | Provider auth errors | Re-open LUMI Settings → re-enter API key |
 | Completion blocked | Run `/roadmap validate`; check `lumi.roadmap.*` settings |
 | Subagent merge blocked | See [governed runbook](docs/governed-execution-runbook.md) |
+| `DATABASE_AUTHORITY_UNAVAILABLE` | Restore the persistent SQLite database, then retry; do not delete projection files or switch to local authority |
 | Reset extension state | Close VS Code; remove `~/.dietcode/data/`; reload window |
 
 ---
@@ -537,7 +557,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **5.0.0**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **5.5.2**, provider used, and steps to reproduce.
 
 ---
 
@@ -565,6 +585,8 @@ Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · R
 **Where is my data stored?** Settings and secrets in `~/.dietcode/data/`; workspace cognitive memory in `./dietcode.db`.
 
 **Can read-only subagent lanes share files?** Yes — lock collisions are write-scoped only.
+
+**What happens if the coordination database is unavailable?** Production retries at a safe boundary or fails closed. It never treats in-memory or filesystem projections as a replacement lock authority.
 
 **How do I contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md) — squash merges on `main`, Conventional Commits for PR titles.
 

@@ -2,11 +2,14 @@ import type { LaneDAGNode, LaneExecutionMode } from "@shared/subagent/governedEx
 
 export type { LaneDAGNode } from "@shared/subagent/governedExecution"
 
+export type ImmutableLaneDAGNode = Omit<LaneDAGNode, "dependsOn"> & { readonly dependsOn: readonly number[] }
+
 /**
  * Minimal lane dependency graph with ready / blocked / running / sealed / failed states.
  */
 export class LaneDAG {
 	private readonly nodes: Map<number, LaneDAGNode>
+	private stateVersion = 0
 
 	constructor(laneCount: number, dependencies?: Map<number, number[]>) {
 		this.nodes = new Map()
@@ -23,6 +26,33 @@ export class LaneDAG {
 
 	getNode(index: number): LaneDAGNode | undefined {
 		return this.nodes.get(index)
+	}
+
+	getStateVersion(): number {
+		return this.stateVersion
+	}
+
+	immutableSnapshot(): { version: number; nodes: ReadonlyMap<number, Readonly<ImmutableLaneDAGNode>> } {
+		return {
+			version: this.stateVersion,
+			nodes: new Map(
+				[...this.nodes].map(([index, node]) => [
+					index,
+					Object.freeze({ ...node, dependsOn: Object.freeze([...node.dependsOn]) }),
+				]),
+			),
+		}
+	}
+
+	laneDependsOn(index: number, candidateDependency: number): boolean {
+		const node = this.nodes.get(index)
+		if (!node) {
+			return false
+		}
+		if (node.dependsOn.includes(candidateDependency)) {
+			return true
+		}
+		return node.dependsOn.some((dep) => this.laneDependsOn(dep, candidateDependency))
 	}
 
 	getReadyLanes(): number[] {
@@ -61,6 +91,7 @@ export class LaneDAG {
 		if (executionMode) {
 			node.executionMode = executionMode
 		}
+		this.stateVersion++
 	}
 
 	markSealed(index: number): void {
@@ -68,8 +99,10 @@ export class LaneDAG {
 		if (!node) {
 			return
 		}
+		if (node.state === "sealed") return
 		node.state = "sealed"
 		this.recomputeBlocked()
+		this.stateVersion++
 	}
 
 	markRetryReady(index: number): void {
@@ -81,6 +114,7 @@ export class LaneDAG {
 		node.agentId = undefined
 		node.error = undefined
 		this.recomputeBlocked()
+		this.stateVersion++
 	}
 
 	markFailed(index: number, error?: string): void {
@@ -88,9 +122,11 @@ export class LaneDAG {
 		if (!node) {
 			return
 		}
+		if (node.state === "failed" && node.error === error) return
 		node.state = "failed"
 		node.error = error
 		this.recomputeBlocked()
+		this.stateVersion++
 	}
 
 	snapshot(): LaneDAGNode[] {

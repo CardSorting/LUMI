@@ -1,118 +1,255 @@
-import { getDb } from "../../infrastructure/db/Config"
+import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
+import type { CoordinationAuthorityMode } from "@shared/governance/lockTypes"
+import { getCoordinationRawDb } from "../../infrastructure/db/Config"
 
-/**
- * SwarmMutexService provides cross-agent synchronization using a database-backed
- * locking mechanism. This ensures that parallel sub-agents or separate agent
- * instances do not overwrite each other's work on shared resources.
- */
-export class SwarmMutexService {
-	/**
-	 * Internal in-memory mutex for serializing database-level lock checks
-	 * to prevent race conditions within the same process.
-	 */
-	private static inMemoryMutex = new Map<string, Promise<void>>()
+export const SWARM_LOCK_PROTOCOL_VERSION = 2
 
-	private static async waitInMemory(key: string): Promise<() => void> {
-		const previous = SwarmMutexService.inMemoryMutex.get(key) || Promise.resolve()
-		let release: () => void
-		const current = new Promise<void>((resolve) => {
-			release = resolve
-		})
-		SwarmMutexService.inMemoryMutex.set(
-			key,
-			previous.then(() => current),
+export interface DurableSwarmLease {
+	resource: string
+	ownerId: string
+	expiresAt: number
+	createdAt: number
+	leaseEpoch: string
+	fencingToken: string
+	protocolVersion: number
+	authorityMode: CoordinationAuthorityMode
+	pid: number
+}
+
+type RawDatabase = Awaited<ReturnType<typeof getCoordinationRawDb>>
+
+function asDatabaseUnavailable(error: unknown, operation: string): CoordinationError {
+	if (error instanceof CoordinationError) return error
+	return new CoordinationError(
+		CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
+		`SQLite authority unavailable during ${operation}.`,
+		"retry",
+		undefined,
+		error,
+	)
+}
+
+function parseCounter(value: unknown, field: string): bigint {
+	if (typeof value !== "string" || !/^\d+$/.test(value)) {
+		throw new CoordinationError(
+			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
+			`Invalid ${field} value in swarm lock generation state.`,
+			"fail_closed",
 		)
-		await previous
-		return () => {
-			if (SwarmMutexService.inMemoryMutex.get(key) === current) {
-				SwarmMutexService.inMemoryMutex.delete(key)
-			}
-			release()
-		}
 	}
+	return BigInt(value)
+}
 
-	/**
-	 * Acquires a persistent lock for a specific resource key.
-	 * If the lock is held by another owner and not expired, it throws an error.
-	 */
-	static async claim(key: string, ownerId: string, timeoutMs = 300000): Promise<void> {
-		const releaseInMemory = await SwarmMutexService.waitInMemory(key)
+function normalizeLease(row: Record<string, unknown>): DurableSwarmLease {
+	if (
+		typeof row.resource !== "string" ||
+		typeof row.ownerId !== "string" ||
+		typeof row.leaseEpoch !== "string" ||
+		!/^\d+$/.test(row.leaseEpoch) ||
+		typeof row.fencingToken !== "string" ||
+		!/^\d+$/.test(row.fencingToken) ||
+		row.authorityMode !== "sqlite" ||
+		Number(row.protocolVersion) !== SWARM_LOCK_PROTOCOL_VERSION ||
+		!Number.isFinite(Number(row.expiresAt)) ||
+		!Number.isFinite(Number(row.createdAt)) ||
+		!Number.isInteger(Number(row.pid))
+	) {
+		throw new CoordinationError(
+			row.authorityMode && row.authorityMode !== "sqlite"
+				? CoordinationErrorCode.AUTHORITY_MODE_MISMATCH
+				: CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
+			`Swarm lease '${String(row.resource)}' uses incompatible or corrupt coordination metadata.`,
+			"fail_closed",
+		)
+	}
+	return {
+		resource: row.resource,
+		ownerId: row.ownerId,
+		expiresAt: Number(row.expiresAt),
+		createdAt: Number(row.createdAt),
+		leaseEpoch: row.leaseEpoch,
+		fencingToken: row.fencingToken,
+		protocolVersion: Number(row.protocolVersion),
+		authorityMode: "sqlite",
+		pid: Number(row.pid),
+	}
+}
+
+function withImmediateTransaction<T>(rawDb: RawDatabase, operation: () => T): T {
+	rawDb.exec("BEGIN IMMEDIATE")
+	try {
+		const result = operation()
+		rawDb.exec("COMMIT")
+		return result
+	} catch (error) {
 		try {
-			const db = await getDb()
-			const now = Date.now()
-			const expiresAt = now + timeoutMs
+			rawDb.exec("ROLLBACK")
+		} catch {}
+		throw error
+	}
+}
 
-			// Check for existing lock
-			const existingLock = await db.selectFrom("swarm_locks").selectAll().where("resource", "=", key).executeTakeFirst()
+/** SQLite-backed lease authority. All generation allocation and lease changes are CAS transactions. */
+export class SwarmMutexService {
+	static async acquireLease(key: string, ownerId: string, timeoutMs = 300_000): Promise<DurableSwarmLease> {
+		let rawDb: RawDatabase
+		try {
+			rawDb = await getCoordinationRawDb()
+		} catch (error) {
+			throw asDatabaseUnavailable(error, "lease acquisition")
+		}
 
-			if (existingLock) {
-				if (existingLock.expiresAt > now && existingLock.ownerId !== ownerId) {
-					throw new Error(`Resource '${key}' is already claimed by agent '${existingLock.ownerId}'.`)
+		try {
+			return withImmediateTransaction(rawDb, () => {
+				const now = Date.now()
+				const existingRaw = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
+					| Record<string, unknown>
+					| undefined
+				let existing: DurableSwarmLease | undefined
+				if (existingRaw) {
+					existing = normalizeLease(existingRaw)
+					if (existing.expiresAt > now) {
+						throw new CoordinationError(
+							CoordinationErrorCode.LOCK_BUSY,
+							`Resource '${key}' is already claimed by '${existing.ownerId}'.`,
+							"retry",
+							{ ownerId: existing.ownerId, expiresAt: existing.expiresAt },
+						)
+					}
 				}
 
-				// Update existing (even if expired, we take it over)
-				await db
-					.updateTable("swarm_locks")
-					.set({
+				rawDb
+					.prepare(
+						"INSERT OR IGNORE INTO swarm_lock_generations (resourceKey, highestLeaseEpoch, highestFencingToken) VALUES (?, '0', '0')",
+					)
+					.run(key)
+				const generation = rawDb
+					.prepare("SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?")
+					.get(key) as Record<string, unknown> | undefined
+				if (!generation) {
+					throw new CoordinationError(
+						CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
+						`Missing generation state for '${key}'.`,
+						"fail_closed",
+					)
+				}
+				const currentEpoch = parseCounter(generation.highestLeaseEpoch, "highestLeaseEpoch")
+				const currentToken = parseCounter(generation.highestFencingToken, "highestFencingToken")
+				const previousEpoch = existing ? BigInt(existing.leaseEpoch) : 0n
+				const previousToken = existing ? BigInt(existing.fencingToken) : 0n
+				const leaseEpoch = (currentEpoch > previousEpoch ? currentEpoch : previousEpoch) + 1n
+				const fencingToken = (currentToken > previousToken ? currentToken : previousToken) + 1n
+				const expiresAt = now + timeoutMs
+
+				rawDb
+					.prepare(
+						"UPDATE swarm_lock_generations SET highestLeaseEpoch = ?, highestFencingToken = ? WHERE resourceKey = ?",
+					)
+					.run(leaseEpoch.toString(), fencingToken.toString(), key)
+				rawDb
+					.prepare(
+						`INSERT INTO swarm_locks (
+							resource, ownerId, expiresAt, createdAt, leaseEpoch, fencingToken, protocolVersion, authorityMode, pid
+						) VALUES (?, ?, ?, ?, ?, ?, ?, 'sqlite', ?)
+						ON CONFLICT(resource) DO UPDATE SET
+							ownerId = excluded.ownerId,
+							expiresAt = excluded.expiresAt,
+							createdAt = excluded.createdAt,
+							leaseEpoch = excluded.leaseEpoch,
+							fencingToken = excluded.fencingToken,
+							protocolVersion = excluded.protocolVersion,
+							authorityMode = excluded.authorityMode,
+							pid = excluded.pid`,
+					)
+					.run(
+						key,
 						ownerId,
 						expiresAt,
-						createdAt: existingLock.createdAt, // Keep original
-					})
-					.where("resource", "=", key)
-					.execute()
-			} else {
-				// Insert new lock
-				await db
-					.insertInto("swarm_locks")
-					.values({
-						resource: key,
-						ownerId,
-						expiresAt,
-						createdAt: now,
-					})
-					.execute()
-			}
-		} finally {
-			releaseInMemory()
+						now,
+						leaseEpoch.toString(),
+						fencingToken.toString(),
+						SWARM_LOCK_PROTOCOL_VERSION,
+						process.pid,
+					)
+
+				return {
+					resource: key,
+					ownerId,
+					expiresAt,
+					createdAt: now,
+					leaseEpoch: leaseEpoch.toString(),
+					fencingToken: fencingToken.toString(),
+					protocolVersion: SWARM_LOCK_PROTOCOL_VERSION,
+					authorityMode: "sqlite",
+					pid: process.pid,
+				}
+			})
+		} catch (error) {
+			if (error instanceof CoordinationError) throw error
+			throw asDatabaseUnavailable(error, "lease acquisition")
 		}
 	}
 
-	/**
-	 * Releases a persistent lock if held by the specified owner.
-	 */
-	static async release(key: string, ownerId?: string): Promise<void> {
-		const releaseInMemory = await SwarmMutexService.waitInMemory(key)
+	/** Compatibility helper. New code should retain the returned identity from acquireLease. */
+	static async claim(key: string, ownerId: string, timeoutMs = 300_000): Promise<void> {
+		await SwarmMutexService.acquireLease(key, ownerId, timeoutMs)
+	}
+
+	static async getLease(key: string): Promise<DurableSwarmLease | undefined> {
 		try {
-			const db = await getDb()
-			let query = db.deleteFrom("swarm_locks").where("resource", "=", key)
-			if (ownerId) {
-				query = query.where("ownerId", "=", ownerId)
-			}
-			await query.execute()
-		} finally {
-			releaseInMemory()
+			const rawDb = await getCoordinationRawDb()
+			const row = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
+				| Record<string, unknown>
+				| undefined
+			return row ? normalizeLease(row) : undefined
+		} catch (error) {
+			if (error instanceof CoordinationError) throw error
+			throw asDatabaseUnavailable(error, "lease read")
 		}
 	}
 
-	/**
-	 * Cleans up expired locks. Should be called periodically or during initialization.
-	 */
-	static async pruneStaleLocks(): Promise<void> {
-		const db = await getDb()
-		const now = Date.now()
-		await db.deleteFrom("swarm_locks").where("expiresAt", "<", now).execute()
+	static async release(
+		key: string,
+		ownerId: string,
+		leaseEpoch: string | bigint,
+		fencingToken: string | bigint,
+	): Promise<{ status: "released" | "not_owner" | "already_gone"; released: boolean }> {
+		try {
+			const rawDb = await getCoordinationRawDb()
+			return withImmediateTransaction(rawDb, () => {
+				const deletion = rawDb
+					.prepare(
+						`DELETE FROM swarm_locks
+						 WHERE resource = ? AND ownerId = ? AND leaseEpoch = ? AND fencingToken = ? AND authorityMode = 'sqlite'`,
+					)
+					.run(key, ownerId, String(leaseEpoch), String(fencingToken))
+				if (deletion.changes === 1) return { status: "released", released: true }
+				const exists = rawDb.prepare("SELECT 1 FROM swarm_locks WHERE resource = ?").get(key)
+				return exists ? { status: "not_owner", released: false } : { status: "already_gone", released: true }
+			})
+		} catch (error) {
+			if (error instanceof CoordinationError) throw error
+			throw asDatabaseUnavailable(error, "lease release")
+		}
 	}
 
-	/**
-	 * Acquires a lock for a specific resource key and executes the provided function exclusively.
-	 * Combines in-memory and DB-backed locking for maximum safety.
-	 */
-	static async runExclusive<T>(key: string, ownerId: string, fn: () => Promise<T>, timeoutMs = 60000): Promise<T> {
-		await SwarmMutexService.claim(key, ownerId, timeoutMs)
+	static async pruneStaleLocks(): Promise<void> {
+		try {
+			const rawDb = await getCoordinationRawDb()
+			withImmediateTransaction(rawDb, () => {
+				rawDb.prepare("DELETE FROM swarm_locks WHERE expiresAt < ? AND authorityMode = 'sqlite'").run(Date.now())
+			})
+		} catch (error) {
+			throw asDatabaseUnavailable(error, "stale lease pruning")
+		}
+	}
+
+	static async runExclusive<T>(key: string, ownerId: string, fn: () => Promise<T>, timeoutMs = 60_000): Promise<T> {
+		const lease = await SwarmMutexService.acquireLease(key, ownerId, timeoutMs)
 		try {
 			return await fn()
 		} finally {
-			await SwarmMutexService.release(key, ownerId)
+			await SwarmMutexService.release(key, ownerId, lease.leaseEpoch, lease.fencingToken)
 		}
 	}
 }

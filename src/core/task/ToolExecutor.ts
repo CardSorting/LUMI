@@ -18,6 +18,7 @@ import { isParallelToolCallingEnabled, modelDoesntSupportWebp } from "@/utils/mo
 import { ToolUse } from "../assistant-message"
 import { ContextManager } from "../context/context-management/ContextManager"
 import { KnowledgeGraphService } from "../context/KnowledgeGraphService"
+import { createLockAuthority } from "../governance/LockAuthority"
 import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
@@ -874,6 +875,24 @@ export class ToolExecutor {
 		// Check abort flag at the very start to prevent execution after cancellation
 		if (this.taskState.abort) {
 			return
+		}
+
+		const isMutating = !["view_file", "grep_search", "list_dir", "attempt_completion"].includes(block.name)
+
+		if (isMutating) {
+			if (this.taskState.activeLockClaim) {
+				const activeClaim = this.taskState.activeLockClaim
+				const claim = ("lockClaim" in activeClaim ? activeClaim.lockClaim : activeClaim) as
+					| import("@shared/governance/lockTypes").LockClaim
+					| undefined
+				if (!claim) {
+					throw new Error("Mutating governed lane is missing its durable lock claim.")
+				}
+				const lockAuthority = createLockAuthority()
+				await lockAuthority.assertCurrentFencingToken(claim.resourceKey, String(claim.fencingToken), this.cwd)
+			}
+			this.taskState.workspaceStateVersion = (this.taskState.workspaceStateVersion || 0) + 1
+			this.taskState.workspaceContentVersion = (this.taskState.workspaceContentVersion || 0) + 1
 		}
 
 		const hooksEnabled = getHooksEnabledSafe()

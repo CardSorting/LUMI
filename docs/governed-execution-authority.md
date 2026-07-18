@@ -1,7 +1,7 @@
 ---
 title: "Governed Execution Authority"
 sidebarTitle: "Execution Authority"
-description: "Coordinator-owned live state vs advisory receipts — deadlock prevention, recovery philosophy, and runtime heuristics for governed swarms."
+description: "SQLite-backed live authority, projection-safe reconciliation, deadlock prevention, and durable completion for governed swarms."
 ---
 
 # Governed execution authority
@@ -63,10 +63,36 @@ Implementation anchors:
 
 | Concern | Canonical source |
 |---------|------------------|
+| Production mutation lease | SQLite `swarm_locks` + `swarm_lock_generations` through `SwarmMutexService` |
 | Swarm merge / seal | `GovernedSwarmCoordinator` + `MergeGate` |
 | Authoritative receipt | Last `sealed && mergePassed` in `.governed.history.jsonl` ([runbook procedure](governed-execution-runbook.md#authoritative-state-procedure)) |
-| Parent completion | `attempt_completion` cold path + `GateLifecycleEvaluator` |
+| Parent completion eligibility | Completion lifecycle decision engine and action guard |
+| Parent terminal result | SQLite `task_completions` row committed by the completion CAS transaction |
 | Workspace roadmap truth | Coordinator `commitWorkspaceRoadmapPatches` after reconciliation |
+
+### Coordination authority modes
+
+Coordination mode is fixed at startup:
+
+| Mode | Intended use | Authority |
+|------|--------------|-----------|
+| `sqlite` | Production and durable local execution | SQLite is the only lease and fencing authority |
+| `local_test` | Explicit unit-test/local harnesses | In-memory claims only; never selected dynamically after a database failure |
+
+Records carry their `authorityMode`. A runtime rejects records from the other mode instead of translating or adopting them. In `sqlite` mode, a connection or query failure raises `DATABASE_AUTHORITY_UNAVAILABLE` with retry class `retry`; execution retries at a safe boundary or fails closed. Memory and filesystem state never become substitute authority.
+
+### Lease transaction order
+
+Production acquisition and release have asymmetric, intentional order:
+
+1. Roadmap admission may reject the request before ownership is attempted.
+2. `BEGIN IMMEDIATE` allocates a new `leaseEpoch` and `fencingToken` and persists the SQLite lease.
+3. File, Broccoli, and in-process projections are created from that exact durable identity.
+4. A projection failure triggers an ownership-checked SQLite release and exact projection cleanup.
+5. Release first deletes the SQLite row by `resource + ownerId + leaseEpoch + fencingToken`.
+6. Only after the database transition commits are matching projections removed. Cleanup failures are logged and repaired later; they never restore the released database lease.
+
+`leaseEpoch` and `fencingToken` are decimal strings backed by JavaScript `bigint` and SQLite `TEXT`. Do not parse them through `number`.
 
 ### Subagent and lane role
 
@@ -123,10 +149,13 @@ The system must **never halt solely** because:
 Before blocking execution:
 
 1. Re-evaluate current authoritative coordinator state.
-2. Check whether the blocking condition is still active.
-3. Determine whether the condition originated from stale or duplicate governance paths.
-4. Prefer repair, reconciliation, or continuation over recursive escalation.
-5. Avoid re-auditing identical invariants across multiple governance layers.
+2. Capture an immutable scheduler snapshot and its state version.
+3. Build typed wait edges for lane dependencies, resource ownership, timers, and capacity.
+4. Run Tarjan SCC detection over hard dependency and ownership edges.
+5. Treat an SCC as deadlocked only when it has no edge-resolving escape transition.
+6. Re-confirm scheduler and lane versions before applying recovery.
+
+Valid escapes include a pending timer, an expiring resource lease, an outside running owner that can release a resource without waiting on the SCC, and unrelated capacity holders that can free a pool slot. Capacity contention and backoff are therefore not deadlocks. A changed snapshot invalidates the diagnosis; the coordinator recomputes instead of applying stale recovery.
 
 ### Mapping to implementation (parent-thread shift-right)
 
@@ -230,7 +259,11 @@ The goal is:
 - understandable recovery
 - bounded execution integrity
 
-A governed runtime that cannot recover or proceed is **operationally failed** even if all safeguards technically succeeded.
+A governed runtime that cannot recover or proceed is **operationally failed** even if all safeguards technically succeeded. This does not permit authority substitution: database unavailability, corrupt identities, mode mismatch, and newer projection tokens remain fail-closed until the authoritative state can be read safely.
+
+Normal reconciliation requires a database-available snapshot. It may reclaim an expired authoritative lease, remove confirmed orphan projections, or repair stale/missing projections. It must not unlink malformed records or reclaim anything while SQLite is unavailable.
+
+Manual or panic cleanup is isolated in `AdministrativeLockCleaner.ts`. It requires an explicit override reason, logs every record it unlinks, and is not exposed through `LockAuthority` or ordinary orchestration paths.
 
 ---
 
@@ -263,7 +296,21 @@ GOVERNED EXECUTION AUTHORITY
 - Progress is evidence; repeated validation without state change is failure.
 ```
 
-Wired into system prompts when `subagentsEnabled` — see `src/core/prompts/system-prompt/components/rules.ts`.
+The ACT-mode prompt exposes only the semantic state needed for the next transition:
+
+```text
+# EXECUTION STATE
+
+Mode: ACT
+Workspace: <workspacePath>
+Task: <taskId>
+Next required action: <nextAction>
+Active hard blockers: <blockers>
+Lane progress: <lanesComplete>/<lanesTotal> complete
+Completion condition: <condition>
+```
+
+Raw fencing tokens, lease epochs, mistake counters, and advisory warnings are intentionally omitted. Those values remain available to the runtime and operator diagnostics, not the model decision surface. See `src/core/prompts/system-prompt/registry/PromptBuilder.ts`.
 
 ---
 
@@ -276,3 +323,6 @@ Wired into system prompts when `subagentsEnabled` — see `src/core/prompts/syst
 | Lane warns `auditDeferredToSeal` | Expected — not a lane failure | Join audit at parent seal |
 | Parent re-reads same audit with no workspace change | Governance recursion | Fix workspace; rely on cache-aside / avoid duplicate summaries |
 | 10× completion blocks | Circuit breaker (intentional cold path) | `run_finalization` when engineering verified |
+| Database authority unavailable | No production authority snapshot | Restore SQLite; retry or fail closed; never switch to local mode |
+| Malformed or clock-skewed projection | Projection corruption | Preserve the record, inspect it, and reconcile only with SQLite available |
+| Emergency cleanup required | Ordinary reconciliation cannot proceed safely | Use isolated `AdministrativeLockCleaner` with a recorded override reason |
