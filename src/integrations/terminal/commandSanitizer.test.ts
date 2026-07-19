@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { describe, it } from "mocha"
 import { analyzeCommandFailure } from "./commandDiagnostics"
-import { extractCommandSubstitutions, splitCommand, tokenizeSubcommand, validateCommand } from "./commandSanitizer"
+import {
+	extractCommandSubstitutions,
+	getSanitizerMode,
+	splitCommand,
+	tokenizeSubcommand,
+	validateCommand,
+} from "./commandSanitizer"
 
 describe("commandSanitizer", () => {
 	describe("splitCommand", () => {
@@ -147,6 +153,30 @@ describe("commandSanitizer", () => {
 				assert.equal(validateCommand("npm init").valid, false)
 			} finally {
 				process.env.LUMI_ALLOWED_INTERACTIVE_COMMANDS = originalEnv
+			}
+		})
+	})
+
+	describe("getSanitizerMode", () => {
+		it("returns environment variable overrides first", () => {
+			const originalMode = process.env.LUMI_COMMAND_SANITIZER_MODE
+			try {
+				process.env.LUMI_COMMAND_SANITIZER_MODE = "disabled"
+				assert.equal(getSanitizerMode(), "disabled")
+				process.env.LUMI_COMMAND_SANITIZER_MODE = "blocking"
+				assert.equal(getSanitizerMode(), "blocking")
+			} finally {
+				process.env.LUMI_COMMAND_SANITIZER_MODE = originalMode
+			}
+		})
+
+		it("falls back to advisory by default", () => {
+			const originalMode = process.env.LUMI_COMMAND_SANITIZER_MODE
+			try {
+				delete process.env.LUMI_COMMAND_SANITIZER_MODE
+				assert.equal(getSanitizerMode(), "advisory")
+			} finally {
+				process.env.LUMI_COMMAND_SANITIZER_MODE = originalMode
 			}
 		})
 	})

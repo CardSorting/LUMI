@@ -20,6 +20,8 @@ import { DietCodeTempManager } from "@services/temp"
 import { findLastIndex } from "@shared/array"
 import { COMMAND_CANCEL_TOKEN } from "@shared/ExtensionMessage"
 import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { analyzeCommandFailure } from "./commandDiagnostics"
 import {
@@ -142,6 +144,11 @@ export async function orchestrateCommandExecution(
 		outputBufferSize = 0
 
 		if (!didContinue) {
+			if (suppressUserInteraction) {
+				didContinue = true
+				process.continue()
+				return
+			}
 			// Start timer to detect if buffer gets stuck
 			bufferStuckTimer = setTimeout(() => {
 				telemetryService.captureTerminalHang(TerminalHangStage.BUFFER_STUCK, terminalType)
@@ -207,7 +214,11 @@ export async function orchestrateCommandExecution(
 			}
 		} else {
 			// After "Proceed While Running": stream output directly to UI
-			await say("command_output", chunk)
+			try {
+				await say("command_output", chunk)
+			} catch (error) {
+				Logger.error("Failed to stream buffered terminal output to UI:", error)
+			}
 		}
 	}
 
@@ -247,7 +258,11 @@ export async function orchestrateCommandExecution(
 			outputBufferSize = 0
 			if (!didContinue) {
 				// Use say() instead of ask() since we're transitioning to file mode
-				await say("command_output", chunk)
+				try {
+					await say("command_output", chunk)
+				} catch (error) {
+					Logger.error("Failed to flush pending output buffer on file mode transition:", error)
+				}
 			}
 		}
 
@@ -257,9 +272,19 @@ export async function orchestrateCommandExecution(
 			chunkTimer = null
 		}
 
-		// Set up file logging using DietCodeTempManager for proper cleanup
-		largeOutputLogPath = DietCodeTempManager.createTempFilePath("large-output")
-		largeOutputLogStream = fs.createWriteStream(largeOutputLogPath, { flags: "a" })
+		// Set up file logging using DietCodeTempManager for proper cleanup, with fallback directory resolution
+		try {
+			largeOutputLogPath = DietCodeTempManager.createTempFilePath("large-output")
+			largeOutputLogStream = fs.createWriteStream(largeOutputLogPath, { flags: "a" })
+		} catch (error) {
+			Logger.warn("[CommandOrchestrator] Failed to create large output log file in temp directory, trying fallback:", error)
+			const fallbackDir = (process as any).cwd && fs.existsSync((process as any).cwd) ? (process as any).cwd : os.homedir()
+			largeOutputLogPath = path.join(
+				fallbackDir,
+				`large-output-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.log`,
+			)
+			largeOutputLogStream = fs.createWriteStream(largeOutputLogPath, { flags: "a" })
+		}
 		largeOutputLogStream.on("error", (error) => {
 			Logger.error("Failed to write large terminal output:", error)
 		})
@@ -276,10 +301,14 @@ export async function orchestrateCommandExecution(
 		lastLines = outputLines.slice(-SUMMARY_LINES_TO_KEEP)
 
 		// FINALLY: Notify user (now this will appear at the end after all buffered output)
-		await say(
-			"command_output",
-			`\n📋 Output is large (${outputLines.length} lines, ${Math.round(totalOutputBytes / 1024)}KB). Writing to: ${largeOutputLogPath}`,
-		)
+		try {
+			await say(
+				"command_output",
+				`\n📋 Output is large (${outputLines.length} lines, ${Math.round(totalOutputBytes / 1024)}KB). Writing to: ${largeOutputLogPath}`,
+			)
+		} catch (error) {
+			Logger.error("Failed to notify user about large output file:", error)
+		}
 	}
 
 	/**
@@ -326,24 +355,15 @@ export async function orchestrateCommandExecution(
 			outputLines.push(line)
 		}
 
-		// Apply buffered streaming (only if not in file mode or still showing initial output)
-		if (!didContinue) {
-			if (!isWritingToFile) {
-				outputBuffer.push(line)
-				outputBufferSize += lineBytes
-				// Flush if buffer is large enough
-				if (outputBuffer.length >= CHUNK_LINE_COUNT || outputBufferSize >= CHUNK_BYTE_SIZE) {
-					await flushBuffer()
-				} else {
-					scheduleFlush()
-				}
-			}
-			// When in file mode, we've already notified the user, so don't keep buffering
-		} else {
-			// After "Proceed While Running": stream output directly to UI
-			// But throttle if we're in file mode to avoid flooding UI
-			if (!isWritingToFile) {
-				await say("command_output", line)
+		// Apply buffered streaming (only if not in file mode)
+		if (!isWritingToFile) {
+			outputBuffer.push(line)
+			outputBufferSize += lineBytes
+			// Flush if buffer is large enough
+			if (outputBuffer.length >= CHUNK_LINE_COUNT || outputBufferSize >= CHUNK_BYTE_SIZE) {
+				await flushBuffer()
+			} else {
+				scheduleFlush()
 			}
 		}
 	}
@@ -395,7 +415,7 @@ export async function orchestrateCommandExecution(
 		completionFlushPromise = (async () => {
 			await lineProcessingPromise
 			// Flush any remaining buffered output before command result assembly.
-			if (!didContinue && outputBuffer.length > 0) {
+			if (outputBuffer.length > 0) {
 				if (chunkTimer) {
 					clearTimeout(chunkTimer)
 					chunkTimer = null

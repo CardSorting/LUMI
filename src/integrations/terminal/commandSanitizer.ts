@@ -734,3 +734,20 @@ export function validateCommand(command: string): CommandValidationResult {
 	}
 	return validateCommandInternal(command, 0)
 }
+
+export function getSanitizerMode(): "blocking" | "advisory" | "disabled" {
+	const envMode = process.env.LUMI_COMMAND_SANITIZER_MODE
+	if (envMode === "blocking" || envMode === "advisory" || envMode === "disabled") {
+		return envMode
+	}
+
+	if (vscode?.workspace) {
+		try {
+			const config = vscode.workspace.getConfiguration("lumi")
+			return config.get<"blocking" | "advisory" | "disabled">("commandSanitizerMode") || "advisory"
+		} catch {
+			// Ignore config lookup error
+		}
+	}
+	return "advisory"
+}

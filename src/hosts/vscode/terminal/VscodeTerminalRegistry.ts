@@ -25,7 +25,7 @@ let terminals: TerminalInfo[] = []
 let nextTerminalId = 1
 
 function isTerminalClosed(terminal: vscode.Terminal): boolean {
-	return terminal.exitStatus !== undefined
+	return terminal.exitStatus !== undefined || !vscode.window.terminals.includes(terminal)
 }
 
 export const TerminalRegistry = {
@@ -38,14 +38,26 @@ export const TerminalRegistry = {
 			env: {
 				DIETCODE_ACTIVE: "true",
 				CLINE_ACTIVE: "true",
+				BASH_ENV: "",
+				ENV: "",
+				PYTHONINSPECT: "",
 				DEBIAN_FRONTEND: "noninteractive",
+				DEBCONF_NONINTERACTIVE_SEEN: "true",
 				GCM_INTERACTIVE: "Never",
 				GIT_PAGER: "cat",
 				GIT_TERMINAL_PROMPT: "0",
 				MANPAGER: "cat",
 				PAGER: "cat",
 				PIP_NO_INPUT: "1",
+				PIP_DISABLE_PIP_VERSION_CHECK: "1",
 				SYSTEMD_PAGER: "cat",
+				NPM_CONFIG_YES: "true",
+				YARN_YES: "true",
+				POETRY_NO_INTERACTION: "1",
+				CARGO_TERM_PROGRESS_WHEN: "never",
+				HOMEBREW_NO_ANALYTICS: "1",
+				HOMEBREW_NO_AUTO_UPDATE: "1",
+				HOMEBREW_NO_ENV_HINTS: "1",
 			},
 		}
 
@@ -54,7 +66,19 @@ export const TerminalRegistry = {
 			terminalOptions.shellPath = shellPath
 		}
 
-		const terminal = vscode.window.createTerminal(terminalOptions)
+		let terminal: vscode.Terminal
+		try {
+			terminal = vscode.window.createTerminal(terminalOptions)
+		} catch (error) {
+			// Fall back to default terminal shell if configured shellPath fails
+			if (terminalOptions.shellPath) {
+				delete terminalOptions.shellPath
+				terminal = vscode.window.createTerminal(terminalOptions)
+			} else {
+				throw error
+			}
+		}
+
 		let initialCwd: string | undefined
 		if (cwd) {
 			initialCwd = cwd instanceof vscode.Uri ? cwd.fsPath : cwd
@@ -97,3 +121,8 @@ export const TerminalRegistry = {
 		return terminals
 	},
 }
+
+// Keep the registry in sync with closed terminals in real-time
+vscode.window.onDidCloseTerminal((closedTerminal) => {
+	terminals = terminals.filter((t) => t.terminal !== closedTerminal)
+})

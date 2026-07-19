@@ -3,6 +3,8 @@ import { TerminalOutputFailureReason, telemetryService } from "@services/telemet
 import { DietCodeTempManager } from "@services/temp"
 import { EventEmitter } from "events"
 import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
 import * as vscode from "vscode"
 import { resolveCarriageReturns, stripAnsi } from "@/hosts/vscode/terminal/ansiUtils"
 import { getLatestTerminalOutput } from "@/hosts/vscode/terminal/get-latest-output"
@@ -50,6 +52,7 @@ type StreamRaceResult =
 	| { type: "execution_end"; exitCode?: number }
 	| { type: "prompt_timeout" }
 	| { type: "stream_error"; error: Error }
+	| { type: "terminal_closed"; exitCode?: number }
 
 interface FallbackPaths {
 	exitCode: string
@@ -141,9 +144,11 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	private executionStarted = false
 	private didObserveShellExecution = false
 	private hasRun = false
+	private cwd?: string
 
-	async run(terminal: vscode.Terminal, command: string, shellHint?: string): Promise<void> {
+	async run(terminal: vscode.Terminal, command: string, shellHint?: string, cwd?: string): Promise<void> {
 		this.resetForRun(terminal)
+		this.cwd = cwd
 
 		// VscodeTerminalManager returns the process immediately so orchestration can attach
 		// listeners. Yield once to make even synchronous fallbacks obey that event contract.
@@ -153,13 +158,32 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			if (this.cancelledBeforeStart) {
 				return
 			}
+			if (terminal.exitStatus !== undefined) {
+				this.exitCode = terminal.exitStatus.code
+				this.emitRemainingBufferIfListening()
+				this.emitCompleted()
+				this.emitContinue()
+				return
+			}
 			if (terminal.shellIntegration?.executeCommand) {
-				await this.runWithShellIntegration(terminal, command)
-				const outputMethod =
-					this.fullOutput.trim() || this.didObserveShellExecution
-						? "shell_integration"
-						: await this.captureTerminalSnapshotWhenEmpty()
-				telemetryService.captureTerminalExecution(outputMethod !== "none", "vscode", outputMethod)
+				try {
+					await this.runWithShellIntegration(terminal, command)
+					const outputMethod =
+						this.fullOutput.trim() || this.didObserveShellExecution
+							? "shell_integration"
+							: await this.captureTerminalSnapshotWhenEmpty()
+					telemetryService.captureTerminalExecution(outputMethod !== "none", "vscode", outputMethod)
+				} catch (shError) {
+					Logger.error("Error during shell integration command execution, trying fallback:", shError)
+					telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
+					await this.runWithoutShellIntegration(terminal, command, shellHint)
+					telemetryService.captureTerminalExecution(
+						this.fullOutput.trim().length > 0,
+						"vscode",
+						this.fullOutput.trim() ? "file_redirection" : "none",
+					)
+					this.emit("no_shell_integration")
+				}
 			} else {
 				telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
 				await this.runWithoutShellIntegration(terminal, command, shellHint)
@@ -245,6 +269,24 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			}
 		})
 
+		let terminalClosedPromiseResolve: ((value: StreamRaceResult) => void) | undefined
+		const terminalClosedPromise = new Promise<StreamRaceResult>((resolve) => {
+			terminalClosedPromiseResolve = resolve
+		})
+		const terminalCloseDisposable = vscode.window.onDidCloseTerminal((closedTerminal) => {
+			if (closedTerminal === terminal) {
+				const status = (closedTerminal as any).exitStatus
+				terminalClosedPromiseResolve?.({ type: "terminal_closed", exitCode: status?.code })
+			}
+		})
+
+		if (terminal.exitStatus !== undefined) {
+			shellEndDisposable?.dispose()
+			terminalCloseDisposable.dispose()
+			this.exitCode = terminal.exitStatus.code
+			return
+		}
+
 		execution = terminal.shellIntegration?.executeCommand?.(command)
 		if (!execution) {
 			shellEndDisposable?.dispose()
@@ -292,7 +334,12 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 
 		try {
 			while (true) {
-				const contenders: Promise<StreamRaceResult>[] = [readNext()]
+				const status = (terminal as any).exitStatus
+				if (status !== undefined) {
+					this.exitCode = status.code
+					break
+				}
+				const contenders: Promise<StreamRaceResult>[] = [readNext(), terminalClosedPromise]
 				if (!detached) {
 					contenders.push(continuePromise)
 				}
@@ -321,6 +368,9 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				}
 
 				switch (raceResult.type) {
+					case "terminal_closed":
+						this.exitCode = raceResult.exitCode ?? -1
+						return
 					case "continue":
 						detached = true
 						continue
@@ -425,6 +475,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		} finally {
 			this.removeListener("continue", onContinue)
 			shellEndDisposable?.dispose()
+			terminalCloseDisposable.dispose()
 			if (iterator.return) {
 				try {
 					await Promise.race([iterator.return(), delay(ITERATOR_CLEANUP_TIMEOUT_MS)])
@@ -475,8 +526,10 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	}
 
 	private looksLikeInteractivePrompt(buffer: string): boolean {
-		const printableBuffer = stripControlCharacters(buffer).trim()
-		return /(?:password|passphrase|username for|verification code|one-time code|otp)(?: for .*)?:\s*$|\[[yY]\/[nN]\]\s*$|\([yY]\/[nN]\)\s*$|ok to proceed\?\s*\([yY]\)\s*$/i.test(
+		// Only check the last 1000 characters of the buffer to prevent regex CPU spikes on large output streams
+		const endOfBuffer = buffer.length > 1000 ? buffer.slice(-1000) : buffer
+		const printableBuffer = stripControlCharacters(endOfBuffer).trim()
+		return /(?:password|passphrase|username for|login|user|email|verification code|one-time code|otp|enter .*|select .*|choose .*|confirm .*|input .*|key)(?: for .*)?:\s*$|\[[yY]\/[nN]\]\s*(?:[?:/]\s*)?$|\([yY]\/[nN]\)\s*(?:[?:/]\s*)?$|ok to proceed\?\s*\([yY]\)\s*(?:[?:/]\s*)?$/i.test(
 			printableBuffer,
 		)
 	}
@@ -492,14 +545,24 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	private async runWithoutShellIntegration(terminal: vscode.Terminal, command: string, shellHint?: string): Promise<void> {
 		this.executionStarted = true
 		const { kind, shell } = this.detectShell(terminal, shellHint)
-		const paths = this.createFallbackPaths(kind)
+		let paths = this.createFallbackPaths(kind)
 		const decoder = new StringDecoder("utf8")
 		let readOffset = 0
 		let promptDetectedAt: number | undefined
 		let interruptedAt: number | undefined
 
 		try {
-			const invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+			let invocation: string
+			try {
+				invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+			} catch (writeError) {
+				Logger.warn(
+					`[TerminalProcess] Failed to write fallback script to temp directory, trying workspace CWD fallback: ${writeError}`,
+				)
+				const fallbackDir = this.cwd && fs.existsSync(this.cwd) ? this.cwd : os.homedir()
+				paths = this.createFallbackPathsWithBase(kind, fallbackDir)
+				invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+			}
 			Logger.info(`[TerminalProcess] Shell integration unavailable; using ${kind} file capture fallback`)
 			terminal.sendText(invocation, true)
 
@@ -565,6 +628,19 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			}
 		}
 
+		if (shell && (shell.includes("/") || shell.includes("\\"))) {
+			try {
+				if (!fs.existsSync(shell)) {
+					Logger.warn(
+						`[TerminalProcess] Configured shell path does not exist: ${shell}, falling back to safe default shell`,
+					)
+					shell = process.platform === "win32" ? "powershell" : "/bin/sh"
+				}
+			} catch {
+				// Ignore
+			}
+		}
+
 		const normalizedShell = shell.toLowerCase()
 		if (normalizedShell.includes("powershell") || normalizedShell.includes("pwsh")) {
 			return { kind: "powershell", shell }
@@ -598,10 +674,14 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		command: string,
 		paths: FallbackPaths,
 	): Promise<string> {
+		const envPrefix = getEnvPrefix(kind)
+		const cdPrefix = this.cwd ? getCdPrefix(kind, this.cwd) : ""
 		const script =
 			kind === "powershell"
 				? [
 						"$ErrorActionPreference = 'Continue'",
+						envPrefix,
+						cdPrefix,
 						command,
 						"$dcSuccess = $?",
 						"if ($dcSuccess) { exit 0 }",
@@ -609,7 +689,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 						"exit 1",
 						"",
 					].join("\n")
-				: `${kind === "cmd" ? "@echo off\r\n" : ""}${command}\n`
+				: `${kind === "cmd" ? "@echo off\r\n" : ""}${envPrefix}${cdPrefix}${command}\n`
 		await fs.promises.writeFile(paths.script, script, {
 			encoding: "utf8",
 			mode: 0o600,
@@ -642,27 +722,27 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				return `call ${quoteCmd(paths.supervisor)}`
 			}
 			case "fish": {
-				const shellPath = quotePosix(shell)
-				const scriptPath = quotePosix(paths.script)
-				const outputPath = quotePosix(paths.output)
-				const pendingPath = quotePosix(paths.pendingExitCode)
-				const exitPath = quotePosix(paths.exitCode)
+				const shellPath = quotePosix(shell.replace(/\\/g, "/"))
+				const scriptPath = quotePosix(paths.script.replace(/\\/g, "/"))
+				const outputPath = quotePosix(paths.output.replace(/\\/g, "/"))
+				const pendingPath = quotePosix(paths.pendingExitCode.replace(/\\/g, "/"))
+				const exitPath = quotePosix(paths.exitCode.replace(/\\/g, "/"))
 				return `command ${shellPath} ${scriptPath} > ${outputPath} 2>&1; set dc_status $status; cat ${outputPath}; printf '%s\\n' $dc_status > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
 			}
 			case "csh": {
-				const shellPath = quotePosix(shell)
-				const scriptPath = quotePosix(paths.script)
-				const outputPath = quotePosix(paths.output)
-				const pendingPath = quotePosix(paths.pendingExitCode)
-				const exitPath = quotePosix(paths.exitCode)
+				const shellPath = quotePosix(shell.replace(/\\/g, "/"))
+				const scriptPath = quotePosix(paths.script.replace(/\\/g, "/"))
+				const outputPath = quotePosix(paths.output.replace(/\\/g, "/"))
+				const pendingPath = quotePosix(paths.pendingExitCode.replace(/\\/g, "/"))
+				const exitPath = quotePosix(paths.exitCode.replace(/\\/g, "/"))
 				return `${shellPath} ${scriptPath} >& ${outputPath}; set dc_status = $status; cat ${outputPath}; echo $dc_status > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
 			}
 			case "posix": {
-				const shellPath = quotePosix(shell)
-				const scriptPath = quotePosix(paths.script)
-				const outputPath = quotePosix(paths.output)
-				const pendingPath = quotePosix(paths.pendingExitCode)
-				const exitPath = quotePosix(paths.exitCode)
+				const shellPath = quotePosix(shell.replace(/\\/g, "/"))
+				const scriptPath = quotePosix(paths.script.replace(/\\/g, "/"))
+				const outputPath = quotePosix(paths.output.replace(/\\/g, "/"))
+				const pendingPath = quotePosix(paths.pendingExitCode.replace(/\\/g, "/"))
+				const exitPath = quotePosix(paths.exitCode.replace(/\\/g, "/"))
 				return `${shellPath} ${scriptPath} > ${outputPath} 2>&1; dc_status=$?; cat ${outputPath}; printf '%s\\n' "$dc_status" > ${pendingPath}; mv -f ${pendingPath} ${exitPath}`
 			}
 		}
@@ -890,6 +970,24 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		}
 		return lines.join("\n").trimEnd()
 	}
+
+	private createFallbackPathsWithBase(kind: ShellKind, baseDir: string): FallbackPaths {
+		const extension = kind === "powershell" ? ".ps1" : kind === "cmd" ? ".cmd" : kind === "fish" ? ".fish" : ".sh"
+		const randomSuffix = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+		const scriptName = `dc-term-command-${randomSuffix()}${extension}`
+		const exitName = `dc-term-exit-${randomSuffix()}.log`
+		const pendingExitName = `dc-term-exit-pending-${randomSuffix()}.log`
+		const outputName = `dc-term-out-${randomSuffix()}.log`
+		const supervisorName = `dc-term-supervisor-${randomSuffix()}.cmd`
+
+		return {
+			exitCode: path.join(baseDir, exitName),
+			output: path.join(baseDir, outputName),
+			pendingExitCode: path.join(baseDir, pendingExitName),
+			script: path.join(baseDir, scriptName),
+			supervisor: kind === "cmd" ? path.join(baseDir, supervisorName) : undefined,
+		}
+	}
 }
 
 export type TerminalProcessResultPromise = VscodeTerminalProcess & Promise<void>
@@ -907,4 +1005,78 @@ export function mergePromise(process: VscodeTerminalProcess, promise: Promise<vo
 		}
 	}
 	return process as TerminalProcessResultPromise
+}
+
+function getEnvPrefix(kind: ShellKind): string {
+	const vars = {
+		DIETCODE_ACTIVE: "true",
+		CLINE_ACTIVE: "true",
+		BASH_ENV: "",
+		ENV: "",
+		PYTHONINSPECT: "",
+		DEBIAN_FRONTEND: "noninteractive",
+		DEBCONF_NONINTERACTIVE_SEEN: "true",
+		GCM_INTERACTIVE: "Never",
+		GIT_PAGER: "cat",
+		GIT_TERMINAL_PROMPT: "0",
+		MANPAGER: "cat",
+		PAGER: "cat",
+		PIP_NO_INPUT: "1",
+		PIP_DISABLE_PIP_VERSION_CHECK: "1",
+		SYSTEMD_PAGER: "cat",
+		NPM_CONFIG_YES: "true",
+		YARN_YES: "true",
+		POETRY_NO_INTERACTION: "1",
+		CARGO_TERM_PROGRESS_WHEN: "never",
+		HOMEBREW_NO_ANALYTICS: "1",
+		HOMEBREW_NO_AUTO_UPDATE: "1",
+		HOMEBREW_NO_ENV_HINTS: "1",
+	}
+
+	if (kind === "powershell") {
+		return (
+			Object.entries(vars)
+				.map(([k, v]) => `$env:${k} = "${v}"`)
+				.join("\n") + "\n"
+		)
+	}
+	if (kind === "cmd") {
+		return (
+			Object.entries(vars)
+				.map(([k, v]) => `set "${k}=${v}"`)
+				.join("\r\n") + "\r\n"
+		)
+	}
+	if (kind === "fish") {
+		return (
+			Object.entries(vars)
+				.map(([k, v]) => `set -gx ${k} "${v}"`)
+				.join("\n") + "\n"
+		)
+	}
+	if (kind === "csh") {
+		return (
+			Object.entries(vars)
+				.map(([k, v]) => `setenv ${k} "${v}"`)
+				.join("\n") + "\n"
+		)
+	}
+	// posix
+	return (
+		Object.entries(vars)
+			.map(([k, v]) => `export ${k}="${v}"`)
+			.join("\n") + "\n"
+	)
+}
+
+function getCdPrefix(kind: ShellKind, cwd: string): string {
+	if (kind === "powershell") {
+		return `Set-Location -LiteralPath ${quotePowerShell(cwd)}\n`
+	}
+	if (kind === "cmd") {
+		return `cd /d "${cwd}"\r\n`
+	}
+	// posix, fish, csh
+	const normalizedCwd = cwd.replace(/\\/g, "/")
+	return `cd ${quotePosix(normalizedCwd)}\n`
 }

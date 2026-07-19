@@ -1,5 +1,7 @@
 import { arePathsEqual } from "@utils/path"
 import { getShell, getShellForProfile } from "@utils/shell"
+import * as fs from "fs"
+import * as os from "os"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 import {
@@ -233,11 +235,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// if shell integration is already active, run the command immediately
 		if (vscodeTerminalInfo.terminal.shellIntegration) {
 			process.waitForShellIntegration = false
-			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
+			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath, vscodeTerminalInfo.cwd)
 		} else if (vscodeTerminalInfo.shellIntegrationFailed) {
 			// Shell integration previously failed/timed out on this terminal. Skip waiting to prevent delays.
 			process.waitForShellIntegration = false
-			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
+			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath, vscodeTerminalInfo.cwd)
 		} else {
 			// docs recommend waiting 3s for shell integration to activate
 			Logger.log(
@@ -262,7 +264,12 @@ export class VscodeTerminalManager implements ITerminalManager {
 					const existingProcess = this.processes.get(vscodeTerminalInfo.id)
 					if (existingProcess?.waitForShellIntegration) {
 						existingProcess.waitForShellIntegration = false
-						void existingProcess.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath)
+						void existingProcess.run(
+							vscodeTerminalInfo.terminal,
+							command,
+							vscodeTerminalInfo.shellPath,
+							vscodeTerminalInfo.cwd,
+						)
 					}
 				})
 		}
@@ -271,12 +278,30 @@ export class VscodeTerminalManager implements ITerminalManager {
 	}
 
 	async getOrCreateTerminal(cwd: string): Promise<ITerminalInfo> {
+		let resolvedCwd = cwd
+		if (resolvedCwd) {
+			try {
+				if (!fs.existsSync(resolvedCwd)) {
+					Logger.warn(
+						`[TerminalManager] Configured CWD does not exist: ${resolvedCwd}, falling back to workspace root or home`,
+					)
+					if (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) {
+						resolvedCwd = vscode.workspace.workspaceFolders[0].uri.fsPath
+					} else {
+						resolvedCwd = os.homedir()
+					}
+				}
+			} catch {
+				// Ignore errors in exists check
+			}
+		}
+
 		const terminals = TerminalRegistry.getAllTerminals()
 		const expectedShellPath =
 			this.defaultTerminalProfile !== "default" ? getShellForProfile(this.defaultTerminalProfile) : undefined
 
 		// Find available terminal from our pool first (created for this task)
-		Logger.log(`[TerminalManager] Looking for terminal in cwd: ${cwd}`)
+		Logger.log(`[TerminalManager] Looking for terminal in cwd: ${resolvedCwd}`)
 		Logger.log(`[TerminalManager] Available terminals: ${terminals.length}`)
 
 		const matchingTerminal = terminals.find((t) => {
@@ -293,7 +318,7 @@ export class VscodeTerminalManager implements ITerminalManager {
 				Logger.log(`[TerminalManager] Terminal ${t.id} has no cwd, skipping`)
 				return false
 			}
-			const matches = arePathsEqual(vscode.Uri.file(cwd).fsPath, terminalCwd)
+			const matches = arePathsEqual(vscode.Uri.file(resolvedCwd).fsPath, terminalCwd)
 			Logger.log(`[TerminalManager] Terminal ${t.id} cwd: ${terminalCwd}, matches: ${matches}`)
 			return matches
 		})
@@ -316,7 +341,7 @@ export class VscodeTerminalManager implements ITerminalManager {
 				try {
 					// Set up promise and tracking for CWD change
 					const cwdPromise = new Promise<void>((resolve, reject) => {
-						availableTerminal.pendingCwdChange = cwd
+						availableTerminal.pendingCwdChange = resolvedCwd
 						availableTerminal.cwdResolved = { resolve, reject }
 					})
 
@@ -325,14 +350,19 @@ export class VscodeTerminalManager implements ITerminalManager {
 					const shellPath = availableTerminal.shellPath ?? getShell()
 					const cdProcess = this.runCommand(
 						availableTerminal as unknown as ITerminalInfo,
-						buildChangeDirectoryCommand(cwd, shellPath),
+						buildChangeDirectoryCommand(resolvedCwd, shellPath),
 					)
 
-					// Wait for the cd command to complete before proceeding
-					await cdProcess
+					// Wait for the cd command to complete before proceeding, with a 3-second timeout
+					await Promise.race([
+						cdProcess,
+						new Promise<void>((_, reject) =>
+							setTimeout(() => reject(new Error("Timeout changing directory (3000ms)")), 3000),
+						),
+					])
 					const exitCode = cdProcess.getCompletionDetails?.().exitCode
 					if (typeof exitCode === "number" && exitCode !== 0) {
-						throw new Error(`Failed to change terminal directory to ${cwd} (exit code ${exitCode})`)
+						throw new Error(`Failed to change terminal directory to ${resolvedCwd} (exit code ${exitCode})`)
 					}
 
 					if (!this.isCwdMatchingExpected(availableTerminal)) {
@@ -342,10 +372,10 @@ export class VscodeTerminalManager implements ITerminalManager {
 						])
 					}
 					if (!this.isCwdMatchingExpected(availableTerminal)) {
-						throw new Error(`Terminal did not report the requested working directory: ${cwd}`)
+						throw new Error(`Terminal did not report the requested working directory: ${resolvedCwd}`)
 					}
 
-					availableTerminal.cwd = cwd
+					availableTerminal.cwd = resolvedCwd
 					availableTerminal.pendingCwdChange = undefined
 					availableTerminal.cwdResolved = undefined
 					this.terminalIds.add(availableTerminal.id)
@@ -364,7 +394,7 @@ export class VscodeTerminalManager implements ITerminalManager {
 		}
 
 		// If all terminals are busy or don't match shell profile, create a new one with the configured shell
-		const newTerminalInfo = TerminalRegistry.createTerminal(cwd, expectedShellPath)
+		const newTerminalInfo = TerminalRegistry.createTerminal(resolvedCwd, expectedShellPath)
 		this.terminalIds.add(newTerminalInfo.id)
 		// Cast to ITerminalInfo for interface compatibility
 		return newTerminalInfo as unknown as ITerminalInfo

@@ -15,6 +15,7 @@ import {
 } from "@shared/command-execution-evidence"
 import { Logger } from "@shared/services/Logger"
 import { arePathsEqual } from "@utils/path"
+import { getSanitizerMode } from "@/integrations/terminal/commandSanitizer"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { executionFunnel } from "../execution/ExecutionFunnel"
@@ -174,12 +175,15 @@ export class ExecuteCommandToolHandler implements IToolHandler, IPartialBlockHan
 		}
 
 		// Check dietcodeignore validation for command
-		const commandValidation = this.validator.validateCommand(actualCommand)
-		if (!commandValidation.ok) {
-			if (!config.isSubagentExecution) {
-				await config.callbacks.say("dietcodeignore_error", commandValidation.error)
+		const mode = getSanitizerMode()
+		if (mode === "blocking") {
+			const commandValidation = this.validator.validateCommand(actualCommand)
+			if (!commandValidation.ok) {
+				if (!config.isSubagentExecution) {
+					await config.callbacks.say("dietcodeignore_error", commandValidation.error)
+				}
+				return evidenceResponse(formatResponse.toolError(commandValidation.error), { approvalStatus: "denied" })
 			}
-			return evidenceResponse(formatResponse.toolError(commandValidation.error), { approvalStatus: "denied" })
 		}
 
 		// Determine workspace context for telemetry

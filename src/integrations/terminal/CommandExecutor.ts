@@ -10,7 +10,7 @@ import { attachCommandExecutionEvidence } from "@shared/command-execution-eviden
 import { DietCodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
-import { validateCommand } from "./commandSanitizer"
+import { getSanitizerMode, validateCommand } from "./commandSanitizer"
 import type {
 	CommandExecutionOptions,
 	CommandExecutorCallbacks,
@@ -60,6 +60,7 @@ export class CommandExecutor {
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
 	): Promise<[boolean, DietCodeToolResponseContent]> {
+		const resolvedTimeoutSeconds = timeoutSeconds ?? 600 // 10 minutes safety timeout fallback
 		// Strip leading `cd` to workspace from command
 		const workspaceCdPrefix = `cd ${this.cwd} && `
 		let sanitizedCommand = command
@@ -68,25 +69,34 @@ export class CommandExecutor {
 		}
 
 		// Preflight command validation to prevent terminal hangs/blockers
-		const validation = validateCommand(sanitizedCommand)
-		if (!validation.valid) {
-			const validationError = validation.error ?? "Command requires unsupported interactive input."
-			Logger.warn(`Blocked interactive command before terminal execution: ${validationError}`)
-			return [
-				false,
-				attachCommandExecutionEvidence(`Command execution did not start: ${validationError}`, {
-					command,
-					approvalStatus: "unknown",
-					started: false,
-					completed: false,
-					exitCode: undefined,
-					signal: undefined,
-					timedOut: false,
-					durationMs: 0,
-					stdoutAvailable: false,
-					stderrAvailable: false,
-				}),
-			]
+		const mode = getSanitizerMode()
+		if (mode !== "disabled") {
+			const validation = validateCommand(sanitizedCommand)
+			if (!validation.valid) {
+				const validationError = validation.error ?? "Command requires unsupported interactive input."
+				if (mode === "blocking") {
+					Logger.warn(`Blocked interactive command before terminal execution: ${validationError}`)
+					return [
+						false,
+						attachCommandExecutionEvidence(`Command execution did not start: ${validationError}`, {
+							command,
+							approvalStatus: "unknown",
+							started: false,
+							completed: false,
+							exitCode: undefined,
+							signal: undefined,
+							timedOut: false,
+							durationMs: 0,
+							stdoutAvailable: false,
+							stderrAvailable: false,
+						}),
+					]
+				}
+				Logger.warn(`Potentially interactive command allowed (advisory mode): ${validationError}`)
+				if (!options?.suppressUserInteraction) {
+					void this.callbacks.say("command_output", `⚠️ Warning: ${validationError}`)
+				}
+			}
 		}
 
 		const manager = this.terminalManager
@@ -124,7 +134,7 @@ export class CommandExecutor {
 		// Use shared orchestration logic.
 		const result = await orchestrateCommandExecution(process, manager, this.callbacks, {
 			command,
-			timeoutSeconds,
+			timeoutSeconds: resolvedTimeoutSeconds,
 			suppressUserInteraction: options?.suppressUserInteraction,
 			showShellIntegrationSuggestion: this.shouldShowBackgroundTerminalSuggestion(),
 			terminalType: "vscode",
