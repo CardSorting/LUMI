@@ -120,7 +120,7 @@ jobs:
                   path: .
 
             - name: Upload core unit tests coverage to Qlty
-              uses: qltysh/qlty-action/coverage@fd52dc852530a708d68c3b7342f8d33d1df4cd55 # v2
+              uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637 # v2
               with:
                   token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
                   # we can merge multiple files if necessary
@@ -129,7 +129,7 @@ jobs:
                   tag: unit:core
 
             - name: Upload webview-ui unit tests coverage to Qlty
-              uses: qltysh/qlty-action/coverage@fd52dc852530a708d68c3b7342f8d33d1df4cd55 # v2
+              uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637 # v2
               with:
                   token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
                   # we can merge multiple files if necessary
