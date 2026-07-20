@@ -1,4 +1,4 @@
-export type ChatNavItemId = "newChat" | "chat" | "history" | "tools" | "account" | "settings" | "worktrees"
+export type ChatNavItemId = "newChat" | "chat" | "history" | "tools" | "settings" | "worktrees"
 
 export interface ChatNavItem {
 	id: ChatNavItemId
@@ -69,17 +69,6 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		showInToolbar: false,
 		shortcutMac: "⌥⇧W",
 		shortcutWin: "Alt+Shift+W",
-	},
-	{
-		id: "account",
-		label: "Account & billing",
-		shortLabel: "Account",
-		description: "Manage your profile, team, and usage limits",
-		tooltip: "Account & billing (Alt+Shift+4 or Alt+Shift+A)",
-		icon: "UserCircle",
-		showInToolbar: false,
-		shortcutMac: "⌥⇧A",
-		shortcutWin: "Alt+Shift+A",
 	},
 	{
 		id: "settings",

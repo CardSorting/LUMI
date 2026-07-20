@@ -8,13 +8,14 @@ import {
 	HardDriveDownload,
 	Info,
 	type LucideIcon,
+	Search,
 	SlidersHorizontal,
 	Sparkles,
 	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import { useDietCodeAuth } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -135,6 +136,25 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	},
 ]
 
+const TAB_KEYWORDS: Record<SettingsTabID, string[]> = {
+	"api-config": ["models", "keys", "api key", "provider", "ai", "llm", "tokens"],
+	embedding: ["search", "indexing", "embeddings", "rag", "code search", "vector"],
+	features: ["preferences", "behavior", "subagents", "think together", "tool calls", "plan", "auto-compact", "parallel"],
+	skills: ["skills", "mcp", "tools", "plugins", "marketplace"],
+	browser: ["browser", "chrome", "viewport", "screenshot", "web"],
+	terminal: ["terminal", "shell", "bash", "zsh", "timeout", "reuse", "output", "lockout"],
+	general: ["general", "language", "privacy", "telemetry", "analytics", "reports"],
+	"remote-config": ["remote", "config", "organization", "admin"],
+	about: ["about", "version", "community", "discord", "github", "support"],
+	debug: ["debug", "reset", "state", "test", "developer"],
+}
+
+const AI_SEARCH_TABS: string[] = ["api-config", "embedding"]
+const BEHAVIOR_TABS: string[] = ["features", "skills"]
+const INTEGRATION_TABS: string[] = ["browser", "terminal"]
+const GENERAL_TABS: string[] = ["general", "about"]
+const ADVANCED_TABS: string[] = ["remote-config", "debug"]
+
 type SettingsViewProps = {
 	onDone: () => void
 	targetSection?: string
@@ -184,7 +204,46 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 	const [activeTab, setActiveTab] = useState<SettingsTabID>(() =>
 		SETTINGS_TABS.some((tab) => tab.id === targetSection) ? (targetSection as SettingsTabID) : SETTINGS_TABS[0].id,
 	)
-	const visibleTabs = useMemo(() => SETTINGS_TABS.filter((tab) => !tab.hidden?.({ activeOrganization })), [activeOrganization])
+	const [searchQuery, setSearchQuery] = useState("")
+	const searchInputRef = useRef<HTMLInputElement>(null)
+
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			const isInputActive =
+				document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement
+			if (!isInputActive && (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "f"))) {
+				e.preventDefault()
+				searchInputRef.current?.focus()
+				searchInputRef.current?.select()
+			}
+		}
+
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [])
+
+	const visibleTabs = useMemo(() => {
+		const filtered = SETTINGS_TABS.filter((tab) => !tab.hidden?.({ activeOrganization }))
+		if (!searchQuery.trim()) {
+			return filtered
+		}
+		const query = searchQuery.toLowerCase().trim()
+		return filtered.filter((tab) => {
+			const nameMatch = tab.name.toLowerCase().includes(query)
+			const tooltipMatch = tab.tooltipText.toLowerCase().includes(query)
+			const headerMatch = tab.headerText.toLowerCase().includes(query)
+			const keywords = TAB_KEYWORDS[tab.id] || []
+			const keywordMatch = keywords.some((kw) => kw.includes(query))
+			return nameMatch || tooltipMatch || headerMatch || keywordMatch
+		})
+	}, [activeOrganization, searchQuery])
+
+	// Auto-switch active tab to the first match if the current active tab is filtered out
+	useEffect(() => {
+		if (searchQuery.trim() && visibleTabs.length > 0 && !visibleTabs.some((tab) => tab.id === activeTab)) {
+			setActiveTab(visibleTabs[0].id)
+		}
+	}, [searchQuery, visibleTabs, activeTab])
 
 	// Optimized message handler with early returns
 	const handleMessage = useCallback((event: MessageEvent) => {
@@ -261,7 +320,7 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 						"flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border-transparent px-3 text-foreground/70 hover:bg-list-hover hover:text-foreground",
 						useHorizontalNavigation
 							? "min-h-10 w-auto justify-start border-b-2"
-							: "min-h-11 w-36 justify-start border-l-2",
+							: "min-h-[30px] h-[30px] w-full justify-start border-l-2 rounded-r-md px-4 transition-colors",
 						isActive &&
 							(useHorizontalNavigation
 								? "border-b-foreground bg-selection-inactive text-foreground"
@@ -271,8 +330,8 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 					key={tab.id}
 					title={tab.tooltipText}
 					value={tab.id}>
-					<tab.icon aria-hidden className="h-4 w-4 shrink-0" />
-					<span className="truncate text-left text-xs">{tab.name}</span>
+					<tab.icon aria-hidden className="h-4 w-4 shrink-0 opacity-80" />
+					<span className="truncate text-left text-xs font-medium">{tab.name}</span>
 				</TabTrigger>
 			)
 		},
@@ -303,19 +362,112 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 	return (
 		<Tab>
 			<div className={cn("flex flex-1 overflow-hidden", useHorizontalNavigation && "flex-col")}>
-				<TabList
-					aria-label="Settings sections"
-					aria-orientation={useHorizontalNavigation ? "horizontal" : "vertical"}
-					className={cn(
-						"flex shrink-0",
-						useHorizontalNavigation
-							? "lumi-scroll-chips w-full flex-row overflow-x-auto border-b border-border/30"
-							: "w-36 flex-col overflow-y-auto border-r border-border/30",
-					)}
-					onValueChange={(value) => setActiveTab(value as SettingsTabID)}
-					value={activeTab}>
-					{visibleTabs.map(renderTabItem)}
-				</TabList>
+				{useHorizontalNavigation ? (
+					<TabList
+						aria-label="Settings sections"
+						aria-orientation="horizontal"
+						className="flex shrink-0 lumi-scroll-chips w-full flex-row overflow-x-auto border-b border-border/30"
+						onValueChange={(value) => setActiveTab(value as SettingsTabID)}
+						value={activeTab}>
+						{visibleTabs.map(renderTabItem)}
+					</TabList>
+				) : (
+					<div className="flex shrink-0 w-44 flex-col border-r border-border/30 overflow-hidden bg-(--vscode-sideBar-background)">
+						{/* Search Box */}
+						<div className="p-2 border-b border-border/10">
+							<div className="relative flex items-center">
+								<Search className="absolute left-2.5 h-3.5 w-3.5 text-(--vscode-input-placeholderForeground) opacity-65" />
+								<input
+									className="w-full pl-8 pr-12 py-1 text-xs rounded border border-border/40 bg-(--vscode-input-background) text-(--vscode-input-foreground) placeholder-(--vscode-input-placeholderForeground) focus:outline-none focus:border-(--vscode-focusBorder) transition-colors"
+									onChange={(e) => setSearchQuery(e.target.value)}
+									placeholder="Search settings..."
+									ref={searchInputRef}
+									type="text"
+									value={searchQuery}
+								/>
+								{!searchQuery ? (
+									<span className="absolute right-2 text-[9px] font-mono px-1 py-0.5 rounded bg-border/20 text-(--vscode-input-placeholderForeground) select-none pointer-events-none opacity-70">
+										{typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
+											? "⌘F"
+											: "Ctrl+F"}
+									</span>
+								) : (
+									<button
+										className="absolute right-2 text-xs text-(--vscode-input-placeholderForeground) hover:text-(--vscode-input-foreground) focus:outline-none"
+										onClick={() => setSearchQuery("")}>
+										✕
+									</button>
+								)}
+							</div>
+						</div>
+
+						<TabList
+							aria-label="Settings sections"
+							aria-orientation="vertical"
+							className="flex-1 overflow-y-auto flex flex-col gap-4 py-3"
+							onValueChange={(value) => setActiveTab(value as SettingsTabID)}
+							value={activeTab}>
+							{visibleTabs.length === 0 ? (
+								<div className="text-xs text-(--vscode-descriptionForeground) px-3 py-4 text-center select-none">
+									No settings found
+								</div>
+							) : (
+								<>
+									{visibleTabs.some((t) => AI_SEARCH_TABS.includes(t.id)) && (
+										<div>
+											<div className="text-[9px] font-bold tracking-wider text-(--vscode-descriptionForeground) uppercase px-3 mb-1 select-none opacity-60">
+												AI Assistant
+											</div>
+											<div className="flex flex-col gap-0.5">
+												{visibleTabs.filter((t) => AI_SEARCH_TABS.includes(t.id)).map(renderTabItem)}
+											</div>
+										</div>
+									)}
+									{visibleTabs.some((t) => BEHAVIOR_TABS.includes(t.id)) && (
+										<div>
+											<div className="text-[9px] font-bold tracking-wider text-(--vscode-descriptionForeground) uppercase px-3 mb-1 select-none opacity-60">
+												Behavior
+											</div>
+											<div className="flex flex-col gap-0.5">
+												{visibleTabs.filter((t) => BEHAVIOR_TABS.includes(t.id)).map(renderTabItem)}
+											</div>
+										</div>
+									)}
+									{visibleTabs.some((t) => INTEGRATION_TABS.includes(t.id)) && (
+										<div>
+											<div className="text-[9px] font-bold tracking-wider text-(--vscode-descriptionForeground) uppercase px-3 mb-1 select-none opacity-60">
+												System Tools
+											</div>
+											<div className="flex flex-col gap-0.5">
+												{visibleTabs.filter((t) => INTEGRATION_TABS.includes(t.id)).map(renderTabItem)}
+											</div>
+										</div>
+									)}
+									{visibleTabs.some((t) => GENERAL_TABS.includes(t.id)) && (
+										<div>
+											<div className="text-[9px] font-bold tracking-wider text-(--vscode-descriptionForeground) uppercase px-3 mb-1 select-none opacity-60">
+												General
+											</div>
+											<div className="flex flex-col gap-0.5">
+												{visibleTabs.filter((t) => GENERAL_TABS.includes(t.id)).map(renderTabItem)}
+											</div>
+										</div>
+									)}
+									{visibleTabs.some((t) => ADVANCED_TABS.includes(t.id)) && (
+										<div>
+											<div className="text-[9px] font-bold tracking-wider text-(--vscode-descriptionForeground) uppercase px-3 mb-1 select-none opacity-60">
+												Advanced
+											</div>
+											<div className="flex flex-col gap-0.5">
+												{visibleTabs.filter((t) => ADVANCED_TABS.includes(t.id)).map(renderTabItem)}
+											</div>
+										</div>
+									)}
+								</>
+							)}
+						</TabList>
+					</div>
+				)}
 
 				<TabContent
 					aria-labelledby={`lumi-tab-${activeTab}`}
@@ -323,7 +475,9 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 					id={`lumi-tabpanel-${activeTab}`}
 					role="tabpanel"
 					tabIndex={0}>
-					{ActiveContent}
+					<div className="animate-in fade-in-50 duration-200" key={activeTab}>
+						{ActiveContent}
+					</div>
 				</TabContent>
 			</div>
 		</Tab>

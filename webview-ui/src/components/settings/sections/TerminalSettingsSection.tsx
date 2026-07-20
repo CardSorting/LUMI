@@ -1,5 +1,5 @@
 import { UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/index.dietcode"
-import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import React, { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "../../../services/grpc-client"
@@ -69,6 +69,23 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 		updateSetting("defaultTerminalProfile", profileId || "default")
 	}
 
+	const handleResetTerminalSettings = () => {
+		updateSetting("defaultTerminalProfile", "default")
+		updateSetting("terminalReuseEnabled", true)
+		updateSetting("terminalOutputLineLimit", 500)
+
+		StateServiceClient.updateTerminalConnectionTimeout({ timeoutMs: 2000 })
+			.then((response: UpdateTerminalConnectionTimeoutResponse) => {
+				const confirmedTimeoutMs = response.timeoutMs
+				if (confirmedTimeoutMs !== undefined) {
+					setInputValue((confirmedTimeoutMs / 1000).toString())
+				}
+			})
+			.catch((error) => {
+				console.error("Failed to reset terminal connection timeout:", error)
+			})
+	}
+
 	const profilesToShow = availableTerminalProfiles
 
 	return (
@@ -92,13 +109,13 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							))}
 						</VSCodeDropdown>
 						<p className="text-xs text-(--vscode-descriptionForeground) mt-1">
-							Select the default terminal LUMI will use. 'Default' uses your VSCode global setting.
+							Choose the terminal type LUMI will open. 'Default' automatically matches your active VS Code profile.
 						</p>
 					</div>
 
 					<div className="mb-4">
 						<div className="mb-2">
-							<label className="font-medium block mb-1">Shell integration timeout (seconds)</label>
+							<label className="font-medium block mb-1">Shell Connection Timeout (seconds)</label>
 							<div className="flex items-center">
 								<VSCodeTextField
 									className="w-full"
@@ -111,8 +128,8 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							{inputError && <div className="text-(--vscode-errorForeground) text-xs mt-1">{inputError}</div>}
 						</div>
 						<p className="text-xs text-(--vscode-descriptionForeground)">
-							Set how long LUMI waits for shell integration to activate before executing commands. Increase this
-							value if you experience terminal connection timeouts.
+							How long LUMI waits for VS Code shell integration to activate. If it fails or is disabled, LUMI uses
+							an automatic backup command runner. Lowering this speeds up starts on slow shell setups.
 						</p>
 					</div>
 
@@ -121,15 +138,25 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							<VSCodeCheckbox
 								checked={terminalReuseEnabled ?? true}
 								onChange={(event) => handleTerminalReuseChange(event as Event)}>
-								Enable aggressive terminal reuse
+								Reuse active terminal tabs
 							</VSCodeCheckbox>
 						</div>
 						<p className="text-xs text-(--vscode-descriptionForeground)">
-							When enabled, LUMI will reuse existing terminal windows that aren't in the current working directory.
-							Disable this if you experience issues with task lockout after a terminal command.
+							When enabled, LUMI will reuse open terminal windows to execute new commands, automatically navigating
+							to the correct directory. Uncheck this if you experience command lockouts or process conflicts.
 						</p>
 					</div>
 					<TerminalOutputLineLimitSlider />
+
+					<div className="mt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-4 border-t border-border/20">
+						<span className="text-xs text-(--vscode-descriptionForeground)">
+							Troubleshoot by resetting all terminal settings back to default values.
+						</span>
+						<VSCodeButton appearance="secondary" onClick={handleResetTerminalSettings}>
+							Reset Terminal Settings
+						</VSCodeButton>
+					</div>
+
 					<div className="mt-5 p-3 bg-(--vscode-textBlockQuote-background) rounded border border-(--vscode-textBlockQuote-border)">
 						<p className="text-[13px] m-0">
 							<strong>Having terminal issues?</strong> Check our{" "}

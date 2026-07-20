@@ -1,6 +1,5 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
 import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
 import { NewChatConfirmModal } from "./components/common/NewChatConfirmModal"
@@ -35,7 +34,6 @@ const AppContent = () => {
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showAccount,
 		showWorktrees,
 		showAnnouncement,
 		showNewChatConfirm,
@@ -45,13 +43,11 @@ const AppContent = () => {
 		setShouldShowAnnouncement,
 		closeMcpView,
 		hideSettings,
-		hideAccount,
 		hideWorktrees,
 		hideAnnouncement,
 		navigateToHistory,
 		navigateToMcp,
 		navigateToSettings,
-		navigateToAccount,
 		navigateToChat,
 		navigateToWorktrees,
 	} = useExtensionState()
@@ -111,7 +107,7 @@ const AppContent = () => {
 
 			if (
 				event.key === "Escape" &&
-				(showHistory || showMcp || showSettings || showAccount || showWorktrees) &&
+				(showHistory || showMcp || showSettings || showWorktrees) &&
 				!isEditableTarget(event.target)
 			) {
 				event.preventDefault()
@@ -131,9 +127,6 @@ const AppContent = () => {
 				} else if (key === "s" || key === "5") {
 					event.preventDefault()
 					navigateToSettings()
-				} else if (key === "a" || key === "4") {
-					event.preventDefault()
-					navigateToAccount()
 				} else if (key === "w" || key === "6") {
 					event.preventDefault()
 					navigateToWorktrees()
@@ -156,13 +149,11 @@ const AppContent = () => {
 		showHistory,
 		showMcp,
 		showSettings,
-		showAccount,
 		showWorktrees,
 		showNewChatConfirm,
 		navigateToHistory,
 		navigateToMcp,
 		navigateToSettings,
-		navigateToAccount,
 		navigateToChat,
 		navigateToWorktrees,
 		handleRequestNewChat,
@@ -209,18 +200,10 @@ const AppContent = () => {
 						tabIndex={-1}>
 						{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
 						{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-						{showAccount && (
-							<AccountView
-								activeOrganization={activeOrganization}
-								dietcodeUser={dietcodeUser}
-								onDone={hideAccount}
-								organizations={organizations}
-							/>
-						)}
 						{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
 						<ChatView
 							hideAnnouncement={hideAnnouncement}
-							isHidden={showSettings || showMcp || showAccount || showWorktrees}
+							isHidden={showSettings || showMcp || showWorktrees}
 							showAnnouncement={showAnnouncement}
 							showHistoryView={navigateToHistory}
 						/>

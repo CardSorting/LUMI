@@ -122,16 +122,43 @@ function buildChangeDirectoryCommand(cwd: string, shellPath: string): string {
 	return `cd ${quotePosix(cwd)}`
 }
 
+function supportsShellIntegration(shellPath?: string): boolean {
+	if (!shellPath) {
+		return true
+	}
+	const normalized = shellPath.toLowerCase()
+	return (
+		normalized.includes("zsh") ||
+		normalized.includes("bash") ||
+		normalized.includes("fish") ||
+		normalized.includes("pwsh") ||
+		normalized.includes("powershell")
+	)
+}
+
 export class VscodeTerminalManager implements ITerminalManager {
 	private terminalIds: Set<number> = new Set()
 	private processes: Map<number, VscodeTerminalProcess> = new Map()
 	private disposables: vscode.Disposable[] = []
-	private shellIntegrationTimeout = 4000
+	private shellIntegrationTimeout = 2000
 	private terminalReuseEnabled = true
 	private terminalOutputLineLimit = 500
 	private defaultTerminalProfile = "default"
 
 	constructor() {
+		// Auto-enable shell integration if disabled to ensure zero-setup out of the box
+		try {
+			const config = vscode.workspace.getConfiguration("terminal.integrated")
+			if (config.get<boolean>("shellIntegration.enabled") === false) {
+				Logger.info(
+					"[TerminalManager] Shell integration is disabled. Automatically enabling it globally for seamless execution.",
+				)
+				void config.update("shellIntegration.enabled", true, vscode.ConfigurationTarget.Global)
+			}
+		} catch (error) {
+			Logger.error("[TerminalManager] Failed to auto-enable shell integration setting:", error)
+		}
+
 		let disposable: vscode.Disposable | undefined
 		try {
 			disposable = (vscode.window as vscode.Window).onDidStartTerminalShellExecution?.(async (e) => {
@@ -232,12 +259,22 @@ export class VscodeTerminalManager implements ITerminalManager {
 			})
 		})
 
+		const shellPath = vscodeTerminalInfo.shellPath || getShell()
+		const isShellIntegrationSupported = supportsShellIntegration(shellPath)
+		const isShellIntegrationEnabledInSettings = vscode.workspace
+			.getConfiguration("terminal.integrated")
+			.get<boolean>("shellIntegration.enabled", true)
+
 		// if shell integration is already active, run the command immediately
 		if (vscodeTerminalInfo.terminal.shellIntegration) {
 			process.waitForShellIntegration = false
 			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath, vscodeTerminalInfo.cwd)
-		} else if (vscodeTerminalInfo.shellIntegrationFailed) {
-			// Shell integration previously failed/timed out on this terminal. Skip waiting to prevent delays.
+		} else if (
+			vscodeTerminalInfo.shellIntegrationFailed ||
+			!isShellIntegrationSupported ||
+			!isShellIntegrationEnabledInSettings
+		) {
+			// Shell integration previously failed/timed out, shell is unsupported, or integration is disabled in VS Code settings. Skip waiting.
 			process.waitForShellIntegration = false
 			void process.run(vscodeTerminalInfo.terminal, command, vscodeTerminalInfo.shellPath, vscodeTerminalInfo.cwd)
 		} else {

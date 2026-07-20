@@ -104,8 +104,8 @@ message Secrets {
   optional string embedding_api_key = 53;
   optional string vertex_api_key = 58;
   optional string cline_api_key = 96;
-  optional string openai_codex_oauth_credentials = 108;
-  optional string xai_oauth_credentials = 109;
+  optional string openai_codex_oauth_credentials = 110;
+  optional string xai_oauth_credentials = 111;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS

@@ -18,14 +18,12 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 	const {
 		navigateToHistory,
 		navigateToSettings,
-		navigateToAccount,
 		navigateToMcp,
 		navigateToChat,
 		navigateToWorktrees,
 		showHistory,
 		showMcp,
 		showSettings,
-		showAccount,
 		showWorktrees,
 		setExpandTaskHeader,
 	} = useExtensionState()
@@ -33,18 +31,17 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 	const { density } = useDensity()
 
 	const isSubViewActive = useMemo(() => {
-		return showHistory || showMcp || showSettings || showAccount || showWorktrees
-	}, [showHistory, showMcp, showSettings, showAccount, showWorktrees])
+		return showHistory || showMcp || showSettings || showWorktrees
+	}, [showHistory, showMcp, showSettings, showWorktrees])
 
 	const activePanel = useMemo((): ChatNavItemId | null => {
 		if (showHistory) return "history"
 		if (showMcp) return "tools"
-		if (showAccount) return "account"
 		if (showSettings) return "settings"
 		if (showWorktrees) return "worktrees"
 		if (!isSubViewActive) return "chat"
 		return null
-	}, [showHistory, showMcp, showAccount, showSettings, showWorktrees, isSubViewActive])
+	}, [showHistory, showMcp, showSettings, showWorktrees, isSubViewActive])
 
 	const visibleToolbarItems = useMemo(() => {
 		const items = CHAT_NAV_ITEMS.filter((item) => item.id !== "newChat" && item.id !== "chat")
@@ -93,10 +90,6 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 					collapseTaskDetails()
 					navigateToWorktrees()
 					break
-				case "account":
-					collapseTaskDetails()
-					navigateToAccount()
-					break
 				case "settings":
 					collapseTaskDetails()
 					navigateToSettings()
@@ -106,7 +99,6 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		[
 			collapseTaskDetails,
 			handleBackToChat,
-			navigateToAccount,
 			navigateToHistory,
 			navigateToMcp,
 			navigateToSettings,
@@ -120,10 +112,9 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		if (showHistory) return CHAT_NAV_BY_ID.history?.label || "Chat history"
 		if (showMcp) return CHAT_NAV_BY_ID.tools?.label || "Plugins & tools"
 		if (showSettings) return CHAT_NAV_BY_ID.settings?.label || "Settings"
-		if (showAccount) return CHAT_NAV_BY_ID.account?.label || "Account & billing"
 		if (showWorktrees) return CHAT_NAV_BY_ID.worktrees?.label || "Branch workspaces"
 		return conversationTitle?.trim() || "Chat"
-	}, [showHistory, showMcp, showSettings, showAccount, showWorktrees, conversationTitle])
+	}, [showHistory, showMcp, showSettings, showWorktrees, conversationTitle])
 
 	return (
 		<header className="z-10 flex-none border-b border-border/40 bg-background select-none">

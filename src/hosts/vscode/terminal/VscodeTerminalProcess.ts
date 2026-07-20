@@ -550,6 +550,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		let readOffset = 0
 		let promptDetectedAt: number | undefined
 		let interruptedAt: number | undefined
+		let useFileRedirection = true
 
 		try {
 			let invocation: string
@@ -559,10 +560,29 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				Logger.warn(
 					`[TerminalProcess] Failed to write fallback script to temp directory, trying workspace CWD fallback: ${writeError}`,
 				)
-				const fallbackDir = this.cwd && fs.existsSync(this.cwd) ? this.cwd : os.homedir()
-				paths = this.createFallbackPathsWithBase(kind, fallbackDir)
-				invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+				try {
+					const fallbackDir = this.cwd && fs.existsSync(this.cwd) ? this.cwd : os.homedir()
+					paths = this.createFallbackPathsWithBase(kind, fallbackDir)
+					invocation = await this.prepareFallbackInvocation(kind, shell, command, paths)
+				} catch (secondError) {
+					Logger.error(
+						`[TerminalProcess] Failed to write fallback script to both temp and CWD: ${secondError}. Falling back to direct terminal sendText.`,
+					)
+					useFileRedirection = false
+					invocation = command
+				}
 			}
+
+			if (!useFileRedirection) {
+				Logger.info(`[TerminalProcess] Using direct sendText execution fallback`)
+				terminal.sendText(invocation, true)
+				// Wait 1.5 seconds to allow standard command execution to output in the terminal panel before continuing
+				await delay(1500)
+				this.exitCode = 0
+				this.emit("line", "⚠️ Command executed directly (could not capture output/exit status due to write permissions).")
+				return
+			}
+
 			Logger.info(`[TerminalProcess] Shell integration unavailable; using ${kind} file capture fallback`)
 			terminal.sendText(invocation, true)
 
@@ -702,7 +722,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				const outputPath = quotePowerShell(paths.output)
 				const pendingPath = quotePowerShell(paths.pendingExitCode)
 				const exitPath = quotePowerShell(paths.exitCode)
-				return `& ${shellPath} -NoLogo -NoProfile -NonInteractive -File ${scriptPath} *> ${outputPath}; $dcStatus = $LASTEXITCODE; if (Test-Path -LiteralPath ${outputPath}) { Get-Content -LiteralPath ${outputPath} -Raw }; Set-Content -LiteralPath ${pendingPath} -Value $dcStatus; Move-Item -Force -LiteralPath ${pendingPath} -Destination ${exitPath}`
+				return `& ${shellPath} -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${scriptPath} *> ${outputPath}; $dcStatus = $LASTEXITCODE; if (Test-Path -LiteralPath ${outputPath}) { Get-Content -LiteralPath ${outputPath} -Raw }; Set-Content -LiteralPath ${pendingPath} -Value $dcStatus; Move-Item -Force -LiteralPath ${pendingPath} -Destination ${exitPath}`
 			}
 			case "cmd": {
 				if (!paths.supervisor) {

@@ -2,7 +2,7 @@
 	"name": "lumi-vscode",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "6.6.0",
+	"version": "6.6.2",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -147,11 +147,6 @@
 				"command": "lumi.historyButtonClicked",
 				"title": "History",
 				"icon": "$(history)"
-			},
-			{
-				"command": "lumi.accountButtonClicked",
-				"title": "Account",
-				"icon": "$(account)"
 			},
 			{
 				"command": "lumi.settingsButtonClicked",

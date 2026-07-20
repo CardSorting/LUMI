@@ -36,7 +36,6 @@ export interface ExtensionGrpcSubscriptionsParams {
 	navigateToChat: () => void
 	navigateToSettings: () => void
 	navigateToWorktrees: () => void
-	navigateToAccount: () => void
 }
 
 /** Declarative, auto-reconnecting extension subscriptions — transport owned by GrpcSubscriptionRuntime. */
@@ -56,7 +55,6 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		navigateToChat,
 		navigateToSettings,
 		navigateToWorktrees,
-		navigateToAccount,
 	} = params
 
 	useGrpcSubscription<typeof EMPTY_REQUEST, State>({
@@ -205,14 +203,6 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		request: EMPTY_REQUEST,
 		staleAfterMs: null,
 		onMessage: () => navigateToWorktrees(),
-	})
-	useGrpcSubscription({
-		key: "accountButtonClicked",
-		debugLabel: "Account Nav",
-		subscribe: UiServiceClient.subscribeToAccountButtonClicked.bind(UiServiceClient),
-		request: EMPTY_REQUEST,
-		staleAfterMs: null,
-		onMessage: () => navigateToAccount(),
 	})
 
 	useGrpcSubscription({

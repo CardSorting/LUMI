@@ -54,7 +54,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	settingsTargetSection?: string
 	settingsInitialModelTab?: "recommended" | "free"
 	showHistory: boolean
-	showAccount: boolean
 	showWorktrees: boolean
 	showAnnouncement: boolean
 	expandTaskHeader: boolean
@@ -102,14 +101,12 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToSettings: (targetSection?: string) => void
 	navigateToSettingsModelPicker: (opts: { targetSection?: string; initialModelTab?: "recommended" | "free" }) => void
 	navigateToHistory: () => void
-	navigateToAccount: () => void
 	navigateToWorktrees: () => void
 	navigateToChat: () => void
 
 	// Hide functions
 	hideSettings: () => void
 	hideHistory: () => void
-	hideAccount: () => void
 	hideWorktrees: () => void
 	hideAnnouncement: () => void
 	closeMcpView: () => void
@@ -130,7 +127,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
 	const [settingsInitialModelTab, setSettingsInitialModelTab] = useState<"recommended" | "free" | undefined>(undefined)
 	const [showHistory, setShowHistory] = useState(false)
-	const [showAccount, setShowAccount] = useState(false)
 	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showNewChatConfirm, setShowNewChatConfirm] = useState(false)
@@ -148,7 +144,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		setSettingsInitialModelTab(undefined)
 	}, [])
 	const hideHistory = useCallback(() => setShowHistory(false), [])
-	const hideAccount = useCallback(() => setShowAccount(false), [])
 	const hideWorktrees = useCallback(() => setShowWorktrees(false), [])
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
 
@@ -156,7 +151,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const navigateToMcp = useCallback((tab?: McpViewTab) => {
 		setShowSettings(false)
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowWorktrees(false)
 		if (tab) {
 			setMcpTab(tab)
@@ -168,7 +162,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		(targetSection?: string) => {
 			setShowHistory(false)
 			closeMcpView()
-			setShowAccount(false)
 			setShowWorktrees(false)
 			setSettingsTargetSection(targetSection)
 			setSettingsInitialModelTab(undefined)
@@ -181,7 +174,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		(opts: { targetSection?: string; initialModelTab?: "recommended" | "free" }) => {
 			setShowHistory(false)
 			closeMcpView()
-			setShowAccount(false)
 			setShowWorktrees(false)
 			setSettingsTargetSection(opts.targetSection)
 			setSettingsInitialModelTab(opts.initialModelTab)
@@ -193,24 +185,14 @@ export const ExtensionStateContextProvider: React.FC<{
 	const navigateToHistory = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
-		setShowAccount(false)
 		setShowWorktrees(false)
 		setShowHistory(true)
-	}, [closeMcpView])
-
-	const navigateToAccount = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowWorktrees(false)
-		setShowAccount(true)
 	}, [closeMcpView])
 
 	const navigateToWorktrees = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowWorktrees(true)
 	}, [closeMcpView])
 
@@ -218,7 +200,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowWorktrees(false)
 	}, [closeMcpView])
 
@@ -246,7 +227,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		localAgentsRulesToggles: {},
 		localWorkflowToggles: {},
 		globalWorkflowToggles: {},
-		shellIntegrationTimeout: 4000,
+		shellIntegrationTimeout: 2000,
 		terminalReuseEnabled: true,
 		vscodeTerminalExecutionMode: "vscodeTerminal",
 		terminalOutputLineLimit: 500,
@@ -351,7 +332,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToChat,
 		navigateToSettings,
 		navigateToWorktrees,
-		navigateToAccount,
 	})
 
 	const refreshOpenRouterModels = useCallback(() => {
@@ -480,7 +460,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		settingsTargetSection,
 		settingsInitialModelTab,
 		showHistory,
-		showAccount,
 		showWorktrees,
 		showAnnouncement,
 		showNewChatConfirm,
@@ -501,14 +480,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToSettings,
 		navigateToSettingsModelPicker,
 		navigateToHistory,
-		navigateToAccount,
 		navigateToWorktrees,
 		navigateToChat,
 
 		// Hide functions
 		hideSettings,
 		hideHistory,
-		hideAccount,
 		hideWorktrees,
 		hideAnnouncement,
 		setShowAnnouncement,
