@@ -29,6 +29,7 @@ interface ExecutionStatusHeaderProps {
 	isDetailsOpen: boolean
 	onToggleDetails: () => void
 	onReviewBlock?: () => void
+	children?: React.ReactNode
 }
 
 const STATE_STYLE: Record<ExecutionState, { panel: string; icon: string }> = {
@@ -93,6 +94,7 @@ export const ExecutionStatusHeader = memo(
 		isDetailsOpen,
 		onToggleDetails,
 		onReviewBlock,
+		children,
 	}: ExecutionStatusHeaderProps) => {
 		const status = useMemo(
 			() =>
@@ -197,25 +199,13 @@ export const ExecutionStatusHeader = memo(
 
 				{/* ── Row 2: Next action (visible when expanded) ── */}
 				{isDetailsOpen && (
-					<div className={cn("border-t border-current/10 bg-background/25", isCompact ? "px-2.5 py-1.5" : "px-3 py-2")}>
-						<div className="flex items-start gap-2">
-							<span
-								className={cn(
-									"shrink-0 font-semibold uppercase tracking-[0.1em] text-description/70",
-									isCompact ? "text-[8px]" : "text-[9px]",
-								)}>
-								Next
-							</span>
-							<span
-								className={cn(
-									"min-w-0 flex-1 leading-[1.4] text-foreground/90",
-									isCompact ? "text-[9px]" : "text-[10px]",
-								)}>
-								{status.nextAction}
-							</span>
+					<div className={cn("border-t border-current/10 bg-background/25", isCompact ? "px-2 py-1" : "px-2.5 py-1.5")}>
+						<div className="flex items-center gap-1.5 text-[10px]">
+							<span className="shrink-0 font-bold uppercase tracking-[0.05em] text-description/70">Next:</span>
+							<span className="min-w-0 flex-1 truncate text-foreground/90">{status.nextAction}</span>
 							{status.state === "blocked" && onReviewBlock ? (
 								<button
-									className="shrink-0 rounded border border-amber-500/40 bg-transparent px-2 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-300"
+									className="shrink-0 rounded border border-amber-500/40 bg-transparent px-1.5 py-0.5 text-[9px] font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
 									onClick={onReviewBlock}
 									type="button">
 									Review
@@ -225,51 +215,22 @@ export const ExecutionStatusHeader = memo(
 					</div>
 				)}
 
-				{/* ── Row 3: Safety + Completion grid (visible when expanded) ── */}
+				{/* ── Row 3: Safety + Completion metrics (visible when expanded) ── */}
 				{isDetailsOpen && (
-					<div
-						className={cn(
-							"lumi-execution-meta border-t border-current/10 bg-background/15",
-							isCompact ? "flex flex-wrap" : "grid grid-cols-2",
-						)}>
-						<div
-							className={cn(
-								"flex min-w-0 items-center gap-1.5",
-								isCompact ? "flex-1 min-w-[120px] px-2.5 py-1.5" : "border-r border-current/10 px-3 py-2",
-							)}>
-							{status.state === "blocked" || status.state === "failed" ? (
-								<ShieldAlert
-									aria-hidden
-									className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300"
-									strokeWidth={1.8}
-								/>
-							) : (
-								<ShieldCheck aria-hidden className="size-3.5 shrink-0 text-description" strokeWidth={1.8} />
-							)}
-							<div className="min-w-0">
-								<p className="m-0 text-[8px] font-medium uppercase tracking-wide text-description/65">Safety</p>
-								<p className="m-0 truncate text-[10px] font-medium text-foreground/90" title={status.safety}>
-									{status.safety}
-								</p>
-							</div>
+					<div className="border-t border-current/10 bg-background/15 px-2.5 py-1 flex items-center gap-4 text-[10px]">
+						<div className="flex items-center gap-1 min-w-0">
+							<ShieldCheck aria-hidden className="size-3.5 text-description shrink-0" />
+							<span className="text-description/65 font-medium">Safety:</span>
+							<span className="truncate font-semibold text-foreground/90">{status.safety}</span>
 						</div>
-						<div
-							className={cn(
-								"flex min-w-0 items-center gap-1.5",
-								isCompact ? "flex-1 min-w-[120px] px-2.5 py-1.5" : "px-3 py-2",
-							)}>
-							<BadgeCheck aria-hidden className="size-3.5 shrink-0 text-description" strokeWidth={1.8} />
-							<div className="min-w-0">
-								<p className="m-0 text-[8px] font-medium uppercase tracking-wide text-description/65">
-									Completion
-								</p>
-								<p className="m-0 truncate text-[10px] font-medium text-foreground/90" title={status.confidence}>
-									{status.confidence}
-								</p>
-							</div>
+						<div className="flex items-center gap-1 min-w-0">
+							<BadgeCheck aria-hidden className="size-3.5 text-description shrink-0" />
+							<span className="text-description/65 font-medium">Completion:</span>
+							<span className="truncate font-semibold text-foreground/90">{status.confidence}</span>
 						</div>
 					</div>
 				)}
+				{isDetailsOpen && children}
 			</section>
 		)
 	},

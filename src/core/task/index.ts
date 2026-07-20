@@ -2171,20 +2171,7 @@ export class Task {
 				Logger.error("Failed to post state after setting abort flag", error)
 			}
 
-			// PHASE 6: Check for incomplete progress
-			if (this.FocusChainManager) {
-				// Extract current model and provider for telemetry
-				const apiConfig = this.stateManager.getApiConfiguration()
-				const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-				const currentProvider = (
-					currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
-				) as string
-				const currentModelId = this.api.getModel().id
-
-				this.FocusChainManager.checkIncompleteProgressOnCompletion(currentModelId, currentProvider)
-			}
-
-			// PHASE 7: Clean up resources
+			// PHASE 6: Clean up resources
 			this.toolExecutor.disposeIoResources()
 			// Flush JoyRide cache entries for this cancelled task
 			try {

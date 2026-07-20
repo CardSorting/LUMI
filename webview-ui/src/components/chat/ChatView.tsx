@@ -444,10 +444,18 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					</div>
 				) : !isNewUser ? (
 					<WelcomeSection
+						chatState={chatState}
 						hideAnnouncement={hideAnnouncement}
+						messageHandlers={messageHandlers}
+						messages={messages}
+						mode={mode}
+						placeholderText={placeholderText}
+						selectFilesAndImages={selectFilesAndImages}
+						shouldDisableFilesAndImages={shouldDisableFilesAndImages}
 						showAnnouncement={showAnnouncement}
 						showHistoryView={showHistoryView}
 						taskHistory={taskHistory}
+						taskSessionActive={taskSessionActive}
 						telemetrySetting={telemetrySetting}
 						version={version}
 					/>

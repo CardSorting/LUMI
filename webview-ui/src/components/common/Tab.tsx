@@ -1,4 +1,4 @@
-import React, { forwardRef, HTMLAttributes, useCallback } from "react"
+import React, { createContext, forwardRef, HTMLAttributes, useCallback, useContext, useMemo } from "react"
 import { cn } from "@/lib/utils"
 
 type TabProps = HTMLAttributes<HTMLDivElement>
@@ -33,6 +33,13 @@ export const TabContent = ({ className, children, ...props }: TabProps) => {
 		</div>
 	)
 }
+
+interface TabContextType {
+	value: string
+	onSelect: (value: string) => void
+}
+
+const TabContext = createContext<TabContextType | null>(null)
 
 export const TabList = forwardRef<
 	HTMLDivElement,
@@ -76,23 +83,14 @@ export const TabList = forwardRef<
 		[onKeyDown],
 	)
 
+	const contextValue = useMemo(() => ({ value, onSelect: handleTabSelect }), [value, handleTabSelect])
+
 	return (
-		<div className={cn("flex", className)} onKeyDown={handleKeyDown} ref={ref} role="tablist" {...props}>
-			{React.Children.map(children, (child) => {
-				if (React.isValidElement(child)) {
-					const tab = child as React.ReactElement<{
-						value: string
-						isSelected?: boolean
-						onSelect?: () => void
-					}>
-					return React.cloneElement(tab, {
-						isSelected: tab.props.value === value,
-						onSelect: () => handleTabSelect(tab.props.value),
-					})
-				}
-				return child
-			})}
-		</div>
+		<TabContext.Provider value={contextValue}>
+			<div className={cn("flex", className)} onKeyDown={handleKeyDown} ref={ref} role="tablist" {...props}>
+				{children}
+			</div>
+		</TabContext.Provider>
 	)
 })
 
@@ -103,7 +101,11 @@ export const TabTrigger = forwardRef<
 		isSelected?: boolean
 		onSelect?: () => void
 	}
->(({ children, className, value, isSelected, onSelect, onClick, ...props }, ref) => {
+>(({ children, className, value, isSelected: propIsSelected, onSelect: propOnSelect, onClick, ...props }, ref) => {
+	const context = useContext(TabContext)
+	const isSelected = propIsSelected ?? (context ? context.value === value : false)
+	const handleSelect = propOnSelect ?? (() => context?.onSelect(value))
+
 	const id = props.id ?? `lumi-tab-${value}`
 	const controls = props["aria-controls"] ?? `lumi-tabpanel-${value}`
 
@@ -119,7 +121,7 @@ export const TabTrigger = forwardRef<
 			id={id}
 			onClick={(event) => {
 				onClick?.(event)
-				if (!event.defaultPrevented) onSelect?.()
+				if (!event.defaultPrevented) handleSelect()
 			}}
 			ref={ref}
 			role="tab"

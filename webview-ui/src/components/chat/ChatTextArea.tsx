@@ -1174,12 +1174,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				</p>
 				<div
 					className={cn(
-						"chat-input-shell relative overflow-hidden rounded-xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] shadow-sm shadow-black/[0.04] transition-[border-color,box-shadow]",
-						isDraggingOver &&
-							!showUnsupportedFileError &&
-							"ring-2 ring-[var(--vscode-focusBorder)] border-transparent",
-						isInputFocused &&
-							"border-[color-mix(in_srgb,var(--vscode-focusBorder)_55%,var(--vscode-input-border))] shadow-md shadow-black/[0.06]",
+						"chat-input-shell relative overflow-hidden rounded-2xl border border-[#20202a] bg-[#1a1a22] shadow-lg transition-all duration-200",
+						isDraggingOver && !showUnsupportedFileError && "ring-1 ring-lumi border-lumi/80",
+						isInputFocused && "border-lumi ring-1 ring-lumi/70 shadow-xl",
 					)}>
 					{showDimensionError && (
 						<div
@@ -1245,7 +1242,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							aria-label="Message LUMI"
 							autoFocus={true}
 							className={cn(
-								"chat-input-textarea block w-full resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
+								"chat-input-textarea block w-full resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0 text-[#faf9f7] placeholder:text-description/40",
 								isUltraCompact ? "px-3 pt-2.5 pb-1" : isCompact ? "px-3.5 pt-3 pb-1.5" : "px-4 pt-3.5 pb-2",
 								showContextMenu || showSlashCommandsMenu
 									? "min-h-[36px]"
@@ -1294,50 +1291,53 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 					<div
 						className={cn(
-							"chat-control-rail flex min-w-0 items-center gap-2 border-t border-foreground/[0.06] pb-2 pt-1.5",
-							isUltraCompact ? "px-2" : isCompact ? "px-2.5" : "px-3",
+							"chat-control-rail flex min-w-0 items-center justify-between border-t border-[#20202a] pb-2 pt-1.5 px-3",
 						)}>
-						<ChatInputActions
-							attachDisabled={shouldDisableFilesAndImages}
-							composerMode={composerMode}
-							modelDisplayName={modelDisplayName}
-							onAttachClick={() => {
-								if (!shouldDisableFilesAndImages) onSelectFilesAndImages()
-							}}
-							onContextClick={handleContextButtonClick}
-							onModelClick={handleModelButtonClick}
-						/>
-						{/* Keyboard hint — hidden at compact density */}
-						{!isCompact && (
-							<kbd
-								aria-hidden
-								className="shrink-0 rounded border border-border/55 bg-foreground/[0.025] px-1 py-0.5 font-sans text-[8px] text-description/70"
-								title="Enter to send · Shift+Enter for a new line">
-								↵
-							</kbd>
-						)}
-						<button
-							aria-describedby="lumi-composer-description"
-							aria-keyshortcuts="Enter"
-							aria-label={sendLabel}
-							className={cn(
-								"flex shrink-0 items-center justify-center rounded-md border-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-								isCompact ? "size-[36px]" : "size-8",
-								sendingDisabled
-									? "cursor-not-allowed bg-foreground/[0.05] text-muted-foreground opacity-50"
-									: sendIsSecondary
-										? "cursor-pointer border border-border/60 bg-foreground/[0.06] text-foreground hover:bg-foreground/[0.1]"
-										: "cursor-pointer bg-lumi text-lumi-foreground hover:brightness-110 active:brightness-95",
+						<div className="flex-1 min-w-0">
+							<ChatInputActions
+								attachDisabled={shouldDisableFilesAndImages}
+								composerMode={composerMode}
+								modelDisplayName={modelDisplayName}
+								onAttachClick={() => {
+									if (!shouldDisableFilesAndImages) onSelectFilesAndImages()
+								}}
+								onContextClick={handleContextButtonClick}
+								onModelClick={handleModelButtonClick}
+							/>
+						</div>
+						<div className="flex items-center gap-2 shrink-0">
+							{/* Keyboard hint — hidden at compact density */}
+							{!isCompact && (
+								<kbd
+									aria-hidden
+									className="shrink-0 rounded border border-[#272730] bg-[#1a1a22] px-1.5 py-1 font-sans text-[9px] text-description/50"
+									title="Enter to send · Shift+Enter for a new line">
+									↵
+								</kbd>
 							)}
-							data-testid="send-button"
-							disabled={sendingDisabled}
-							onClick={() => {
-								if (!sendingDisabled) onSend()
-							}}
-							title={sendingDisabled ? "Sending is unavailable" : `${sendLabel} (Enter)`}
-							type="button">
-							<Icon name="send" size={16} />
-						</button>
+							<button
+								aria-describedby="lumi-composer-description"
+								aria-keyshortcuts="Enter"
+								aria-label={sendLabel}
+								className={cn(
+									"flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none active:scale-[0.97]",
+									sendingDisabled
+										? "cursor-not-allowed bg-white/5 text-description/40 opacity-50"
+										: sendIsSecondary
+											? "cursor-pointer bg-[#272730] text-[#faf9f7] hover:bg-[#32323e]"
+											: "cursor-pointer bg-lumi text-[#faf9f7] hover:bg-lumi/85 active:scale-[0.98]",
+								)}
+								data-testid="send-button"
+								disabled={sendingDisabled}
+								onClick={() => {
+									if (!sendingDisabled) onSend()
+								}}
+								title={sendingDisabled ? "Sending is unavailable" : `${sendLabel} (Enter)`}
+								type="button">
+								<span>Send</span>
+								<Icon name="send" size={13} />
+							</button>
+						</div>
 					</div>
 				</div>
 			</section>

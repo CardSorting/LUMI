@@ -10,6 +10,7 @@ import { type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+import { parseFocusChainListCounts } from "../../focus-chain/utils"
 import { markCompletionAttemptFinished } from "../attemptCompletionUtils"
 import { prepareCompletionAttempt } from "../completion/CompletionFunnel"
 import { type CompletionAuditGateResult, evaluateCompletionAuditGate } from "../completionGatePipeline"
@@ -185,6 +186,28 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (prepResult.kind === "terminal" && prepResult.record && prepResult.event) {
 			config.taskState.lastCompletionDecisionId = prepResult.record.decisionId
 			config.taskState.lastCompletionDecisionResult = JSON.stringify([{ type: "text" as const, text: prefix }])
+
+			// Trigger telemetry tracking for incomplete checklist progress on completion
+			if (config.focusChainSettings?.enabled && config.taskState.currentFocusChainChecklist) {
+				const { totalItems, completedItems } = parseFocusChainListCounts(config.taskState.currentFocusChainChecklist)
+				if (totalItems > 0 && completedItems < totalItems) {
+					const incompleteItems = totalItems - completedItems
+					const apiConfig = config.services.stateManager.getApiConfiguration()
+					const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
+					const currentProvider = (
+						config.mode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
+					) as string
+					const currentModelId = config.api.getModel().id
+					telemetryService.captureFocusChainIncompleteOnCompletion(
+						config.taskId,
+						totalItems,
+						completedItems,
+						incompleteItems,
+						currentModelId,
+						currentProvider,
+					)
+				}
+			}
 
 			markCompletionAttemptFinished(config)
 			await this.runTaskCompleteHook(config, block)

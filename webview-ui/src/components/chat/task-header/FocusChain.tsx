@@ -1,4 +1,4 @@
-import { isCompletedFocusChainItem, isFocusChainItem } from "@shared/focus-chain-utils"
+import { parseFocusChainItem } from "@shared/focus-chain-utils"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { ChevronRight } from "lucide-react"
 import React, { memo, useCallback, useMemo } from "react"
@@ -6,6 +6,7 @@ import ChecklistRenderer from "@/components/common/ChecklistRenderer"
 import LightMarkdown from "@/components/common/LightMarkdown"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
+import type { ExecutionState } from "../execution-status/executionStatus"
 
 interface TodoInfo {
 	readonly currentTodo: { text: string; completed: boolean; index: number } | null
@@ -19,32 +20,50 @@ interface FocusChainProps {
 	readonly lastProgressMessageText?: string
 	readonly currentTaskItemId?: string
 	readonly showPlaceholderWhenEmpty?: boolean
+	readonly executionState?: ExecutionState
 }
 
 const COMPLETED_MESSAGE = "All steps done!"
 const TODO_LIST_LABEL = "Steps"
 const NEW_STEPS_MESSAGE = "More steps may appear as we go."
 
-const StepsSummary = memo<{ todoInfo: TodoInfo }>(({ todoInfo }) => {
+const StepsSummary = memo<{ todoInfo: TodoInfo; executionState?: ExecutionState }>(({ todoInfo, executionState }) => {
 	const { currentTodo, currentIndex, totalCount, completedCount, progressPercentage } = todoInfo
-	const isCompleted = completedCount === totalCount
-	const displayText = isCompleted ? COMPLETED_MESSAGE : currentTodo?.text || TODO_LIST_LABEL
+	const isCancelled = executionState === "cancelled"
+	const isFailed = executionState === "failed"
+	const isCompleted = completedCount === totalCount && !isCancelled && !isFailed
+
+	let displayText = isCompleted ? COMPLETED_MESSAGE : currentTodo?.text || TODO_LIST_LABEL
+	if (isCancelled) {
+		displayText = "Execution cancelled"
+	} else if (isFailed) {
+		displayText = "Execution failed"
+	}
 
 	return (
-		<div className={cn("relative w-full", isCompleted && "text-success")}>
+		<div
+			className={cn(
+				"relative w-full",
+				isCompleted && "text-success",
+				isCancelled && "text-muted-foreground",
+				isFailed && "text-error",
+			)}>
 			<div
 				aria-hidden
 				className={cn(
-					"absolute bottom-0 left-0 h-0.5 bg-success transition-[width] duration-300 pointer-events-none",
+					"absolute bottom-0 left-0 h-0.5 transition-[width] duration-300 pointer-events-none",
+					isFailed ? "bg-error" : isCancelled ? "bg-muted-foreground/40" : "bg-success",
 					progressPercentage === 0 || progressPercentage === 100 ? "opacity-0" : "opacity-100",
 				)}
 				style={{ width: `${progressPercentage}%` }}
 			/>
-			<div className="flex items-center gap-2 py-1.5 px-2">
+			<div className="flex items-center gap-2 py-0.5 px-1">
 				<span
 					className={cn(
-						"rounded-md px-1.5 py-0.5 text-[11px] shrink-0 bg-badge-foreground/20",
-						isCompleted && "bg-success text-black",
+						"rounded-md px-1.5 py-0.5 text-[11px] shrink-0",
+						isCompleted ? "bg-success text-black" : "bg-badge-foreground/20",
+						isCancelled && "bg-foreground/10 text-muted-foreground",
+						isFailed && "bg-error/15 text-error",
 					)}>
 					{currentIndex}/{totalCount}
 				</span>
@@ -78,13 +97,13 @@ const parseCurrentTodoInfo = (text: string): TodoInfo | null => {
 
 	while (lineStart < text.length) {
 		const line = lineEnd === -1 ? text.substring(lineStart).trim() : text.substring(lineStart, lineEnd).trim()
-		if (isFocusChainItem(line)) {
-			const isCompleted = isCompletedFocusChainItem(line)
-			if (isCompleted) {
+		const parsed = parseFocusChainItem(line)
+		if (parsed) {
+			if (parsed.checked) {
 				completedCount++
 			} else if (firstIncompleteIndex === -1) {
 				firstIncompleteIndex = totalCount
-				firstIncompleteText = line.substring(5).trim()
+				firstIncompleteText = parsed.text
 			}
 			totalCount++
 		}
@@ -116,7 +135,7 @@ const parseCurrentTodoInfo = (text: string): TodoInfo | null => {
 
 /** Task progress steps — native <details>, no overlay. */
 export const FocusChain: React.FC<FocusChainProps> = memo(
-	({ currentTaskItemId, lastProgressMessageText, showPlaceholderWhenEmpty }) => {
+	({ currentTaskItemId, lastProgressMessageText, showPlaceholderWhenEmpty, executionState }) => {
 		const todoInfo = useMemo(
 			() => (lastProgressMessageText ? parseCurrentTodoInfo(lastProgressMessageText) : null),
 			[lastProgressMessageText],
@@ -142,12 +161,13 @@ export const FocusChain: React.FC<FocusChainProps> = memo(
 			)
 		}
 
-		const isCompleted = todoInfo.completedCount === todoInfo.totalCount
+		const isCompleted =
+			todoInfo.completedCount === todoInfo.totalCount && executionState !== "cancelled" && executionState !== "failed"
 
 		return (
-			<details className="lumi-inline-disclosure rounded-sm bg-toolbar-hover/50 group">
+			<details className="lumi-inline-disclosure group">
 				<summary className="lumi-details-trigger list-none cursor-pointer" title="View or edit steps">
-					<StepsSummary todoInfo={todoInfo} />
+					<StepsSummary executionState={executionState} todoInfo={todoInfo} />
 				</summary>
 				<div className="px-2 pb-2 pt-0.5 border-t border-border/15">
 					<button
@@ -165,7 +185,8 @@ export const FocusChain: React.FC<FocusChainProps> = memo(
 	(prev, next) =>
 		prev.lastProgressMessageText === next.lastProgressMessageText &&
 		prev.currentTaskItemId === next.currentTaskItemId &&
-		prev.showPlaceholderWhenEmpty === next.showPlaceholderWhenEmpty,
+		prev.showPlaceholderWhenEmpty === next.showPlaceholderWhenEmpty &&
+		prev.executionState === next.executionState,
 )
 
 FocusChain.displayName = "FocusChain"

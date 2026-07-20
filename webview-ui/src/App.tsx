@@ -1,8 +1,8 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import ChatView from "./components/chat/ChatView"
-import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
 import { NewChatConfirmModal } from "./components/common/NewChatConfirmModal"
+import { AppShell } from "./components/layout/AppShell"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeView"
@@ -187,13 +187,8 @@ const AppContent = () => {
 			{showWelcome ? (
 				<WelcomeView />
 			) : (
-				<>
-					<ChatToolbar
-						conversationTitle={conversationTitle}
-						hasActiveConversation={hasActiveConversation}
-						onRequestNewChat={handleRequestNewChat}
-					/>
-					<main
+				<AppShell onRequestNewChat={handleRequestNewChat}>
+					<div
 						aria-labelledby="lumi-view-title"
 						className="relative min-h-0 w-full flex-1 overflow-hidden"
 						id="lumi-main-content"
@@ -207,8 +202,8 @@ const AppContent = () => {
 							showAnnouncement={showAnnouncement}
 							showHistoryView={navigateToHistory}
 						/>
-					</main>
-				</>
+					</div>
+				</AppShell>
 			)}
 			<NewChatConfirmModal
 				error={newChatError}

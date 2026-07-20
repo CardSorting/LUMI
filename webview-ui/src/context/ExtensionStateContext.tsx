@@ -281,6 +281,13 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [expandTaskHeader, setExpandTaskHeader] = useState(false)
 	const [didHydrateState, setDidHydrateState] = useState(false)
 
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDidHydrateState(true)
+		}, 1000)
+		return () => clearTimeout(timer)
+	}, [])
+
 	const [showWelcome, setShowWelcome] = useState(false)
 
 	const [dietcodeModels, setDietCodeModels] = useState<Record<string, ModelInfo> | null>(null)

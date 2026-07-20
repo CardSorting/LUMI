@@ -11,7 +11,7 @@ import { StateManager } from "../../storage/StateManager"
 import { TaskState } from "../TaskState"
 import { createFocusChainMarkdownContent, extractFocusChainListFromText, getFocusChainFilePath } from "./file-utils"
 import { FocusChainPrompts } from "./prompts"
-import { createFocusChainProgressGuidance, parseFocusChainListCounts } from "./utils"
+import { createFocusChainProgressGuidance, mergeFocusChainChecklists, parseFocusChainListCounts } from "./utils"
 
 export interface FocusChainDependencies {
 	taskId: string
@@ -256,13 +256,21 @@ export class FocusChainManager {
 			// If model provides task_progress update, write it to the markdown file
 			if (taskProgress?.trim()) {
 				const previousList = this.taskState.currentFocusChainChecklist
-				this.taskState.currentFocusChainChecklist = taskProgress.trim()
+				let finalProgress = taskProgress.trim()
+
+				if (this.taskState.todoListWasUpdatedByUser && previousList) {
+					finalProgress = mergeFocusChainChecklists(previousList, finalProgress)
+					Logger.log(`[Task ${this.taskId}] focus chain list: User edited checklist was merged with LLM progress.`)
+				}
+				this.taskState.todoListWasUpdatedByUser = false
+
+				this.taskState.currentFocusChainChecklist = finalProgress
 				Logger.debug(
-					`[Task ${this.taskId}] focus chain list: LLM provided focus chain list update via task_progress parameter. Length ${previousList?.length || 0} > ${this.taskState.currentFocusChainChecklist.length}`,
+					`[Task ${this.taskId}] focus chain list: LLM provided focus chain list update via task_progress parameter. Length ${previousList?.length || 0} > ${finalProgress.length}`,
 				)
 
 				// Parse focus chain list counts for telemetry
-				const { totalItems, completedItems } = parseFocusChainListCounts(taskProgress.trim())
+				const { totalItems, completedItems } = parseFocusChainListCounts(finalProgress)
 
 				// Track first progress creation
 				if (!this.hasTrackedFirstProgress && totalItems > 0) {
@@ -276,14 +284,14 @@ export class FocusChainManager {
 
 				// Write the model's update to the markdown file
 				try {
-					await this.writeFocusChainToDisk(taskProgress.trim())
+					await this.writeFocusChainToDisk(finalProgress)
 
 					// Send the task_progress message to the UI immediately
-					await this.say("task_progress", taskProgress.trim())
+					await this.say("task_progress", finalProgress)
 				} catch (error) {
 					Logger.error(`[Task ${this.taskId}] focus chain list: Failed to write to markdown file:`, error)
 					// Fall back to creating a task_progress message directly if file write fails
-					await this.say("task_progress", taskProgress.trim())
+					await this.say("task_progress", finalProgress)
 					Logger.log(`[Task ${this.taskId}] focus chain list: Sent fallback task_progress message to UI`)
 				}
 			} else {

@@ -1,8 +1,47 @@
+:root {
+	/* Default fallbacks for VSCode theme variables in standalone browser mode */
+	--vscode-foreground: #faf9f7;
+	--vscode-descriptionForeground: #8a8996;
+	--vscode-sideBar-background: #0f0f12;
+	--vscode-sideBar-foreground: #faf9f7;
+	--vscode-panel-background: #121216;
+	--vscode-panel-border: #20202a;
+	--vscode-focusBorder: #6366a0;
+	--vscode-editor-background: #16161d;
+	--vscode-editor-foreground: #faf9f7;
+	--vscode-input-background: #1a1a22;
+	--vscode-input-foreground: #faf9f7;
+	--vscode-input-border: #20202a;
+	--vscode-input-placeholderForeground: #8a8996;
+	--vscode-button-background: #6366a0;
+	--vscode-button-foreground: #ffffff;
+	--vscode-button-hoverBackground: #7a7db4;
+	--vscode-button-secondaryBackground: #272730;
+	--vscode-button-secondaryForeground: #faf9f7;
+	--vscode-button-secondaryHoverBackground: #32323e;
+	--vscode-list-hoverBackground: rgba(255, 255, 255, 0.05);
+	--vscode-list-activeSelectionBackground: #6366a0;
+	--vscode-list-activeSelectionForeground: #ffffff;
+	--vscode-textLink-foreground: #6bb5c9;
+	--vscode-textLink-activeForeground: #8a8996;
+	--vscode-editorGroup-border: #20202a;
+	--vscode-editorWidget-border: #20202a;
+	--vscode-textCodeBlock-background: #1a1a22;
+	--vscode-textBlockQuote-background: #1a1a22;
+	--vscode-textBlockQuote-foreground: #faf9f7;
+}
+
 /* Editor theme mapping */
 @theme {
 	/* LUMI brand palette — calm, technical, approachable */
 	--color-lumi: #6366a0;
 	--color-lumi-cyan: #6bb5c9;
+	--color-lumi-bg-dark: #121216;
+	--color-lumi-bg-sidebar: #1a1a22;
+	--color-lumi-panel: #1e1e26;
+	--color-lumi-border: rgba(255, 255, 255, 0.08);
+	--color-lumi-text-primary: #faf9f7;
+	--color-lumi-text-secondary: #8a8996;
 	--color-lumi-lavender: #b8b5d6;
 	--color-lumi-graphite: #3d4451;
 	--color-lumi-slate: #64748b;

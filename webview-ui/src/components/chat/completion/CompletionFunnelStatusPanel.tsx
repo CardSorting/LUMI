@@ -1,4 +1,4 @@
-import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
+import type { CompletionFunnelEvent, CompletionFunnelPhase } from "@shared/completion/completionFunnelEvent"
 import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { memo } from "react"
 import { cn } from "@/lib/utils"
@@ -10,21 +10,31 @@ interface CompletionFunnelStatusPanelProps {
 	className?: string
 }
 
-const PHASE_LABEL = {
+const PHASE_LABEL: Record<CompletionFunnelPhase, string> = {
 	evaluating: "Evaluating",
 	ready: "Ready to complete",
 	blocked: "Workspace changes required",
 	completed: "Completed",
 	failed: "Blocked",
-} as const
+	proposed: "Proposed",
+	decision_accepted: "Decision accepted",
+	decision_rejected: "Decision rejected",
+	settling: "Settling",
+	settlement_failed: "Settlement failed",
+}
 
-const PHASE_CLASS = {
+const PHASE_CLASS: Record<CompletionFunnelPhase, string> = {
 	evaluating: "border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5",
 	ready: "border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5",
 	blocked: "border-amber-500/30 text-amber-700 dark:text-amber-300 bg-amber-500/5",
 	completed: "border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5",
 	failed: "border-red-500/30 text-red-700 dark:text-red-300 bg-red-500/5",
-} as const
+	proposed: "border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5",
+	decision_accepted: "border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5",
+	decision_rejected: "border-red-500/30 text-red-700 dark:text-red-300 bg-red-500/5",
+	settling: "border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5",
+	settlement_failed: "border-red-500/30 text-red-700 dark:text-red-300 bg-red-500/5",
+}
 
 export const CompletionFunnelStatusPanel = memo(
 	({ event, terminalCompletion = false, showInternalDiagnostics = false, className }: CompletionFunnelStatusPanelProps) => {

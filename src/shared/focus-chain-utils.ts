@@ -4,12 +4,18 @@
  *  */
 
 /**
+ * Flexible regex pattern for matching focus chain items with spacing variations
+ * Matches patterns like "- [x] text", "- [X] text", "- [ ] text", "-  [ ]  text", etc.
+ */
+export const FOCUS_CHAIN_ITEM_REGEX = /^-\s*\[([ xX])\]\s*(.+)$/
+
+/**
  * Checks if a trimmed line matches focus chain item patterns
  * @param line The trimmed line to check
  * @returns true if the line is a focus chain item (- [ ], - [x], or - [X])
  */
 export function isFocusChainItem(line: string): boolean {
-	return line.startsWith("- [ ]") || line.startsWith("- [x]") || line.startsWith("- [X]")
+	return FOCUS_CHAIN_ITEM_REGEX.test(line)
 }
 
 /**
@@ -18,14 +24,9 @@ export function isFocusChainItem(line: string): boolean {
  * @returns true if the line is a completed focus chain item (- [x] or - [X])
  */
 export function isCompletedFocusChainItem(line: string): boolean {
-	return line.startsWith("- [x]") || line.startsWith("- [X]")
+	const match = line.match(FOCUS_CHAIN_ITEM_REGEX)
+	return match ? match[1] === "x" || match[1] === "X" : false
 }
-
-/**
- * Flexible regex pattern for matching focus chain items with spacing variations
- * Matches patterns like "- [x] text", "- [X] text", "- [ ] text", "-  [ ]  text", etc.
- */
-export const FOCUS_CHAIN_ITEM_REGEX = /^-\s*\[([ xX])\]\s*(.+)$/
 
 /**
  * Parse focus chain item using flexible regex (allows spacing variations)

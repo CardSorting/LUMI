@@ -1,9 +1,6 @@
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { memo, useCallback, useMemo, useState } from "react"
-import { Progress } from "@/components/ui/progress"
+import { cn } from "@/lib/utils"
 import { formatLargeNumber as formatTokenNumber } from "@/utils/format"
-import CompactTaskButton from "./buttons/CompactTaskButton"
-import { ContextWindowSummary } from "./ContextWindowSummary"
 
 interface ContextWindowProgressProps {
 	useAutoCondense: boolean
@@ -64,66 +61,49 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 		return null
 	}
 
-	const usageLabel =
-		tokenData.percentage >= 85
-			? "Memory almost full"
-			: tokenData.percentage >= 60
-				? "Memory getting full"
-				: "Conversation memory"
-
+	const usageLabel = tokenData.percentage >= 85
 	return (
-		<div className="my-1.5">
-			<div className="flex items-start gap-1">
-				<details className="lumi-inline-disclosure flex-1 min-w-0 group">
-					<summary className="lumi-details-trigger list-none cursor-pointer">
-						<div className="flex-1 min-w-0">
-							<div className="flex items-center justify-between gap-2 mb-1">
-								<span className="text-[10px] text-muted-foreground truncate">{usageLabel}</span>
-								<span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
-									{Math.round(tokenData.percentage)}%
-								</span>
-							</div>
-							<Progress aria-label="Conversation memory used" color="success" value={tokenData.percentage} />
-						</div>
-					</summary>
-
-					<div className="mt-2 px-0.5">
-						<ContextWindowSummary
-							cacheReads={cacheReads}
-							cacheWrites={cacheWrites}
-							contextWindow={tokenData.max}
-							percentage={tokenData.percentage}
-							tokensIn={tokensIn}
-							tokensOut={tokensOut}
-							tokenUsed={tokenData.used}
-						/>
-						<p className="text-[10px] text-muted-foreground m-0 mt-1.5 tabular-nums">
-							{formatTokenNumber(tokenData.used)} of {formatTokenNumber(tokenData.max)} tokens used
-						</p>
-					</div>
-				</details>
-
-				<CompactTaskButton onClick={handleCompactClick} />
+		<div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground my-0.5 py-0.5 border-t border-border/10">
+			<div className="flex items-center gap-1.5 min-w-0">
+				<span className="font-medium shrink-0">Memory:</span>
+				<span className="truncate font-semibold text-foreground/90 tabular-nums">
+					{formatTokenNumber(tokenData.used)} / {formatTokenNumber(tokenData.max)}
+				</span>
+				<span
+					className={cn(
+						"px-1 rounded-sm text-[9px] font-bold shrink-0",
+						tokenData.percentage >= 85 ? "bg-error/15 text-error" : "bg-foreground/10 text-foreground/80",
+					)}>
+					{Math.round(tokenData.percentage)}%
+				</span>
 			</div>
+			<button
+				className="text-[10px] text-lumi hover:text-lumi-lavender transition-colors font-semibold shrink-0 cursor-pointer bg-transparent border-0 p-0"
+				onClick={handleCompactClick}
+				title="Free up conversation space"
+				type="button">
+				Compact
+			</button>
 
-			{confirmationNeeded ? (
-				<div className="mt-2 px-1 flex flex-col gap-2">
-					<p className="text-[11px] text-muted-foreground m-0">Free up conversation space?</p>
-					<div className="flex flex-col gap-1.5">
-						<VSCodeButton
-							appearance="primary"
-							autoFocus
-							className="text-sm w-full"
+			{confirmationNeeded && (
+				<div className="absolute inset-0 bg-background/95 flex items-center justify-between px-3 gap-2 z-10 rounded-lg border border-border/40">
+					<span className="text-[10px] text-foreground font-medium">Free up conversation space?</span>
+					<div className="flex items-center gap-2">
+						<button
+							className="rounded bg-lumi px-2 py-0.5 text-[9px] font-bold text-black hover:bg-lumi-lavender"
 							onClick={handleConfirm}
 							type="button">
-							Yes, shorten chat
-						</VSCodeButton>
-						<VSCodeButton appearance="secondary" className="text-sm w-full" onClick={handleCancel} type="button">
-							Keep as is
-						</VSCodeButton>
+							Confirm
+						</button>
+						<button
+							className="rounded bg-foreground/10 px-2 py-0.5 text-[9px] font-medium text-foreground/80 hover:bg-foreground/15"
+							onClick={handleCancel}
+							type="button">
+							Cancel
+						</button>
 					</div>
 				</div>
-			) : null}
+			)}
 		</div>
 	)
 }

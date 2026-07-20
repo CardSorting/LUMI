@@ -1,4 +1,4 @@
-import { isCompletedFocusChainItem, isFocusChainItem } from "@shared/focus-chain-utils"
+import { isCompletedFocusChainItem, isFocusChainItem, parseFocusChainItem } from "@shared/focus-chain-utils"
 import { FocusChainPrompts } from "./prompts"
 
 export interface TodoListCounts {
@@ -64,4 +64,41 @@ export function createFocusChainProgressGuidance({
 	}
 
 	return ""
+}
+
+/**
+ * Merges the proposed checklist (from LLM tool response) into the current checklist (edited by the user).
+ * Preserves user-added items and checklist modifications while carrying over completion checkboxes marked by the LLM.
+ */
+export function mergeFocusChainChecklists(currentList: string, proposedList: string): string {
+	const currentLines = currentList.split("\n")
+	const proposedLines = proposedList.split("\n")
+
+	const currentItems = currentLines.map((line) => {
+		const parsed = parseFocusChainItem(line.trim())
+		return parsed ? { line, parsed } : { line, parsed: null }
+	})
+
+	const proposedMap = new Map<string, boolean>()
+	for (const line of proposedLines) {
+		const parsed = parseFocusChainItem(line.trim())
+		if (parsed) {
+			proposedMap.set(parsed.text.toLowerCase(), parsed.checked)
+		}
+	}
+
+	const mergedLines = currentItems.map((item) => {
+		if (item.parsed) {
+			const proposedChecked = proposedMap.get(item.parsed.text.toLowerCase())
+			if (proposedChecked === true && !item.parsed.checked) {
+				const checkboxIndex = item.line.indexOf("[")
+				if (checkboxIndex !== -1 && item.line[checkboxIndex + 2] === "]") {
+					return item.line.slice(0, checkboxIndex + 1) + "x" + item.line.slice(checkboxIndex + 2)
+				}
+			}
+		}
+		return item.line
+	})
+
+	return mergedLines.join("\n")
 }

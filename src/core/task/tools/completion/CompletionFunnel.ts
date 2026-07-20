@@ -48,7 +48,7 @@ import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAutho
 import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
 import { createTaskLifecycleIntentId, getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { getCoordinationRawDb } from "@/infrastructure/db/Config"
-
+import { parseFocusChainListCounts } from "../../focus-chain/utils"
 import {
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
@@ -90,6 +90,8 @@ export interface CompletionFunnelSnapshot {
 	readonly auditGateEnabled: boolean
 	readonly auditGateDecision: AuditGateDecision | undefined
 	readonly lastProbeCheckpointHash: string | undefined
+	readonly focusChainEnabled?: boolean
+	readonly focusChainChecklist?: string | null | undefined
 	readonly now: number
 }
 
@@ -469,6 +471,31 @@ export const CompletionFunnelEvaluator = {
 		}
 		stages.push(pass("duplicate_check", "Not a duplicate attempt"))
 
+		// ── Stage 8: Evaluate checklist completeness ──
+		if (snapshot.focusChainEnabled && snapshot.focusChainChecklist) {
+			const { totalItems, completedItems } = parseFocusChainListCounts(snapshot.focusChainChecklist)
+			if (totalItems > 0 && completedItems < totalItems) {
+				const reason = `Checklist is incomplete: ${completedItems}/${totalItems} items completed.`
+				stages.push(fail("checklist", reason, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction:
+						"Complete all checklist items or update your task progress before attempting completion.",
+					reason,
+					playbook: [
+						"Review incomplete checklist items in the Steps disclosure or in the task.md file.",
+						"Complete the remaining work, mark the items completed, and then call attempt_completion again.",
+					],
+					stages,
+				}
+			}
+			stages.push(pass("checklist", `All checklist items completed (${completedItems}/${totalItems})`))
+		} else {
+			stages.push(na("checklist", "Checklist tracking not enabled or empty"))
+		}
+
 		// ── Stage 7: Half-open probe already handled above ──
 		// (circuit breaker stage handles half-open probe eligibility)
 
@@ -556,6 +583,8 @@ export function buildCompletionSnapshot(
 		auditGateEnabled: config.auditCompletionGateEnabled ?? false,
 		auditGateDecision: options?.auditGateDecision,
 		lastProbeCheckpointHash: undefined,
+		focusChainEnabled: config.focusChainSettings?.enabled ?? false,
+		focusChainChecklist: config.taskState.currentFocusChainChecklist,
 		now: Date.now(),
 	}
 }

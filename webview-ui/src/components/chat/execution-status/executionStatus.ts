@@ -87,10 +87,13 @@ function getApprovalDetail(message: DietCodeMessage): string {
 }
 
 function getSafetyLabel(
+	state: ExecutionState,
 	auditMetadata: TaskAuditMetadata | undefined,
 	auditHealth: AuditHealthSummary | undefined,
 	completionFunnel: ResolvedCompletionFunnelSnapshot | undefined,
 ): string {
+	if (state === "cancelled") return "Stopped"
+	if (state === "failed") return "Failed"
 	if (auditMetadata?.gate_blocked) return "Advisory findings"
 	if ((auditHealth?.criticalViolationCount ?? 0) > 0) return "Critical issue"
 	if ((auditHealth?.warningViolationCount ?? 0) > 0) return "Review advised"
@@ -145,7 +148,6 @@ export function deriveExecutionStatus({
 	checkpointError,
 }: ExecutionStatusOptions): ExecutionStatusModel {
 	const lastMessage = messages.at(-1)
-	const safety = getSafetyLabel(auditMetadata, auditHealth, completionFunnel)
 	const receipt = getReceiptIncident(lastMessage)
 	const terminalCompletion =
 		lifecycleEvent?.committed.state === "terminal" && lifecycleEvent.committed.terminalOutcome === "completed"
@@ -310,6 +312,8 @@ export function deriveExecutionStatus({
 			nextAction: "Add a follow-up or inspect the execution timeline.",
 		}
 	}
+
+	const safety = getSafetyLabel(status.state, auditMetadata, auditHealth, completionFunnel)
 
 	return {
 		state: status.state,

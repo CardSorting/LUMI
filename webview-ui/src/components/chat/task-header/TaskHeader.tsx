@@ -5,7 +5,7 @@ import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { StringArrayRequest } from "@shared/proto/dietcode/common"
-import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
+import React, { useCallback, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
@@ -13,13 +13,12 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
-import ExpandHandle from "../ExpandHandle"
 import { ExecutionStatusHeader } from "../execution-status/ExecutionStatusHeader"
+import { deriveExecutionStatus } from "../execution-status/executionStatus"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
 import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
-import { highlightText } from "./Highlights"
 import { TaskNotesSection } from "./TaskNotesSection"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
@@ -87,12 +86,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		taskLifecycleEvent,
 	} = useExtensionState()
 
-	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
-	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
 	const [deleteConfirmationVisible, setDeleteConfirmationVisible] = useState(false)
-	const highlightedTextRef = React.useRef<HTMLDivElement>(null)
-
-	const highlightedText = useMemo(() => highlightText(task.text, false), [task.text])
 
 	const handleCheckpointSettingsClick = useCallback(() => {
 		navigateToSettings("features")
@@ -102,34 +96,29 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	const isCompact = useIsCompact()
 	const isUltraCompact = useIsUltraCompact()
 
-	// Check if text overflows the container (i.e., needs clamping)
-	useLayoutEffect(() => {
-		const el = highlightedTextRef.current
-		if (el && isTaskExpanded && !isHighlightedTextExpanded) {
-			// Check if content height exceeds the max-height
-			setIsTextOverflowing(el.scrollHeight > el.clientHeight)
-		}
-	}, [isTaskExpanded, isHighlightedTextExpanded])
-
-	// Handle click outside to collapse
-	React.useEffect(() => {
-		if (!isHighlightedTextExpanded) {
-			return
-		}
-
-		const handleClickOutside = (event: MouseEvent) => {
-			if (highlightedTextRef.current && !highlightedTextRef.current.contains(event.target as Node)) {
-				setIsHighlightedTextExpanded(false)
-			}
-		}
-
-		document.addEventListener("mousedown", handleClickOutside)
-		return () => document.removeEventListener("mousedown", handleClickOutside)
-	}, [isHighlightedTextExpanded])
-
 	// Simplified computed values
 	const { selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, mode)
 	const modeFields = getModeSpecificFields(apiConfiguration, mode)
+
+	const status = useMemo(
+		() =>
+			deriveExecutionStatus({
+				messages: dietcodeMessages,
+				auditMetadata: latestAuditMetadata,
+				auditHealth,
+				completionFunnel: completionFunnelSnapshot,
+				lifecycleEvent: taskLifecycleEvent,
+				checkpointError: checkpointManagerErrorMessage,
+			}),
+		[
+			dietcodeMessages,
+			latestAuditMetadata,
+			auditHealth,
+			completionFunnelSnapshot,
+			taskLifecycleEvent,
+			checkpointManagerErrorMessage,
+		],
+	)
 
 	const isCostAvailable = Boolean(totalCost) && modeFields.apiProvider !== "openai-codex" // Subscription-based, no per-token costs
 
@@ -147,64 +136,34 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	}, [currentTaskItem?.id])
 
 	return (
-		<div className="flex flex-col min-h-0">
-			<div
-				className={cn(
-					isTaskExpanded
-						? isCompact
-							? "pt-2.5 pb-2 px-2.5"
-							: "pt-3 pb-2 px-3"
-						: isCompact
-							? "pt-1.5 pb-1 px-2.5"
-							: "pt-2 pb-1.5 px-3",
-				)}>
-				<ExecutionStatusHeader
-					auditHealth={auditHealth}
-					auditMetadata={latestAuditMetadata}
-					checkpointError={checkpointManagerErrorMessage}
-					completionFunnel={completionFunnelSnapshot}
-					isDetailsOpen={isTaskExpanded}
-					lifecycleEvent={taskLifecycleEvent}
-					messages={dietcodeMessages}
-					onReviewBlock={onScrollToLatestGateBlock}
-					onToggleDetails={() => setExpandTaskHeader(!isTaskExpanded)}
-				/>
-			</div>
-
-			{isTaskExpanded && (
-				<div
-					className={cn(
-						"mx-3 mb-2 rounded-lg border border-border/40 bg-(--vscode-toolbar-hoverBackground)/35 overflow-hidden flex flex-col",
-						isUltraCompact ? "max-h-[25vh]" : isCompact ? "max-h-[30vh]" : "max-h-[38vh]",
-					)}
-					style={{ borderColor: environmentBorderColor }}>
-					<div className={cn("overflow-y-auto flex flex-col gap-2.5 min-h-0", isCompact ? "p-2.5" : "p-3")}>
+		<div className="flex flex-col min-h-0 px-3 py-1.5">
+			<ExecutionStatusHeader
+				auditHealth={auditHealth}
+				auditMetadata={latestAuditMetadata}
+				checkpointError={checkpointManagerErrorMessage}
+				completionFunnel={completionFunnelSnapshot}
+				isDetailsOpen={isTaskExpanded}
+				lifecycleEvent={taskLifecycleEvent}
+				messages={dietcodeMessages}
+				onReviewBlock={onScrollToLatestGateBlock}
+				onToggleDetails={() => setExpandTaskHeader(!isTaskExpanded)}>
+				{isTaskExpanded && (
+					<div
+						className={cn(
+							"border-t border-current/10 bg-background/5 overflow-y-auto flex flex-col gap-1.5 min-h-0 max-h-[30vh]",
+							isCompact ? "p-1.5 px-2" : "p-2 px-2.5",
+						)}>
 						<CheckpointError
 							checkpointManagerErrorMessage={checkpointManagerErrorMessage}
 							handleCheckpointSettingsClick={handleCheckpointSettingsClick}
 						/>
-						<div>
-							<p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground m-0 mb-1.5">
-								Task brief
-							</p>
-							<div
-								className={cn(
-									"ph-no-capture whitespace-pre-wrap break-words text-sm relative",
-									isCompact ? "max-h-[3rem]" : "max-h-[4.5rem]",
-									"overflow-hidden",
-									{
-										"max-h-[12rem] overflow-y-auto": isHighlightedTextExpanded,
-									},
-								)}
-								ref={highlightedTextRef}>
-								{highlightedText}
+						<div className="flex items-start gap-1.5 text-xs">
+							<span className="font-bold text-muted-foreground shrink-0 uppercase tracking-wide text-[9px] mt-0.5">
+								Task:
+							</span>
+							<div className="flex-1 min-w-0 text-foreground/90 truncate" title={task.text}>
+								{task.text}
 							</div>
-							{isTextOverflowing && !isHighlightedTextExpanded && (
-								<ExpandHandle isExpanded={false} onToggle={() => setIsHighlightedTextExpanded(true)} />
-							)}
-							{isHighlightedTextExpanded && isTextOverflowing && (
-								<ExpandHandle isExpanded={true} onToggle={() => setIsHighlightedTextExpanded(false)} />
-							)}
 						</div>
 
 						{((task.images && task.images.length > 0) || (task.files && task.files.length > 0)) && (
@@ -214,6 +173,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						{focusChainSettings.enabled && (
 							<FocusChain
 								currentTaskItemId={currentTaskItem?.id}
+								executionState={status.state}
 								lastProgressMessageText={lastProgressMessageText}
 								showPlaceholderWhenEmpty={showFocusChainPlaceholder}
 							/>
@@ -287,8 +247,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							)}
 						</div>
 					</div>
-				</div>
-			)}
+				)}
+			</ExecutionStatusHeader>
 		</div>
 	)
 }

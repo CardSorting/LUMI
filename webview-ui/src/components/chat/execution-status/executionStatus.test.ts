@@ -303,4 +303,36 @@ describe("deriveExecutionStatus", () => {
 		const rendered = Object.values(result).join(" ")
 		expect(rendered).not.toMatch(/COGNITIVE REFLECTION|breather nudge|run_verification/i)
 	})
+
+	it("returns 'Stopped' safety label when execution is cancelled", () => {
+		const result = deriveExecutionStatus({
+			messages: [task],
+			lifecycleEvent: cancelledLifecycleEvent,
+		})
+		expect(result.state).toBe("cancelled")
+		expect(result.safety).toBe("Stopped")
+	})
+
+	it("returns 'Failed' safety label when execution is failed", () => {
+		const failedLifecycleEvent: TaskLifecycleEvent = {
+			...completedLifecycleEvent,
+			eventId: "lifecycle-failed-1",
+			intentId: "lifecycle-fail-intent-1",
+			transition: "settle_failure",
+			committed: {
+				...completedLifecycleEvent.committed,
+				terminalOutcome: "failed",
+				lastEventId: "lifecycle-failed-1",
+			},
+			terminalOutcome: "failed",
+			cause: { source: "controller", reason: "Failure settled." },
+		}
+
+		const result = deriveExecutionStatus({
+			messages: [task],
+			lifecycleEvent: failedLifecycleEvent,
+		})
+		expect(result.state).toBe("failed")
+		expect(result.safety).toBe("Failed")
+	})
 })
