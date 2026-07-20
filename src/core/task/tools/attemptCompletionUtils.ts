@@ -22,6 +22,7 @@ import {
 } from "@shared/audit/gatePolicy"
 import type { CompletionFunnelEvent, CompletionFunnelPhase } from "@shared/completion/completionFunnelEvent"
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
+import { isFocusChainItem, parseFocusChainItem } from "@shared/focus-chain-utils"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 
@@ -253,7 +254,11 @@ const COMPLETION_CHECKLIST_IN_RESULT_PATTERN = /^\s*-\s*\[[ xX]\]/m
 export function extractFocusChainItemLabels(checklist: string): string[] {
 	return checklist
 		.split("\n")
-		.map((line) => line.replace(/^\s*-\s*\[[ xX]\]\s*/i, "").trim())
+		.filter((line) => isFocusChainItem(line.trim()))
+		.map((line) => {
+			const parsed = parseFocusChainItem(line.trim())
+			return parsed ? parsed.text : ""
+		})
 		.filter(Boolean)
 }
 

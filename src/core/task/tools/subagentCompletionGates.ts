@@ -24,7 +24,7 @@ export type SubagentCompletionGateValidation = {
 export async function validateSubagentCompletionGates(
 	config: TaskConfig,
 	result: string,
-	_taskProgress?: string,
+	taskProgress?: string,
 	command?: string,
 	options?: { laneExecutionMode?: LaneExecutionMode },
 ): Promise<SubagentCompletionGateValidation> {
@@ -37,7 +37,7 @@ export async function validateSubagentCompletionGates(
 	})
 	const completionFunnelEvent = decisionToCompletionFunnelEvent(
 		subagentConfig,
-		evaluateCompletionFunnel(subagentConfig, { result }),
+		evaluateCompletionFunnel(subagentConfig, { result, command, taskProgress }),
 	)
 	cacheCompletionFunnelEvent(subagentConfig, completionFunnelEvent)
 

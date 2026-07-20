@@ -48,12 +48,20 @@ import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAutho
 import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
 import { createTaskLifecycleIntentId, getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { getCoordinationRawDb } from "@/infrastructure/db/Config"
-import { parseFocusChainListCounts } from "../../focus-chain/utils"
 import {
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
 	hashCompletionResult,
 	resolveAuditStateIdentifier,
+	validateCompletionDemoCommand,
+	validateCompletionResultExcludesChecklist,
+	validateCompletionResultMaxLength,
+	validateCompletionResultMinLength,
+	validateCompletionResultQuality,
+	validateCompletionTaskProgress,
+	validateCompletionTaskProgressRequired,
+	validateFocusChainComplete,
+	validateTaskProgressAlignsWithFocusChain,
 } from "../attemptCompletionUtils"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { ToolResponse } from "../types/ToolContracts"
@@ -93,6 +101,9 @@ export interface CompletionFunnelSnapshot {
 	readonly focusChainEnabled?: boolean
 	readonly focusChainChecklist?: string | null | undefined
 	readonly now: number
+	readonly result?: string
+	readonly command?: string
+	readonly taskProgress?: string
 }
 
 export type CompletionDecisionKind = "allow_attempt" | "allow_probe" | "soft_block" | "hard_block" | "completed"
@@ -266,15 +277,11 @@ export function hasWorkspaceProgress(snapshot: CompletionFunnelSnapshot): boolea
 
 // ─── Duplicate Detection ──────────────────────────────────────────────────────
 
-/**
- * Evaluate duplicate attempt — uses BOTH result fingerprint AND workspace
- * checkpoint hash.  Mirrors idempotency-key style duplicate suppression.
- *
- * Returns true if this is a duplicate (same fingerprint AND same workspace),
- * false otherwise.
- */
 export function isDuplicateAttempt(snapshot: CompletionFunnelSnapshot): boolean {
 	if (snapshot.blockCount === 0 || !snapshot.lastBlockedResultFingerprint) {
+		return false
+	}
+	if (!snapshot.lastGateBlockCheckpointHash || !snapshot.checkpointHash) {
 		return false
 	}
 	if (snapshot.resultFingerprint !== snapshot.lastBlockedResultFingerprint) {
@@ -471,29 +478,193 @@ export const CompletionFunnelEvaluator = {
 		}
 		stages.push(pass("duplicate_check", "Not a duplicate attempt"))
 
-		// ── Stage 8: Evaluate checklist completeness ──
-		if (snapshot.focusChainEnabled && snapshot.focusChainChecklist) {
-			const { totalItems, completedItems } = parseFocusChainListCounts(snapshot.focusChainChecklist)
-			if (totalItems > 0 && completedItems < totalItems) {
-				const reason = `Checklist is incomplete: ${completedItems}/${totalItems} items completed.`
-				stages.push(fail("checklist", reason, true))
+		// ── Preflight check validations ──
+		const dummyConfig = {
+			isSubagentExecution: false,
+			focusChainSettings: { enabled: snapshot.focusChainEnabled ?? false },
+			taskState: {
+				currentFocusChainChecklist: snapshot.focusChainChecklist,
+			},
+		} as unknown as TaskConfig
+
+		// Stage: quality
+		if (snapshot.result !== undefined) {
+			const qualityErr = validateCompletionResultQuality(snapshot.result)
+			if (qualityErr) {
+				stages.push(fail("quality", qualityErr, true))
 				return {
 					kind: "soft_block" as const,
 					nextAllowedAction: "modify_workspace" as const,
 					forbiddenActions: ["attempt_completion"] as const,
-					canonicalInstruction:
-						"Complete all checklist items or update your task progress before attempting completion.",
-					reason,
-					playbook: [
-						"Review incomplete checklist items in the Steps disclosure or in the task.md file.",
-						"Complete the remaining work, mark the items completed, and then call attempt_completion again.",
-					],
+					canonicalInstruction: "Improve the completion result quality summary.",
+					reason: qualityErr,
+					playbook: ["Verify the result summary does not contain unfinished markers or end in a question."],
 					stages,
 				}
 			}
-			stages.push(pass("checklist", `All checklist items completed (${completedItems}/${totalItems})`))
+			stages.push(pass("quality", "Result quality check passed"))
 		} else {
-			stages.push(na("checklist", "Checklist tracking not enabled or empty"))
+			stages.push(na("quality", "No result provided for quality check"))
+		}
+
+		// Stage: min_length
+		if (snapshot.result !== undefined) {
+			const minLengthErr = validateCompletionResultMinLength(snapshot.result)
+			if (minLengthErr) {
+				stages.push(fail("min_length", minLengthErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Provide a longer summary of your work.",
+					reason: minLengthErr,
+					playbook: ["Make the result summary longer to hit the required minimum character limit."],
+					stages,
+				}
+			}
+			stages.push(pass("min_length", "Result length satisfies minimum requirement"))
+		} else {
+			stages.push(na("min_length", "No result provided for minimum length check"))
+		}
+
+		// Stage: max_length
+		if (snapshot.result !== undefined) {
+			const maxLengthErr = validateCompletionResultMaxLength(snapshot.result)
+			if (maxLengthErr) {
+				stages.push(fail("max_length", maxLengthErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Provide a shorter summary of your work.",
+					reason: maxLengthErr,
+					playbook: ["Make the result summary shorter to fit within the maximum character limit."],
+					stages,
+				}
+			}
+			stages.push(pass("max_length", "Result length is within maximum limit"))
+		} else {
+			stages.push(na("max_length", "No result provided for maximum length check"))
+		}
+
+		// Stage: checklist_in_result
+		if (snapshot.result !== undefined) {
+			const checklistInResultErr = validateCompletionResultExcludesChecklist(snapshot.result)
+			if (checklistInResultErr) {
+				stages.push(fail("checklist_in_result", checklistInResultErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Keep the checklist in task_progress parameter instead of result summary.",
+					reason: checklistInResultErr,
+					playbook: ["Remove checklist markdown formatting from the result summary."],
+					stages,
+				}
+			}
+			stages.push(pass("checklist_in_result", "Result excludes checklist markdown"))
+		} else {
+			stages.push(na("checklist_in_result", "No result provided for checklist check"))
+		}
+
+		// Stage: task_progress_required
+		if (snapshot.focusChainEnabled) {
+			const progressRequiredErr = validateCompletionTaskProgressRequired(dummyConfig, snapshot.taskProgress)
+			if (progressRequiredErr) {
+				stages.push(fail("task_progress_required", progressRequiredErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Provide the task_progress parameter to match the focus chain checklist.",
+					reason: progressRequiredErr,
+					playbook: ["Ensure the task_progress parameter is passed with the completion attempt."],
+					stages,
+				}
+			}
+			stages.push(pass("task_progress_required", "Task progress checklist provided when required"))
+		} else {
+			stages.push(na("task_progress_required", "Focus chain checklist not enabled"))
+		}
+
+		// Stage: task_progress_complete
+		if (snapshot.focusChainEnabled && snapshot.taskProgress !== undefined) {
+			const progressCompleteErr = validateCompletionTaskProgress(snapshot.taskProgress)
+			if (progressCompleteErr) {
+				stages.push(fail("task_progress_complete", progressCompleteErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Complete all items in the task_progress parameter.",
+					reason: progressCompleteErr,
+					playbook: ["Mark all task progress checklist items completed before attempting completion."],
+					stages,
+				}
+			}
+			stages.push(pass("task_progress_complete", "All items in task_progress checklist are complete"))
+		} else {
+			stages.push(na("task_progress_complete", "Focus chain checklist not enabled or task progress empty"))
+		}
+
+		// Stage: task_progress_align
+		if (snapshot.focusChainEnabled && snapshot.taskProgress !== undefined) {
+			const progressAlignErr = validateTaskProgressAlignsWithFocusChain(dummyConfig, snapshot.taskProgress)
+			if (progressAlignErr) {
+				stages.push(fail("task_progress_align", progressAlignErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Ensure task_progress labels align with the active focus chain checklist.",
+					reason: progressAlignErr,
+					playbook: ["Align task_progress checklist labels with the current focus chain items."],
+					stages,
+				}
+			}
+			stages.push(pass("task_progress_align", "Task progress checklist aligns with active focus chain"))
+		} else {
+			stages.push(na("task_progress_align", "Focus chain checklist not enabled or task progress empty"))
+		}
+
+		// Stage: focus_chain
+		if (snapshot.focusChainEnabled) {
+			const focusChainErr = validateFocusChainComplete(dummyConfig)
+			if (focusChainErr) {
+				stages.push(fail("focus_chain", focusChainErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Complete all checklist items in the active focus chain.",
+					reason: focusChainErr,
+					playbook: ["Ensure every focus chain item is completed in the markdown list and task state."],
+					stages,
+				}
+			}
+			stages.push(pass("focus_chain", "All focus chain checklist items are complete"))
+		} else {
+			stages.push(na("focus_chain", "Focus chain checklist not enabled or empty"))
+		}
+
+		// Stage: demo_command
+		if (snapshot.command !== undefined) {
+			const demoCommandErr = validateCompletionDemoCommand(snapshot.command)
+			if (demoCommandErr) {
+				stages.push(fail("demo_command", demoCommandErr, true))
+				return {
+					kind: "soft_block" as const,
+					nextAllowedAction: "modify_workspace" as const,
+					forbiddenActions: ["attempt_completion"] as const,
+					canonicalInstruction: "Provide a valid demo command that showcases the output.",
+					reason: demoCommandErr,
+					playbook: ["Use a command that starts a live server or generates output; do not use echo or cat."],
+					stages,
+				}
+			}
+			stages.push(pass("demo_command", "Demo command is valid"))
+		} else {
+			stages.push(na("demo_command", "No demo command provided"))
 		}
 
 		// ── Stage 7: Half-open probe already handled above ──
@@ -552,6 +723,8 @@ export function buildCompletionSnapshot(
 		auditCacheKey?: string
 		auditGateDecision?: AuditGateDecision
 		checkpointHash?: string
+		taskProgress?: string
+		command?: string
 	},
 ): CompletionFunnelSnapshot {
 	const checkpointHash = options?.checkpointHash ?? getLatestCheckpointHashFromMessages(config)
@@ -570,11 +743,9 @@ export function buildCompletionSnapshot(
 		resultFingerprint: options?.result ? hashCompletionResult(options.result) : undefined,
 		lastCompletionAttemptAt: config.taskState.lastCompletionAttemptAt,
 		lastCompletionAttemptGraphRevision: config.taskState.lastCompletionAttemptGraphRevision,
-		// Historical advisory counters are intentionally excluded. Only state
-		// produced by this funnel may acquire completion authority.
-		blockCount: 0,
-		lastGateBlockCheckpointHash: undefined,
-		lastBlockedResultFingerprint: undefined,
+		blockCount: config.taskState.completionGateBlockCount ?? 0,
+		lastGateBlockCheckpointHash: config.taskState.lastGateBlockCheckpointHash,
+		lastBlockedResultFingerprint: config.taskState.lastBlockedCompletionResultFingerprint,
 		auditMetadata: config.taskState.lastCompletionAudit,
 		auditCacheKey,
 		lastAuditCacheKey: config.taskState.lastCompletionAuditCacheKey,
@@ -582,10 +753,13 @@ export function buildCompletionSnapshot(
 		auditGraphRevision: config.taskState.lastCompletionAuditGraphRevision,
 		auditGateEnabled: config.auditCompletionGateEnabled ?? false,
 		auditGateDecision: options?.auditGateDecision,
-		lastProbeCheckpointHash: undefined,
+		lastProbeCheckpointHash: config.taskState.lastProbeCheckpointHash,
 		focusChainEnabled: config.focusChainSettings?.enabled ?? false,
 		focusChainChecklist: config.taskState.currentFocusChainChecklist,
 		now: Date.now(),
+		result: options?.result,
+		command: options?.command,
+		taskProgress: options?.taskProgress,
 	}
 }
 
@@ -596,6 +770,8 @@ export function evaluateCompletionFunnel(
 		taskDescription?: string
 		auditCacheKey?: string
 		auditGateDecision?: AuditGateDecision
+		taskProgress?: string
+		command?: string
 	},
 ): CompletionFunnelDecision {
 	const cached = getCachedCompletionFunnelEvent(config)
@@ -1049,8 +1225,16 @@ async function evaluateCompletionDecision(
 	taskDescription: string,
 	decisionId: string,
 	stateVersion: number,
+	taskProgress?: string,
+	command?: string,
 ): Promise<CompletionFunnelEvaluation> {
-	const coreDecision = evaluateCompletionFunnel(config, { result, taskDescription, auditCacheKey: decisionId })
+	const coreDecision = evaluateCompletionFunnel(config, {
+		result,
+		taskDescription,
+		auditCacheKey: decisionId,
+		taskProgress,
+		command,
+	})
 	if (coreDecision.kind === "hard_block") {
 		return {
 			decision: {
@@ -1286,6 +1470,7 @@ export async function prepareCompletionAttempt(
 		result: string
 		taskDescription: string
 		command?: string
+		taskProgress?: string
 		originatingInvocationId: string
 	},
 ): Promise<PreparedCompletionAttempt> {
@@ -1409,6 +1594,8 @@ export async function prepareCompletionAttempt(
 		input.taskDescription,
 		proposedDecisionId,
 		evaluatedStateVersion,
+		input.taskProgress,
+		input.command,
 	)
 	const decision = evaluation.decision
 	if (decision.status !== "approved") {
@@ -1636,6 +1823,12 @@ export async function continueCompletionAttempt(
 	if (suspendResult.kind === "rejected") {
 		throw new Error(`Lifecycle suspension rejected (${suspendResult.code}): ${suspendResult.reason}`)
 	}
+	let command: string | undefined
+	if (attempt.commandIntentJson) {
+		try {
+			command = JSON.parse(attempt.commandIntentJson)
+		} catch {}
+	}
 
 	const evaluation = await evaluateCompletionDecision(
 		config,
@@ -1643,6 +1836,8 @@ export async function continueCompletionAttempt(
 		input.taskDescription,
 		attempt.decisionId || "",
 		attempt.expectedLifecycleRevision,
+		undefined, // taskProgress
+		command,
 	)
 
 	const proposedEvent: CompletionFunnelEvent = {

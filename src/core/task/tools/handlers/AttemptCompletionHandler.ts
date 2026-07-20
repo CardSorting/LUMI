@@ -103,12 +103,19 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse | { kind: "continuation"; continuation: any }> {
 		const result: string | undefined = block.params.result
 		const command: string | undefined = block.params.command
+		const taskProgress: string | undefined = block.params.task_progress
 
 		// Validate required parameters
 		if (!result) {
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
+
+		// Sync focus chain checklist before validation to avoid collisions with stale state
+		if (config.focusChainSettings?.enabled && config.callbacks.updateFCListFromToolResponse) {
+			await config.callbacks.updateFCListFromToolResponse(taskProgress)
+		}
+
 		config.latencyTracker?.mark("completion_validation_started", {
 			invocationId: block.call_id,
 			toolName: block.name,
@@ -193,7 +200,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				if (totalItems > 0 && completedItems < totalItems) {
 					const incompleteItems = totalItems - completedItems
 					const apiConfig = config.services.stateManager.getApiConfiguration()
-					const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 					const currentProvider = (
 						config.mode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
 					) as string

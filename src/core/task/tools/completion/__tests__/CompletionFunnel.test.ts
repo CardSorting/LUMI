@@ -185,4 +185,101 @@ describe("CompletionFunnel monolith", () => {
 		cacheCompletionFunnelEvent(taskConfig, terminal)
 		expect(isTaskHarnessTerminal(taskConfig.taskState)).to.equal(false)
 	})
+
+	describe("preflight validation stages", () => {
+		it("skips preflight checks when result/command/progress are not provided", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(snapshot())
+			expect(decision.kind).to.equal("allow_attempt")
+			const qualityStage = decision.stages.find((s) => s.stage === "quality")
+			expect(qualityStage?.result).to.equal("not_applicable")
+		})
+
+		it("fails quality check if result summary is empty or ends with a question", () => {
+			const emptyDecision = CompletionFunnelEvaluator.evaluate(snapshot({ result: "" }))
+			expect(emptyDecision.kind).to.equal("soft_block")
+			expect(emptyDecision.reason).to.contain("empty")
+
+			const questionDecision = CompletionFunnelEvaluator.evaluate(snapshot({ result: "Done. Is there anything else?" }))
+			expect(questionDecision.kind).to.equal("soft_block")
+			expect(questionDecision.reason).to.contain("question")
+		})
+
+		it("fails min_length if result summary is too brief", () => {
+			const briefDecision = CompletionFunnelEvaluator.evaluate(snapshot({ result: "Done" }))
+			expect(briefDecision.kind).to.equal("soft_block")
+			expect(briefDecision.reason).to.contain("too brief")
+		})
+
+		it("fails checklist_in_result if checklist formatting is in the result summary", () => {
+			const checklistDecision = CompletionFunnelEvaluator.evaluate(
+				snapshot({ result: "Here is what I did:\n- [x] Subtask 1\n- [x] Subtask 2" }),
+			)
+			expect(checklistDecision.kind).to.equal("soft_block")
+			expect(checklistDecision.reason).to.contain("checklist")
+		})
+
+		it("fails task_progress_required when focus chain is enabled but progress is missing", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(
+				snapshot({
+					focusChainEnabled: true,
+					focusChainChecklist: "- [x] Subtask 1",
+					taskProgress: undefined,
+				}),
+			)
+			expect(decision.kind).to.equal("soft_block")
+			expect(decision.reason).to.contain("missing")
+		})
+
+		it("fails task_progress_complete when progress checklist has incomplete items", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(
+				snapshot({
+					focusChainEnabled: true,
+					focusChainChecklist: "- [ ] Subtask 1",
+					taskProgress: "- [ ] Subtask 1",
+				}),
+			)
+			expect(decision.kind).to.equal("soft_block")
+			expect(decision.reason).to.contain("incomplete")
+		})
+
+		it("fails task_progress_align when progress checklist labels are misaligned with focus chain", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(
+				snapshot({
+					focusChainEnabled: true,
+					focusChainChecklist: "- [x] Subtask 1\n- [x] Subtask 2",
+					taskProgress: "- [x] Subtask 1",
+				}),
+			)
+			expect(decision.kind).to.equal("soft_block")
+			expect(decision.reason).to.contain("task_progress has")
+		})
+
+		it("fails focus_chain when active focus chain has incomplete items", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(
+				snapshot({
+					focusChainEnabled: true,
+					focusChainChecklist: "- [ ] Subtask 1",
+					taskProgress: "- [x] Subtask 1",
+				}),
+			)
+			expect(decision.kind).to.equal("soft_block")
+			expect(focusChainStageFailed(decision)).to.equal(true)
+		})
+
+		it("fails demo_command if a blocked demo command is provided", () => {
+			const decision = CompletionFunnelEvaluator.evaluate(
+				snapshot({
+					result: "This is a long enough and detailed summary of the task and what was done to resolve it. We successfully verified all gates and everything is complete.",
+					command: "echo hello",
+				}),
+			)
+			expect(decision.kind).to.equal("soft_block")
+			expect(decision.reason).to.contain("showcase live output")
+		})
+	})
 })
+
+function focusChainStageFailed(decision: any): boolean {
+	const stage = decision.stages.find((s: any) => s.stage === "focus_chain")
+	return stage?.result === "failed"
+}

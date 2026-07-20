@@ -626,7 +626,10 @@ export class ToolExecutor {
 		if (
 			!block.partial &&
 			block.params.task_progress &&
-			this.stateManager.getGlobalSettingsKey("focusChainSettings").enabled
+			this.stateManager.getGlobalSettingsKey("focusChainSettings").enabled &&
+			block.name !== DietCodeDefaultTool.ATTEMPT &&
+			block.name !== DietCodeDefaultTool.PLAN_MODE &&
+			block.name !== DietCodeDefaultTool.ACT_MODE
 		) {
 			void this.updateFCListFromToolResponse(block.params.task_progress).catch(() => undefined)
 		}

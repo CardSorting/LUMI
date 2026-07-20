@@ -39,6 +39,7 @@ export class FocusChainManager {
 	private hasTrackedFirstProgress = false
 	private focusChainSettings: FocusChainSettings
 	private fileUpdateDebounceTimer?: NodeJS.Timeout
+	private isWritingFocusChain = false
 
 	constructor(dependencies: FocusChainDependencies) {
 		this.taskId = dependencies.taskId
@@ -99,6 +100,11 @@ export class FocusChainManager {
 	 * @returns Promise<void> - Updates taskState.currentFocusChainChecklist and calls postStateToWebview()
 	 */
 	private async updateFCListFromMarkdownFileAndNotifyUI() {
+		if (this.isWritingFocusChain) {
+			Logger.log(`[Task ${this.taskId}] Focus Chain List: Skipping file watcher update because write is in progress`)
+			return
+		}
+
 		if (this.fileUpdateDebounceTimer) {
 			clearTimeout(this.fileUpdateDebounceTimer)
 		}
@@ -218,15 +224,8 @@ export class FocusChainManager {
 		}
 	}
 
-	/**
-	 * Writes the provided focus chain list to the task's markdown file on disk with proper formatting.
-	 * Creates the full markdown document structure and triggers file watchers to update the UI.
-	 * @param todoList - Raw focus chain list string with markdown checklist items
-	 * @requires this.taskId and this.context for file path generation
-	 * @returns Promise<void> - Resolves when file is written successfully
-	 * @throws Error if file write fails (disk full, permissions, etc.)
-	 */
 	private async writeFocusChainToDisk(todoList: string): Promise<void> {
+		this.isWritingFocusChain = true
 		try {
 			const taskDir = await ensureTaskDirectoryExists(this.taskId)
 			const todoFilePath = getFocusChainFilePath(taskDir, this.taskId)
@@ -235,6 +234,10 @@ export class FocusChainManager {
 		} catch (error) {
 			Logger.error(`[Task ${this.taskId}] focus chain list: FILE WRITE FAILED - Error:`, error)
 			throw error
+		} finally {
+			setTimeout(() => {
+				this.isWritingFocusChain = false
+			}, 500)
 		}
 	}
 
