@@ -46,6 +46,9 @@ function main() {
 			console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
 		}
 
+		// Stage package.json so vsce reads the patched name when packing the archive
+		execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
+
 		didReconcileWorkspaceLink = workspaceLinks.reconcile({
 			fromName: MARKETPLACE_EXTENSION_NAME,
 			toName: OPENVSX_EXTENSION_NAME,
@@ -71,6 +74,11 @@ function main() {
 			console.error(`[openvsx] ${error.message}`)
 		}
 	} finally {
+		// Unstage package.json
+		try {
+			execFileSync("git", ["reset", "package.json"], { cwd: repoRoot, stdio: "ignore" })
+		} catch {}
+
 		workspaceLinks.restore({
 			fromName: MARKETPLACE_EXTENSION_NAME,
 			toName: OPENVSX_EXTENSION_NAME,
