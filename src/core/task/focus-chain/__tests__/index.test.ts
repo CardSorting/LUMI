@@ -36,4 +36,20 @@ describe("mergeFocusChainChecklists", () => {
 
 		expect(result).to.equal(currentList)
 	})
+
+	it("appends newly proposed items that are not in current list", () => {
+		const currentList = "- [ ] Implement collision handling\n- [ ] User added item"
+		const proposedList = "- [x] Implement collision handling\n- [ ] Newly proposed item"
+		const result = mergeFocusChainChecklists(currentList, proposedList)
+
+		expect(result).to.equal("- [x] Implement collision handling\n- [ ] User added item\n- [ ] Newly proposed item")
+	})
+
+	it("merges correctly with whitespace/case variation in matching", () => {
+		const currentList = "- [ ]  Implement   collision handling \n- [ ] User added item"
+		const proposedList = "- [x] implement collision handling"
+		const result = mergeFocusChainChecklists(currentList, proposedList)
+
+		expect(result).to.equal("- [x]  Implement   collision handling \n- [ ] User added item")
+	})
 })

@@ -350,9 +350,26 @@ export function validateTaskProgressAlignsWithFocusChain(config: TaskConfig, tas
 		return null
 	}
 
-	if (progressLabels.length < focusLabels.length) {
+	const normalizeForCompare = (text: string) =>
+		text
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, "")
+			.trim()
+	const normalizedProgress = progressLabels.map(normalizeForCompare)
+	const missingLabels: string[] = []
+
+	for (const focusLabel of focusLabels) {
+		const norm = normalizeForCompare(focusLabel)
+		if (!normalizedProgress.includes(norm)) {
+			missingLabels.push(focusLabel)
+		}
+	}
+
+	if (missingLabels.length > 0 || progressLabels.length < focusLabels.length) {
+		const missingDetail =
+			missingLabels.length > 0 ? ` Missing item(s): ${missingLabels.map((l) => `"${l}"`).join(", ")}.` : ""
 		return (
-			`Advisory diagnostic: task_progress has ${progressLabels.length} item(s) but focus chain has ${focusLabels.length}. ` +
+			`Advisory diagnostic: task_progress has ${progressLabels.length} item(s) but focus chain has ${focusLabels.length}.${missingDetail} ` +
 			"Consider including every focus chain item in task_progress."
 		)
 	}

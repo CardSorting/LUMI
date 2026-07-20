@@ -79,26 +79,49 @@ export function mergeFocusChainChecklists(currentList: string, proposedList: str
 		return parsed ? { line, parsed } : { line, parsed: null }
 	})
 
-	const proposedMap = new Map<string, boolean>()
+	const proposedItems: Array<{ checked: boolean; text: string }> = []
+	const proposedMap = new Map<string, { checked: boolean; originalText: string }>()
+
 	for (const line of proposedLines) {
 		const parsed = parseFocusChainItem(line.trim())
 		if (parsed) {
-			proposedMap.set(parsed.text.toLowerCase(), parsed.checked)
+			const normalized = parsed.text.toLowerCase().replace(/\s+/g, " ").trim()
+			proposedMap.set(normalized, { checked: parsed.checked, originalText: parsed.text })
+			proposedItems.push(parsed)
 		}
 	}
 
+	const matchedProposedNormalized = new Set<string>()
+
 	const mergedLines = currentItems.map((item) => {
 		if (item.parsed) {
-			const proposedChecked = proposedMap.get(item.parsed.text.toLowerCase())
-			if (proposedChecked === true && !item.parsed.checked) {
-				const checkboxIndex = item.line.indexOf("[")
-				if (checkboxIndex !== -1 && item.line[checkboxIndex + 2] === "]") {
-					return item.line.slice(0, checkboxIndex + 1) + "x" + item.line.slice(checkboxIndex + 2)
+			const normalized = item.parsed.text.toLowerCase().replace(/\s+/g, " ").trim()
+			const proposed = proposedMap.get(normalized)
+			if (proposed) {
+				matchedProposedNormalized.add(normalized)
+				const shouldBeChecked = item.parsed.checked || proposed.checked
+				if (shouldBeChecked !== item.parsed.checked) {
+					const checkboxIndex = item.line.indexOf("[")
+					if (checkboxIndex !== -1 && item.line[checkboxIndex + 2] === "]") {
+						return (
+							item.line.slice(0, checkboxIndex + 1) +
+							(shouldBeChecked ? "x" : " ") +
+							item.line.slice(checkboxIndex + 2)
+						)
+					}
 				}
 			}
 		}
 		return item.line
 	})
+
+	for (const proposed of proposedItems) {
+		const normalized = proposed.text.toLowerCase().replace(/\s+/g, " ").trim()
+		if (!matchedProposedNormalized.has(normalized)) {
+			const checkbox = proposed.checked ? "[x]" : "[ ]"
+			mergedLines.push(`- ${checkbox} ${proposed.text}`)
+		}
+	}
 
 	return mergedLines.join("\n")
 }

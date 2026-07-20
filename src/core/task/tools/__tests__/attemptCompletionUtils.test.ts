@@ -639,6 +639,32 @@ describe("attemptCompletionUtils", () => {
 				"focus chain has 3",
 			)
 		})
+
+		it("rejects task_progress when items are missing even if counts match", () => {
+			taskState.currentFocusChainChecklist = "- [x] one\n- [ ] two"
+			expectErrorMessage(
+				validateTaskProgressAlignsWithFocusChain(configWithState(taskState), "- [x] one\n- [ ] three"),
+				'Missing item(s): "two"',
+			)
+		})
+
+		it("allows task_progress with different capitalization/whitespace formatting", () => {
+			taskState.currentFocusChainChecklist = "- [ ]  Do Task A \n- [ ] Do Task B"
+			const err = validateTaskProgressAlignsWithFocusChain(
+				configWithState(taskState),
+				"- [x] do task a\n- [x]  do task b  ",
+			)
+			should.not.exist(err)
+		})
+
+		it("allows task_progress containing extra items if focus chain items are present", () => {
+			taskState.currentFocusChainChecklist = "- [ ] one\n- [ ] two"
+			const err = validateTaskProgressAlignsWithFocusChain(
+				configWithState(taskState),
+				"- [x] one\n- [x] two\n- [ ] extra item",
+			)
+			should.not.exist(err)
+		})
 	})
 
 	describe("extractFocusChainItemLabels", () => {
