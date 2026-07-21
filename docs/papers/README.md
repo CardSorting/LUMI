@@ -11,9 +11,9 @@ Three documents describe the **agent layer** (`src/`, `webview-ui/`) the same wa
 | 5 | [Knowledge philosophy](knowledge-philosophy.md) | Leads, Designers — Advisory memory tenets | 10 min |
 | 6 | [Knowledge thesis](knowledge-thesis.md) | Architects — Sovereign advisory invariant | 15 min |
 | 7 | [Knowledge whitepaper](knowledge-whitepaper.md) | Engineers — Architecture details | 30 min |
-| 8 | [MoD brief](../../.wiki/mod-executive-brief.md) | PMs, contributors — MoD v1.2 Executive Brief | 5 min |
-| 9 | [MoD philosophy](../../.wiki/mod-philosophy.md) | Leads, designers — MoD v1.2 Design Philosophy | 15 min |
-| 10 | [MoD whitepaper](../../.wiki/mod-whitepaper.md) | Engineers — MoD v1.2 Technical Whitepaper | 30 min |
+| 8 | [MoD brief](../../.wiki/mod-executive-brief.md) | PMs, contributors — MoD v2.0 Executive Brief | 5 min |
+| 9 | [MoD philosophy](../../.wiki/mod-philosophy.md) | Leads, designers — MoD v2.0 Design Philosophy | 15 min |
+| 10 | [MoD whitepaper](../../.wiki/mod-whitepaper.md) | Engineers — MoD v2.0 Technical Whitepaper | 30 min |
 
 ## One-line summary
 

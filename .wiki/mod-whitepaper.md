@@ -1,21 +1,22 @@
-# Mixture of Designers (MoD) v1.3: Technical Whitepaper
-**A Multi-Agent Orchestration Framework for Bounded Product-Design Refinement and Guided Codebase Mutations**
+# Mixture of Designers (MoD) v2.0: Technical Whitepaper
+**A High-Throughput Multi-Agent Orchestration Framework for Resilient Product Design Refinement and Governed Codebase Mutations**
 
 ---
 
 ## 1. Abstract
-We present **Mixture of Designers (MoD) v1.3**, an enterprise-grade multi-agent orchestration architecture integrated within the LUMI task runtime. Traditional AI coding agents optimize localized syntax repair and test suite compilation, often resulting in systemic regressions in user experience flow, visual hierarchy, responsive layout dynamics, design system primitive reuse, and accessibility (A11y) standards. MoD addresses this by implementing a structured cognitive hierarchy that separates **design appraisal** from **code mutation**. 
+We present **Mixture of Designers (MoD) v2.0**, an enterprise-grade multi-agent orchestration architecture integrated within the LUMI task runtime. Traditional AI coding agents optimize localized syntax repair and test suite compilation, often resulting in systemic regressions in user experience flow, visual hierarchy, responsive layout dynamics, design system primitive reuse, and accessibility (A11y) standards. MoD addresses this by implementing a structured cognitive hierarchy that separates **design appraisal** from **code mutation**. 
 
-By classifying codebase anomalies, routing analysis through a dynamically selected subset of specialized read-only design personas via capacity-aware Softmax Top-K gating, converging recommendations using a Byzantine Fault Tolerant (BFT) 3-stage priority lattice matrix, locking decisions, and executing mutations via developer subagents governed by Hoare-logic write-boundary guards and workspace state receipt checkpointing, MoD delivers a verified, cohesive product direction. We formalize the orchestration loop mathematically, provide concrete algorithms for selection routing and priority-based convergence, specify state receipts and resume invalidation logic, and demonstrate empirical robustness through a suite of integration proofs.
+MoD v2.0 introduces **Specialist Execution Circuit Breakers**, **Softmax Top-K Gating with MoE Capacity Offloading**, **Zero-Stall Keyword-Driven Heuristic Sensing**, and **In-Memory TTL Context Content Caching**. By classifying codebase anomalies, routing analysis through a dynamically selected subset of specialized read-only design personas, converging recommendations using a Byzantine Fault Tolerant (BFT) 3-stage priority lattice matrix, locking decisions, and executing mutations via developer subagents governed by Hoare-logic write-boundary guards and workspace state receipt checkpointing, MoD delivers a verified, high-throughput product direction. We formalize the orchestration loop mathematically, specify resilience algorithms, detail state receipt checkpointing, and demonstrate empirical robustness through a suite of integration proofs.
 
 ---
 
 ## 2. Introduction & Background
 As Large Language Models (LLMs) transition from simple code-completion autocomplete features to complex multi-file codebase refactoring agents, maintaining product-level UX coherence becomes a primary engineering challenge. Under standard single-agent sequential execution models, the lack of holistic visual and structural awareness leads to "design drift"—where multiple incremental changes result in a fragmented, inconsistent codebase.
 
-MoD draws inspiration from two distinct paradigms:
-1. **Mixture of Experts (MoE)** (Shazeer et al., 2017): Activating specific network pathways (experts) based on input tokens to maximize parameter efficiency. MoD maps this strategy to the cognitive level, routing specific problem domains to distinct, highly focused LLM personas.
-2. **Multi-Agent Debate & Collaboration** (Du et al., 2023; Liang et al., 2023): Demonstrating that multi-agent consensus protocols yield superior reasoning accuracy compared to single-agent prompts. MoD extends this with a deterministic priority hierarchy to resolve design conflicts.
+MoD draws inspiration from three distinct paradigms:
+1. **Mixture of Experts (MoE)** (Shazeer et al., 2017): Activating specific network pathways (experts) based on input tokens to maximize parameter efficiency. MoD maps this strategy to the cognitive level, routing specific problem domains to distinct, highly focused LLM personas with capacity-aware load balancing (`FALLBACK_ROLE_MAP`).
+2. **Circuit-Breaker Fault Resilience** (Nygard, 2007): Wrapping external service calls to isolate failures. MoD wraps specialist analysis in `Promise.allSettled` to prevent single LLM stream timeouts or malformed outputs from blocking orchestration.
+3. **Multi-Agent Consensus & BFT Filtering** (Du et al., 2023): Demonstrating that multi-agent consensus protocols yield superior reasoning accuracy compared to single-agent prompts. MoD extends this with a deterministic priority hierarchy to resolve design conflicts.
 
 ---
 
@@ -30,36 +31,38 @@ MoD draws inspiration from two distinct paradigms:
 ┌────────────────────────────────────────────────────────┐
 │                   1. IntentAnalyzer                    │
 │   (Interprets request text & extracts product goals)   │
+│   (Self-Healing Heuristic Intent Extraction Recovery)  │
 └──────────────────────────┬─────────────────────────────┘
                            │ Product Intent (I)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                  2. ProblemClassifier                  │
 │  (Identifies target areas & classifies weaknesses)     │
+│   (Zero-Stall Keyword-Driven Heuristic Sensing)        │
 └──────────────────────────┬─────────────────────────────┘
                            │ Classified Problems (P)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                 3. SpecialistSelector                  │
-│       (Selects minimized specialist mixture)           │
+│       (Softmax Top-K MoE Capacity Balancing)           │
 └──────────────────────────┬─────────────────────────────┘
                            │ Specialist Mixture (S)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                  4. ContextBuilder                     │
-│    (Prepares isolated read-only workspace scopes)      │
+│    (In-Memory TTL Workspace Content Cache)             │
 └──────────────────────────┬─────────────────────────────┘
                            │ Bounded Contexts
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                 5. Specialist Appraisals               │
-│      (Runs parallel role-specific evaluations)         │
+│      (Circuit-Breaker Promise.allSettled Parallel Runs)│
 └──────────────────────────┬─────────────────────────────┘
                            │ Design Refinements (ref)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                 6. ConvergenceEngine                   │
-│    (Clusters, deduplicates, and resolves conflicts)    │
+│    (BFT 3-Stage Filtering & Priority Lattice Merge)    │
 └──────────────────────────┬─────────────────────────────┘
                            │ Converged Decisions (D_a)
                            ▼
@@ -77,7 +80,7 @@ MoD draws inspiration from two distinct paradigms:
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │                   9. Subagent Runner                   │
-│      (Executes code changes within boundaries)         │
+│   (Executes disjoint mutation batches concurrently)    │
 └──────────────────────────┬─────────────────────────────┘
                            │ Mutated Codebase (W')
                            ▼
@@ -88,16 +91,20 @@ MoD draws inspiration from two distinct paradigms:
                            │ Passed?
                            ├──► [Yes] ──► PLAYBOOK SEAL & COMPLETE
                            │
-                           └──► [No]  ──► TARGETED REVISION (Capped)
+                           └──► [No]  ──► INCREMENTAL REVISION (Capped)
 ```
 
-The system segregates design evaluation into 9 specialist personas:
+The system segregates design evaluation into 10 specialist personas:
 1. **Product Strategist**: Primary owner of user goals, target audience segments, and core Jobs-to-be-Done (JTBD).
 2. **UX Architect**: Validates structural layouts, information architecture, navigation pathways, and user flows.
 3. **Interaction Designer**: Formulates state transitions, interactive affordances, loading indicators, and hover effects.
 4. **Visual Systems Designer**: Evaluates grids, typography scale, spacing hierarchies, and colors.
 5. **Content Designer**: Audits copy tone, error message clarity, labels, and instructional prompts.
 6. **Design System Engineer**: Enforces reuse of UI library components, design tokens, and CSS variables.
+7. **Accessibility Reviewer**: Audits ARIA properties, screen reader support, tab order, and keyboard focus.
+8. **Responsive Design Reviewer**: Evaluates viewport adaptation, liquid layouts, media queries, and touch targets.
+9. **Frontend Implementation Designer**: Evaluates code elegance, build complexity, and dependency safety.
+10. **Product Critic**: Performs post-implementation adversarial critique and holistic product evaluation.
 7. **Accessibility Reviewer**: Enforces A11y compliance (ARIA attributes, keyboard traps, focus visible, high contrast).
 8. **Responsive Design Reviewer**: Validates layout behaviors across multi-device viewports and touch targets.
 9. **Frontend Implementation Designer**: Audits code complexity, bundle size budgets, and build system stability.
