@@ -60,7 +60,7 @@ code --install-extension CardSorting.lumi
 - [Documentation](#documentation)
 - [Governed subagent execution](#governed-subagent-execution)
 - [Workspace Knowledge System](#workspace-knowledge-system)
-- [Golden Cartridge Protocol](#golden-cartridge-protocol)
+- [Mixture of Designers (MoD) v1.2](#mixture-of-designers-mod-v12)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -244,10 +244,9 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [MEOW philosophy](.wiki/meow-philosophy.md) | Normative reasoning and calm concurrency principles |
 | [MEOW whitepaper](.wiki/meow-whitepaper.md) | Canonical technical architecture for execution lane swarms |
 | [MEOW migration](.wiki/meow-migration.md) | Measured throughput evidence and naming evolution |
-| [Golden Cartridge brief](docs/papers/golden-cartridge-brief.md) | Summary of the resource-constrained development workbench |
-| [Golden Cartridge philosophy](docs/papers/golden-cartridge-philosophy.md) | Tenets of resource-conscious software agency |
-| [Golden Cartridge whitepaper](docs/papers/golden-cartridge-whitepaper.md) | Technical overlay architecture, cache, and validation |
-| [Golden Cartridge reference](docs/tools-reference/golden-cartridge.mdx) | Specialized tool parameter schemas and verbs |
+| [MoD brief](.wiki/mod-executive-brief.md) | Executive brief for Mixture of Designers v1.2 orchestration |
+| [MoD philosophy](.wiki/mod-philosophy.md) | Cognitive specialization, bounded rationality, and priority consensus |
+| [MoD whitepaper](.wiki/mod-whitepaper.md) | Mathematical formalization, gating network, and Hoare-logic mutation governance |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
@@ -359,18 +358,15 @@ flowchart TD
 
 ---
 
-## Golden Cartridge Protocol
+## Mixture of Designers (MoD) v1.2
 
-LUMI supports the optional **Golden Cartridge Protocol**, a development workbench designed to target high-information, low-mass engineering paths under finite resource constraints (context mass, mutations, execution, and review capacity).
-
-It uses a single tool facade (`golden_cartridge`) coordinating twelve verbs to trace routes, slice focused context, find structural reuse, design compact representations, patch code surgically, run disproving validation tests, and seal execution receipts.
+LUMI includes **Mixture of Designers (MoD) v1.2**, a toggleable cognitive-specialization orchestration runtime that models professional software product design organizations. Inspired by Mixture-of-Experts (MoE) architectures, MoD dynamically routes codebase problems to a council of specialized read-only design personas (such as UX Architect, Accessibility Reviewer, Design System Engineer), converges recommendations using a deterministic priority hierarchy, locks design decisions, and delegates codebase mutations to developer subagents bounded by strict file mutation scopes.
 
 | Paper / Guide | Target Audience / Purpose |
 |---------------|--------------------------|
-| **[Companion brief](docs/papers/golden-cartridge-brief.md)** | Product summary, pillars, and developer value |
-| **[Philosophy](docs/papers/golden-cartridge-philosophy.md)** | Core principles of resource efficiency and one-way boundaries |
-| **[Technical whitepaper](docs/papers/golden-cartridge-whitepaper.md)** | Tool coordination, caching invalidations, and Pareto-dominance |
-| **[Tools Reference](docs/tools-reference/golden-cartridge.mdx)** | Complete parameter schemas, JSON payloads, and verb reference |
+| **[MoD Executive Brief](.wiki/mod-executive-brief.md)** | Product strategy, persona mappings, and token efficiency models |
+| **[MoD Design Philosophy](.wiki/mod-philosophy.md)** | Bounded rationality, appraisal/execution separation, and priority consensus |
+| **[MoD Technical Whitepaper](.wiki/mod-whitepaper.md)** | Mathematical formulation, gating networks, DAG state resume, and Hoare logic |
 
 ---
 

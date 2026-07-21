@@ -145,6 +145,7 @@ import { refreshWorkflowToggles } from "../context/instructions/user-instruction
 import { EmbeddingHandler, KnowledgeGraphService } from "../context/KnowledgeGraphService"
 import { IController } from "../controller/types"
 import { executeHook } from "../hooks/hook-executor"
+import { MixtureOfDesignersOrchestrator } from "../orchestration/mod/MixtureOfDesignersOrchestrator"
 import { StateManager } from "../storage/StateManager"
 import { FocusChainManager } from "./focus-chain"
 import { type TaskLatencySnapshot, TaskLatencyTracker } from "./latency/TaskLatencyTracker"
@@ -1917,6 +1918,19 @@ export class Task {
 
 	private async initiateTaskLoop(userContent: DietCodeContent[]): Promise<void> {
 		if (this.taskLoopActive) {
+			return
+		}
+
+		const modEnabled = this.stateManager.getGlobalSettingsKey("modEnabled") ?? false
+		if (modEnabled) {
+			this.taskLoopActive = true
+			try {
+				const outcome = this.stateManager.getGlobalSettingsKey("modOutcome") || "plan-and-implement"
+				const orchestrator = new MixtureOfDesignersOrchestrator(this, outcome as any)
+				await orchestrator.run(userContent)
+			} finally {
+				this.taskLoopActive = false
+			}
 			return
 		}
 

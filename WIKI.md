@@ -215,6 +215,77 @@ webview-ui/
   -> VS Code webview messaging runtime
 ```
 
+## Mixture of Designers (MoD) Orchestration
+
+Mixture of Designers (MoD) v1.2 is a toggleable LUMI execution mode for structured product-design refinement and implementation.
+
+### Standard vs MoD Behavior
+- **Standard Mode**: Processes requests in a single LLM request loop, executing tools directly through the `ToolExecutorCoordinator`. Standard mode does not record designer intent or run specialist agents.
+- **MoD Mode**: Routes requests through a multi-stage design-to-implementation pipeline. It selects a set of design specialists, validates their recommendations, resolves conflicts, locks decisions, and delegates work to implementation subagents under parent governance.
+
+### Plan-Only vs Plan-and-Implement
+- **Plan-Only**: Executes up to Stage 7 (Implementation Planning) and runs validation/critique without performing any code mutations or spawning developer subagents.
+- **Plan-and-Implement**: Spawns subagents via the canonical `SubagentRunner` to apply modifications to the codebase within authorized boundaries, followed by integrated validation and gates audit.
+
+### Specialist-Selection Logic
+Selection is derived directly from classified product problems (mapping problem dimensions to specialized roles). Redundant roles are excluded, and only the smallest useful mixture of specialists is called (max 6). Each role selection contains a recorded justification.
+
+### Convergence and Conflict Resolution
+`ConvergenceEngine` clusters related recommendations, deduplicates overlapping recommendations, and resolves conflicts using the following priority order:
+1. Product intent & constraints
+2. User safety and accessibility
+3. Primary workflow impact
+4. Existing product strengths
+5. Evidence quality
+6. Design-system coherence
+7. Technical feasibility
+
+### Decision Locking
+Accepted design decisions are locked before mutation. Reopening a locked decision requires a specific justification (e.g. failed gate validation).
+
+### Mutation Authority & Governance
+Mutations are permitted only in **Plan-and-Implement** outcome mode and must remain within the approved boundaries. Overlapping parallel mutations are prohibited.
+
+### Completion Gates
+Final results are audited against 8 gates: Product Intent, UX Architecture, Visual System, Interaction & State, Accessibility, Implementation Fidelity, Cross-Surface Consistency, and Final Product Critique (ensuring the final product does not feel generic or stitched together).
+
+### Revision Behavior
+A failed gate triggers a targeted revision pass. Only the responsible specialists are re-run. Revisions are capped at a strict budget of 2 passes, after which the parent must reduce scope, accept limitations, or fail honestly.
+
+### Resume Behavior
+MoD state is serialized in `mod_run_state.json` inside the task storage directory. Resuming a task restores the correct stage, preserves completed tasks, and avoids duplicate mutations.
+
+### Telemetry & Failure Modes
+Emits trace lifecycle events (e.g. `mod.started`, `mod.decision.locked`, `mod.gate.passed`). Stage failures route to an explicit `MoDFailure` state to exit cleanly.
+
+### Known Limitations
+- Does not run visual comparison engines on actual visual screenshots.
+- Revision passes are limited to a text-based critique loop.
+
+### Lifecycle Diagram
+
+```mermaid
+flowchart TD
+    A[Resolve Mode] --> B[Build Product Intent]
+    B --> C[Classify Problems]
+    C --> D[Select Smallest Useful Mixture]
+    D --> E[Run Bounded Specialists]
+    E --> F[Validate Refinements]
+    F --> G[Converge and Resolve Conflicts]
+    G --> H[Lock Design Decisions]
+    H --> I{Outcome}
+    I -->|Plan Only| J[Validate Plan]
+    I -->|Plan and Implement| K[Execute Governed Tasks]
+    K --> L[Validate Integrated Product]
+    J --> M[Final Product Critique]
+    L --> M
+    M --> N{Required Gates Pass}
+    N -->|Yes| O[Complete]
+    N -->|Targeted Revision| P[Revise Failed Area]
+    P --> F
+    N -->|Budget Exhausted| Q[Limit Scope or Fail]
+```
+
 ## Known Drift
 
 | Drift | Source of truth |

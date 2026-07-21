@@ -208,6 +208,14 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("customPrompt", value)
 		}
 
+		if (request.modEnabled !== undefined) {
+			controller.stateManager.setGlobalState("modEnabled", request.modEnabled)
+		}
+
+		if (request.modOutcome !== undefined) {
+			controller.stateManager.setGlobalState("modOutcome", request.modOutcome as any)
+		}
+
 		// Update browser settings
 		if (request.browserSettings !== undefined) {
 			// Get current browser settings to preserve fields not in the request

@@ -11,9 +11,9 @@ Three documents describe the **agent layer** (`src/`, `webview-ui/`) the same wa
 | 5 | [Knowledge philosophy](knowledge-philosophy.md) | Leads, Designers — Advisory memory tenets | 10 min |
 | 6 | [Knowledge thesis](knowledge-thesis.md) | Architects — Sovereign advisory invariant | 15 min |
 | 7 | [Knowledge whitepaper](knowledge-whitepaper.md) | Engineers — Architecture details | 30 min |
-| 8 | [Golden Cartridge brief](golden-cartridge-brief.md) | PMs, contributors — Workbench summary | 5 min |
-| 9 | [Golden Cartridge philosophy](golden-cartridge-philosophy.md) | Leads, designers — Resource tenets | 15 min |
-| 10 | [Golden Cartridge whitepaper](golden-cartridge-whitepaper.md) | Engineers — Integration details | 30 min |
+| 8 | [MoD brief](../../.wiki/mod-executive-brief.md) | PMs, contributors — MoD v1.2 Executive Brief | 5 min |
+| 9 | [MoD philosophy](../../.wiki/mod-philosophy.md) | Leads, designers — MoD v1.2 Design Philosophy | 15 min |
+| 10 | [MoD whitepaper](../../.wiki/mod-whitepaper.md) | Engineers — MoD v1.2 Technical Whitepaper | 30 min |
 
 ## One-line summary
 
@@ -64,6 +64,6 @@ cd broccolidb && npm run test:guardrails
 | [Workspace Knowledge Philosophy](knowledge-philosophy.md) | Philosophy tenets |
 | [Workspace Knowledge Brief](knowledge-brief.md) | Executive brief |
 | [Workspace Knowledge Whitepaper](knowledge-whitepaper.md) | Technical whitepaper |
-| [Golden Cartridge Brief](golden-cartridge-brief.md) | Workbench brief |
-| [Golden Cartridge Philosophy](golden-cartridge-philosophy.md) | Philosophy paper |
-| [Golden Cartridge Whitepaper](golden-cartridge-whitepaper.md) | Technical whitepaper |
+| [MoD Brief](../../.wiki/mod-executive-brief.md) | Executive brief |
+| [MoD Philosophy](../../.wiki/mod-philosophy.md) | Philosophy paper |
+| [MoD Whitepaper](../../.wiki/mod-whitepaper.md) | Technical whitepaper |

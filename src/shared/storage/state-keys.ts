@@ -287,6 +287,8 @@ const USER_SETTINGS_FIELDS = {
 	strictPlanModeEnabled: { default: false as boolean },
 	yoloModeToggled: { default: false as boolean },
 	safeYoloModeToggled: { default: false as boolean },
+	modEnabled: { default: false as boolean },
+	modOutcome: { default: "plan-and-implement" as "plan-only" | "plan-and-implement" },
 	useAutoCondense: { default: true as boolean },
 	subagentsEnabled: { default: true as boolean },
 	maxSwarmDepth: { default: 3 as number },

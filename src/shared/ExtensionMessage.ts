@@ -94,6 +94,8 @@ export interface ExtensionState {
 	yoloModeToggled?: boolean
 	useAutoCondense?: boolean
 	subagentsEnabled?: boolean
+	modEnabled?: boolean
+	modOutcome?: "plan-only" | "plan-and-implement"
 	dietcodeWebToolsEnabled?: DietCodeFeatureSetting
 	worktreesEnabled?: DietCodeFeatureSetting
 	focusChainSettings: FocusChainSettings

@@ -903,6 +903,8 @@ export class Controller implements IController {
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
+		const modEnabled = this.stateManager.getGlobalSettingsKey("modEnabled")
+		const modOutcome = this.stateManager.getGlobalSettingsKey("modOutcome")
 		const userInfo = this.stateManager.getGlobalStateKey("userInfo")
 		const mcpMarketplaceEnabled = this.stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
@@ -1012,6 +1014,8 @@ export class Controller implements IController {
 			yoloModeToggled,
 			useAutoCondense,
 			subagentsEnabled,
+			modEnabled,
+			modOutcome,
 			userInfo,
 			mcpMarketplaceEnabled,
 			mcpDisplayMode,

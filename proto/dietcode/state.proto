@@ -105,8 +105,8 @@ message Secrets {
   optional string vertex_api_key = 58;
   optional string cline_api_key = 96;
   optional string qwen_token_plan_api_key = 112;
-  optional string openai_codex_oauth_credentials = 113;
-  optional string xai_oauth_credentials = 114;
+  optional string openai_codex_oauth_credentials = 117;
+  optional string xai_oauth_credentials = 118;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -305,7 +305,9 @@ message Settings {
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 339;
   optional string act_mode_cline_pass_model_id = 340;
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 341;
-  map<string, string> open_ai_headers = 342;
+  optional bool mod_enabled = 343;
+  optional string mod_outcome = 344;
+  map<string, string> open_ai_headers = 345;
 }
 
 message State {
@@ -453,6 +455,8 @@ message UpdateSettingsRequest {
   optional string audit_intent_threshold_overrides = 52;
   optional bool audit_sarif_hook_export_enabled = 53;
   optional bool audit_workspace_artifacts_enabled = 54;
+  optional bool mod_enabled = 55;
+  optional string mod_outcome = 56;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

@@ -103,12 +103,12 @@ const LEARNING_TRACKS = {
 	],
 	papers: [
 		{
-			title: "📜 The Golden Cartridge Framework",
-			description: "Deep conceptual whitepapers establishing the anti-spiral engineering thesis:",
+			title: "🎨 Mixture of Designers (MoD) v1.2",
+			description: "Multi-agent orchestration framework for bounded design refinement & governed mutation:",
 			steps: [
-				{ path: "papers/golden-cartridge-philosophy", label: "Philosophy Whitepaper" },
-				{ path: "papers/golden-cartridge-brief", label: "Conceptual Brief" },
-				{ path: "papers/knowledge-item-thesis", label: "Knowledge Item Thesis" },
+				{ path: "wiki/mod-executive-brief", label: "Executive Brief" },
+				{ path: "wiki/mod-philosophy", label: "Design Philosophy" },
+				{ path: "wiki/mod-whitepaper", label: "Technical Whitepaper" },
 			],
 		},
 		{
@@ -324,7 +324,7 @@ function LandingPage({ toggleTheme, setSpotlightOpen }: LandingProps) {
 						</button>
 						<button
 							className="landing-btn landing-btn-secondary"
-							onClick={() => navigate("/papers/papers/golden-cartridge-philosophy")}>
+							onClick={() => navigate("/docs/wiki/mod-philosophy")}>
 							Read Philosophy Papers
 						</button>
 					</div>
@@ -1530,13 +1530,13 @@ function Footer() {
 					<span className="footer-column-title">Research</span>
 					<ul className="footer-column-links">
 						<li>
-							<Link to="/papers/papers/golden-cartridge-philosophy">Philosophy Papers</Link>
+							<Link to="/docs/wiki/mod-philosophy">Philosophy Papers</Link>
 						</li>
 						<li>
-							<Link to="/papers/papers/golden-cartridge-brief">Conceptual Briefs</Link>
+							<Link to="/docs/wiki/mod-executive-brief">Executive Briefs</Link>
 						</li>
 						<li>
-							<Link to="/papers/papers/knowledge-item-thesis">Knowledge Item Thesis</Link>
+							<Link to="/docs/wiki/mod-whitepaper">MoD Technical Whitepaper</Link>
 						</li>
 						<li>
 							<Link to="/docs/wiki/meow-whitepaper">MEOW Architecture</Link>
