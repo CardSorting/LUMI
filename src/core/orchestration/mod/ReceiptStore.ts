@@ -23,9 +23,39 @@ export class ReceiptStore {
 			const content = await fs.readFile(filePath, "utf8")
 			Logger.info(`[MoD] Loaded run state from receipt file: ${filePath}`)
 			return JSON.parse(content) as MoDRunState
-		} catch (error) {
-			// File does not exist or cannot be parsed
+		} catch (_error) {
 			return null
 		}
+	}
+
+	public static async loadAndValidate(taskId: string, workspaceDir?: string): Promise<MoDRunState | null> {
+		const state = await ReceiptStore.load(taskId)
+		if (!state || !workspaceDir || !state.checkpointHashes) return state
+
+		// Validate file mtimes against checkpoints
+		for (const [relPath, savedMtime] of Object.entries(state.checkpointHashes)) {
+			try {
+				const fullPath = path.isAbsolute(relPath) ? relPath : path.join(workspaceDir, relPath)
+				const stat = await fs.stat(fullPath)
+				const currentMtime = stat.mtimeMs.toString()
+
+				if (savedMtime !== currentMtime) {
+					Logger.warn(`[MoD DAG Invalidation] File ${relPath} changed out-of-band. Invalidating downstream tasks.`)
+					for (const task of state.implementationTasks) {
+						if (task.affectedFiles.includes(relPath) || task.mutationBoundary.includes(relPath)) {
+							task.status = "pending"
+						}
+					}
+				}
+			} catch {
+				for (const task of state.implementationTasks) {
+					if (task.affectedFiles.includes(relPath) || task.mutationBoundary.includes(relPath)) {
+						task.status = "pending"
+					}
+				}
+			}
+		}
+
+		return state
 	}
 }

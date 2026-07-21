@@ -180,6 +180,8 @@ export interface DesignRefinement {
 		scopeStatus: "in-scope" | "borderline" | "out-of-scope"
 		mutationAuthorityRequired: boolean
 		conflictsWith: string[]
+		bftStatus?: "valid" | "out-of-scope" | "malformed"
+		utility?: number
 	}
 }
 
@@ -207,6 +209,7 @@ export interface DesignDecision {
 	acceptanceCriteria: string[]
 	locked: boolean
 	reopenConditions: string[]
+	utility?: number
 }
 
 export interface DesignImplementationPhase {
@@ -345,6 +348,7 @@ export interface MoDRunState {
 	revisions: DesignRevisionRequest[]
 	limitations: string[]
 	failure?: MoDFailure
+	checkpointHashes?: Record<string, string>
 	createdAt: string
 	updatedAt: string
 }

@@ -1,12 +1,12 @@
-# Mixture of Designers (MoD) v1.2: Technical Whitepaper
+# Mixture of Designers (MoD) v1.3: Technical Whitepaper
 **A Multi-Agent Orchestration Framework for Bounded Product-Design Refinement and Guided Codebase Mutations**
 
 ---
 
 ## 1. Abstract
-We present **Mixture of Designers (MoD) v1.2**, an enterprise-grade multi-agent orchestration architecture integrated within the LUMI task runtime. Traditional AI coding agents optimize localized syntax repair and test suite compilation, often resulting in systemic regressions in user experience flow, visual hierarchy, responsive layout dynamics, design system primitive reuse, and accessibility (A11y) standards. MoD addresses this by implementing a structured cognitive hierarchy that separates **design appraisal** from **code mutation**. 
+We present **Mixture of Designers (MoD) v1.3**, an enterprise-grade multi-agent orchestration architecture integrated within the LUMI task runtime. Traditional AI coding agents optimize localized syntax repair and test suite compilation, often resulting in systemic regressions in user experience flow, visual hierarchy, responsive layout dynamics, design system primitive reuse, and accessibility (A11y) standards. MoD addresses this by implementing a structured cognitive hierarchy that separates **design appraisal** from **code mutation**. 
 
-By classifying codebase anomalies, routing analysis through a dynamically selected subset of specialized read-only design personas, converging recommendations using a deterministic priority hierarchy, locking decisions, and executing mutations via developer subagents restricted by strict mutation boundaries, MoD delivers a verified, cohesive product direction. We formalize the orchestration loop mathematically, provide concrete algorithms for selection routing and priority-based convergence, specify state receipts and resume invalidation logic, and demonstrate empirical robustness through a suite of integration proofs.
+By classifying codebase anomalies, routing analysis through a dynamically selected subset of specialized read-only design personas via capacity-aware Softmax Top-K gating, converging recommendations using a Byzantine Fault Tolerant (BFT) 3-stage priority lattice matrix, locking decisions, and executing mutations via developer subagents governed by Hoare-logic write-boundary guards and workspace state receipt checkpointing, MoD delivers a verified, cohesive product direction. We formalize the orchestration loop mathematically, provide concrete algorithms for selection routing and priority-based convergence, specify state receipts and resume invalidation logic, and demonstrate empirical robustness through a suite of integration proofs.
 
 ---
 

@@ -29,6 +29,7 @@ Last validated: 2026-07-18
 - Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
 - Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
+- Mixture of Designers (MoD) v1.3 multi-agent design orchestration framework: `src/core/orchestration/mod/`. Implements capacity-aware Softmax Top-K gating (`SpecialistSelector`), 3-stage BFT filtering & 9-role priority lattice matrix (`ConvergenceEngine`), state receipt workspace checkpointing (`ReceiptStore`), and Hoare-logic write-boundary guards (`MixtureOfDesignersOrchestrator`).
 
 ## Orientation Loop
 
@@ -85,3 +86,6 @@ The benchmark reports deterministic local-fixture evidence. Its “cold” mode 
 - [Migration report](../meow-migration.md)
 - [Approval admission ADR](../adr/MEOW-011-execution-approval-admission.md)
 - [Transactional lifecycle ADR](../adr/MEOW-012-transactional-task-lifecycle.md)
+- [MoD v1.3 Technical Whitepaper](../mod-whitepaper.md)
+- [MoD Executive Brief](../mod-executive-brief.md)
+- [MoD Design Philosophy](../mod-philosophy.md)

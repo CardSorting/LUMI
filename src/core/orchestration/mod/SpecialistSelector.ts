@@ -18,22 +18,37 @@ export const ROLE_MAPPING: Record<string, DesignerRole> = {
 	"cross-surface-consistency": "visual-systems-designer",
 }
 
+export const SEVERITY_WEIGHTS: Record<string, number> = {
+	critical: 4,
+	high: 3,
+	medium: 2,
+	low: 1,
+}
+
 export class SpecialistSelector {
 	public select(problems: ClassifiedProductProblem[], maxSpecialists = 6): SpecialistSelection[] {
 		Logger.info(`[MoD] Selecting specialists for ${problems.length} classified problems...`)
 
 		const selectionsMap = new Map<DesignerRole, SpecialistSelection>()
+		const severityScoresMap = new Map<DesignerRole, number>()
 
-		// Map each problem to its primary designer role
+		// Map each problem to its primary designer role & aggregate severity scores
 		for (const problem of problems) {
 			const role = ROLE_MAPPING[problem.dimension]
 			if (!role) continue
+
+			const weight = SEVERITY_WEIGHTS[problem.severity] || 1
+			severityScoresMap.set(role, (severityScoresMap.get(role) || 0) + weight)
 
 			if (selectionsMap.has(role)) {
 				const selection = selectionsMap.get(role)!
 				if (!selection.assignedProblemIds.includes(problem.id)) {
 					selection.assignedProblemIds.push(problem.id)
 					selection.reasons.push(`Assigned problem: ${problem.observation}`)
+				}
+				if (weight > (SEVERITY_WEIGHTS[selection.priority === "required" ? "high" : "low"] || 1)) {
+					selection.priority =
+						problem.severity === "critical" || problem.severity === "high" ? "required" : "recommended"
 				}
 			} else {
 				selectionsMap.set(role, {
@@ -49,16 +64,36 @@ export class SpecialistSelector {
 			}
 		}
 
-		// Sort by priority and limit to maxSpecialists
+		// Calculate Softmax routing probabilities for telemetry & gating verification
+		const totalScores = Array.from(severityScoresMap.values())
+		const maxScore = totalScores.length > 0 ? Math.max(...totalScores) : 0
+		const expScores = Array.from(severityScoresMap.entries()).map(([role, score]) => ({
+			role,
+			expScore: Math.exp(score - maxScore),
+		}))
+		const sumExp = expScores.reduce((sum, item) => sum + item.expScore, 0) || 1
+		const routingCoefficients = new Map<DesignerRole, number>()
+		for (const item of expScores) {
+			routingCoefficients.set(item.role, item.expScore / sumExp)
+		}
+
+		// Sort selections by priority, aggregated severity score, and Softmax routing coefficient
 		let selections = Array.from(selectionsMap.values())
 
 		selections.sort((a, b) => {
 			const priorityWeight = { required: 3, recommended: 2, optional: 1 }
-			return priorityWeight[b.priority] - priorityWeight[a.priority]
+			const pDiff = priorityWeight[b.priority] - priorityWeight[a.priority]
+			if (pDiff !== 0) return pDiff
+
+			const scoreA = severityScoresMap.get(a.role) || 0
+			const scoreB = severityScoresMap.get(b.role) || 0
+			if (scoreB !== scoreA) return scoreB - scoreA
+
+			return (routingCoefficients.get(b.role) || 0) - (routingCoefficients.get(a.role) || 0)
 		})
 
 		if (selections.length > maxSpecialists) {
-			Logger.info(`[MoD] Limiting specialist count from ${selections.length} to ${maxSpecialists}`)
+			Logger.info(`[MoD] Limiting specialist mixture count from ${selections.length} to ${maxSpecialists}`)
 			selections = selections.slice(0, maxSpecialists)
 		}
 

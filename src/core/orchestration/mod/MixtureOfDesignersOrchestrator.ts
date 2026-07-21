@@ -64,7 +64,8 @@ export class MixtureOfDesignersOrchestrator {
 		this.emitTelemetry("mod.started")
 
 		// Load or initialize state
-		const saved = await ReceiptStore.load(this.task.taskId)
+		const workspaceDir = (this.task as any).cwd
+		const saved = await ReceiptStore.loadAndValidate(this.task.taskId, workspaceDir)
 		if (saved) {
 			Logger.info("[MoD] Found existing run state, resuming...")
 			this.state = saved
@@ -84,6 +85,7 @@ export class MixtureOfDesignersOrchestrator {
 				gateResults: [],
 				revisions: [],
 				limitations: [],
+				checkpointHashes: {},
 				createdAt: new Date().toISOString(),
 				updatedAt: new Date().toISOString(),
 			}
@@ -415,7 +417,19 @@ Output JSON array only.`
 
 			if (relevantDecisions.length === 0) continue
 
+			const preserveBoundaries = this.state.intent?.boundaries?.preserve || []
+			const allowedToChange = this.state.intent?.boundaries?.allowedToChange || []
+
 			for (const dec of relevantDecisions) {
+				// Filter affected areas against preserve list (Hoare logic precondition)
+				const validMutationBoundary = dec.affectedAreas.filter((file) => {
+					const isPreserved = preserveBoundaries.some((p) => file.includes(p))
+					if (allowedToChange.length > 0) {
+						return !isPreserved && allowedToChange.some((a) => file.includes(a))
+					}
+					return !isPreserved
+				})
+
 				tasks.push({
 					id: `task-${taskIndex++}`,
 					decisionIds: [dec.id],
@@ -427,8 +441,8 @@ Output JSON array only.`
 					dependencies: [],
 					acceptanceCriteria: dec.acceptanceCriteria,
 					validationCommands: [],
-					mutationBoundary: dec.affectedAreas,
-					preservedBehavior: this.state.intent?.boundaries.preserve || [],
+					mutationBoundary: validMutationBoundary.length > 0 ? validMutationBoundary : dec.affectedAreas,
+					preservedBehavior: preserveBoundaries,
 					rollbackNotes: [],
 					status: "pending",
 				})

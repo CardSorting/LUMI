@@ -1008,7 +1008,7 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 		})
 
 		it("Test 9: Telemetry Lifecycle - logs events correctly", async () => {
-			const task = mockTask({ taskId: "telemetry-task" })
+			const task = mockTask({ taskId: "telemetry-unique-task-999" })
 			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-only")
 
 			const loggerSpy = sinon.spy(Logger, "info")
@@ -1017,6 +1017,272 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 
 			assert.ok(loggerSpy.calledWithMatch("[MoD Telemetry] Event emitted: mod.started"))
 			assert.ok(loggerSpy.calledWithMatch("[MoD Telemetry] Event emitted: mod.completed"))
+		})
+
+		it("Test 10: Softmax Top-K Gating & Severity Score Aggregation", () => {
+			const selector = new SpecialistSelector()
+			const problems: ClassifiedProductProblem[] = [
+				{
+					id: "prob-critical-acc",
+					dimension: "accessibility",
+					target: "src/Button.tsx",
+					observation: "Missing ARIA role",
+					userImpact: "Screen readers fail",
+					evidence: [],
+					severity: "critical",
+					confidence: "high",
+				},
+				{
+					id: "prob-high-ux",
+					dimension: "information-architecture",
+					target: "src/Nav.tsx",
+					observation: "Confusing navigation",
+					userImpact: "Friction point",
+					evidence: [],
+					severity: "high",
+					confidence: "high",
+				},
+				{
+					id: "prob-low-content",
+					dimension: "content",
+					target: "src/Footer.tsx",
+					observation: "Typo in label",
+					userImpact: "Cosmetic",
+					evidence: [],
+					severity: "low",
+					confidence: "medium",
+				},
+			]
+
+			const selections = selector.select(problems, 2)
+			assert.equal(selections.length, 2)
+			// Accessibility (critical) and UX Architect (high) should be selected over low content designer
+			assert.ok(selections.some((s) => s.role === "accessibility-reviewer"))
+			assert.ok(selections.some((s) => s.role === "ux-architect"))
+		})
+
+		it("Test 11: BFT 3-Stage Rejection - filters out-of-scope and malformed refinements", () => {
+			const engine = new ConvergenceEngine()
+			const intent: ProductDesignIntent = {
+				request: { originalRequest: "test", interpretedGoal: "test", explicitRequirements: [], implicitRequirements: [] },
+				product: {
+					productArea: "",
+					productPurpose: "",
+					targetUsers: [],
+					userExperienceLevels: [],
+					primaryJobs: [],
+					secondaryJobs: [],
+				},
+				currentExperience: {
+					workflow: [],
+					strengths: [],
+					weaknesses: [],
+					frictionPoints: [],
+					existingPatterns: [],
+					unresolvedQuestions: [],
+				},
+				constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+				boundaries: { preserve: [], allowedToChange: ["src/allowed.ts"], outOfScope: ["src/protected.ts"] },
+				success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+			}
+
+			const refinements: DesignRefinement[] = [
+				{
+					id: "ref-valid",
+					role: "ux-architect",
+					problem: {
+						problemId: "ux",
+						target: "src/allowed.ts",
+						observedBehavior: "o",
+						userImpact: "i",
+						severity: "high",
+						frequency: "constant",
+					},
+					evidence: [],
+					recommendation: {
+						designStrategy: "strategy",
+						proposedChange: "Valid UX change",
+						adaptationNotes: [],
+						alternativesConsidered: [],
+						tradeoffs: [],
+					},
+					implementation: {
+						affectedFiles: ["src/allowed.ts"],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						riskLevel: "low",
+					},
+					validation: { acceptanceCriteria: [], regressionRisks: [], verificationMethods: [] },
+					governance: {
+						confidence: "high",
+						scopeStatus: "in-scope",
+						mutationAuthorityRequired: false,
+						conflictsWith: [],
+					},
+				},
+				{
+					id: "ref-out-of-scope",
+					role: "visual-systems-designer",
+					problem: {
+						problemId: "visual",
+						target: "src/protected.ts",
+						observedBehavior: "o",
+						userImpact: "i",
+						severity: "medium",
+						frequency: "constant",
+					},
+					evidence: [],
+					recommendation: {
+						designStrategy: "strategy",
+						proposedChange: "Change protected core file",
+						adaptationNotes: [],
+						alternativesConsidered: [],
+						tradeoffs: [],
+					},
+					implementation: {
+						affectedFiles: ["src/protected.ts"],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						riskLevel: "high",
+					},
+					validation: { acceptanceCriteria: [], regressionRisks: [], verificationMethods: [] },
+					governance: {
+						confidence: "high",
+						scopeStatus: "out-of-scope",
+						mutationAuthorityRequired: false,
+						conflictsWith: [],
+					},
+				},
+			]
+
+			const converged = engine.converge(intent, refinements)
+			assert.equal(converged.decisions.length, 1)
+			assert.equal(converged.decisions[0].id, "dec-ref-valid")
+		})
+
+		it("Test 12: Decision Utility Calculation", () => {
+			const engine = new ConvergenceEngine()
+			const intent: ProductDesignIntent = {
+				request: { originalRequest: "test", interpretedGoal: "test", explicitRequirements: [], implicitRequirements: [] },
+				product: {
+					productArea: "",
+					productPurpose: "",
+					targetUsers: [],
+					userExperienceLevels: [],
+					primaryJobs: [],
+					secondaryJobs: [],
+				},
+				currentExperience: {
+					workflow: [],
+					strengths: [],
+					weaknesses: [],
+					frictionPoints: [],
+					existingPatterns: [],
+					unresolvedQuestions: [],
+				},
+				constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+				boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+				success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+			}
+
+			const refinements: DesignRefinement[] = [
+				{
+					id: "ref-critical-high-conf",
+					role: "accessibility-reviewer",
+					problem: {
+						problemId: "acc",
+						target: "btn",
+						observedBehavior: "o",
+						userImpact: "i",
+						severity: "critical",
+						frequency: "constant",
+					},
+					evidence: [],
+					recommendation: {
+						designStrategy: "s",
+						proposedChange: "Critical accessibility fix",
+						adaptationNotes: [],
+						alternativesConsidered: [],
+						tradeoffs: [],
+					},
+					implementation: {
+						affectedFiles: [],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						riskLevel: "low",
+					},
+					validation: { acceptanceCriteria: [], regressionRisks: [], verificationMethods: [] },
+					governance: {
+						confidence: "high",
+						scopeStatus: "in-scope",
+						mutationAuthorityRequired: false,
+						conflictsWith: [],
+					},
+				},
+			]
+
+			const converged = engine.converge(intent, refinements)
+			assert.equal(converged.decisions.length, 1)
+			// Utility = critical (4) * high confidence (1.0) = 4.0
+			assert.equal(converged.decisions[0].utility, 4.0)
+		})
+
+		it("Test 13: ReceiptStore DAG Invalidation when Checkpoint mtime changes", async () => {
+			const filePath = path.join(tempDir, "test-file.ts")
+			await fs.writeFile(filePath, "// initial content")
+			const stat = await fs.stat(filePath)
+
+			const state: MoDRunState = {
+				runId: "run-checkpoint-test",
+				mode: "mixture-of-designers",
+				outcome: "plan-and-implement",
+				stage: "implementation",
+				specialistSelections: [],
+				specialistResults: [],
+				refinements: [],
+				decisions: [],
+				implementationTasks: [
+					{
+						id: "task-checkpoint",
+						decisionIds: ["dec-1"],
+						objective: "Modify test file",
+						affectedFiles: [filePath],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						acceptanceCriteria: [],
+						validationCommands: [],
+						mutationBoundary: [filePath],
+						preservedBehavior: [],
+						rollbackNotes: [],
+						status: "completed",
+					},
+				],
+				validationResults: [],
+				critiqueFindings: [],
+				gateResults: [],
+				revisions: [],
+				limitations: [],
+				checkpointHashes: {
+					[filePath]: "1000", // outdated mtime simulation
+				},
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			}
+
+			await ReceiptStore.save("task-checkpoint-id", state)
+			const loaded = await ReceiptStore.loadAndValidate("task-checkpoint-id", tempDir)
+
+			assert.ok(loaded)
+			// Outdated mtime causes task status to reset to pending
+			assert.equal(loaded.implementationTasks[0].status, "pending")
 		})
 	})
 })

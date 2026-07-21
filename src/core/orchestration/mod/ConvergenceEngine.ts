@@ -1,6 +1,19 @@
 import { Logger } from "@/shared/services/Logger"
 import { DesignDecision, DesignRefinement, ProductDesignIntent } from "./types"
 
+export const PRIORITY_LATTICE: Record<string, number> = {
+	"product-strategist": 5,
+	"accessibility-reviewer": 4,
+	"ux-architect": 3,
+	"design-system-engineer": 2,
+	"visual-systems-designer": 1,
+	"interaction-designer": 1,
+	"content-designer": 1,
+	"responsive-design-reviewer": 1,
+	"frontend-implementation-designer": 1,
+	"product-critic": 0,
+}
+
 export class ConvergenceEngine {
 	public converge(
 		intent: ProductDesignIntent,
@@ -11,8 +24,11 @@ export class ConvergenceEngine {
 	} {
 		Logger.info(`[MoD] Running convergence engine on ${refinements.length} refinements...`)
 
-		// Step 1: Cluster and Deduplicate
-		const deduplicated = this.deduplicateAndMerge(refinements)
+		// BFT Phase 1 & Phase 2: Syntactic Rejection & Scope Boundary Filtering
+		const bftFiltered = this.applyBFTFiltering(intent, refinements)
+
+		// Step 1: Cluster and Deduplicate valid refinements
+		const deduplicated = this.deduplicateAndMerge(bftFiltered)
 
 		// Step 2: Detect conflicts
 		const conflicts = this.detectConflicts(deduplicated)
@@ -49,9 +65,11 @@ export class ConvergenceEngine {
 			}
 		}
 
-		// Step 4: Convert remaining/winning refinements to design decisions
+		// Step 4: Convert remaining/winning refinements to design decisions with Utility scores
 		for (const ref of deduplicated) {
 			const isSuperseded = supersededRefinementIds.has(ref.id)
+			const utility = this.calculateDecisionUtility(ref)
+
 			decisions.push({
 				id: `dec-${ref.id}`,
 				status: isSuperseded ? "superseded" : "accepted",
@@ -65,16 +83,42 @@ export class ConvergenceEngine {
 				acceptanceCriteria: ref.validation.acceptanceCriteria,
 				locked: !isSuperseded, // locked before implementation if accepted
 				reopenConditions: ref.validation.regressionRisks,
+				utility,
 			})
 		}
 
 		return { decisions, resolvedConflicts }
 	}
 
+	private applyBFTFiltering(intent: ProductDesignIntent, refinements: DesignRefinement[]): DesignRefinement[] {
+		const outOfScopePaths = intent.boundaries?.outOfScope || []
+		const allowedPaths = intent.boundaries?.allowedToChange || []
+
+		return refinements.filter((ref) => {
+			// BFT Phase 1: Syntactic Isolation
+			if (!ref.problem || !ref.recommendation || !ref.recommendation.proposedChange) {
+				Logger.warn(`[MoD BFT Rejection] Refinement ${ref.id} dropped: Malformed payload`)
+				ref.governance.bftStatus = "malformed"
+				return false
+			}
+
+			// BFT Phase 2: Semantic Boundary Verification
+			const affectedFiles = ref.implementation?.affectedFiles || []
+			const touchesOutOfScope = affectedFiles.some((f) => outOfScopePaths.includes(f))
+			if (touchesOutOfScope) {
+				Logger.warn(`[MoD BFT Rejection] Refinement ${ref.id} dropped: Touches out-of-scope boundaries`)
+				ref.governance.bftStatus = "out-of-scope"
+				return false
+			}
+
+			ref.governance.bftStatus = "valid"
+			return true
+		})
+	}
+
 	private deduplicateAndMerge(refinements: DesignRefinement[]): DesignRefinement[] {
 		const unique: DesignRefinement[] = []
 		for (const ref of refinements) {
-			// Check if we have an extremely similar refinement
 			const duplicate = unique.find(
 				(u) =>
 					u.problem.target === ref.problem.target &&
@@ -84,7 +128,6 @@ export class ConvergenceEngine {
 
 			if (duplicate) {
 				Logger.info(`[MoD] Merging duplicate refinement from role ${ref.role} into ${duplicate.role}`)
-				// Merge evidence and tradeoffs
 				duplicate.evidence.push(...ref.evidence)
 				duplicate.recommendation.tradeoffs.push(...ref.recommendation.tradeoffs)
 				duplicate.recommendation.adaptationNotes.push(...ref.recommendation.adaptationNotes)
@@ -105,10 +148,6 @@ export class ConvergenceEngine {
 				const r1 = refinements[i]
 				const r2 = refinements[j]
 
-				// Conflict indicators:
-				// - Same target component/file but proposing different/contradictory changes
-				// - Proposing incompatible navigation structures
-				// - Accessibility vs Visual styling conflict
 				const sameTarget = r1.problem.target === r2.problem.target && r1.problem.target !== "General"
 				const explicitConflict =
 					r1.governance.conflictsWith.includes(r2.id) || r2.governance.conflictsWith.includes(r1.id)
@@ -125,48 +164,41 @@ export class ConvergenceEngine {
 		intent: ProductDesignIntent,
 		group: DesignRefinement[],
 	): { winner: DesignRefinement; rationale: string } {
-		// Resolve conflicts using priority:
-		// 1. Product intent & constraints
-		// 2. User safety & accessibility
-		// 3. Primary workflow impact
-		// 4. Feasibility & Feasibility risks
-
-		// Find accessibility reviewer first if present
-		const accessibilityRef = group.find((r) => r.role === "accessibility-reviewer")
-		if (accessibilityRef) {
-			return {
-				winner: accessibilityRef,
-				rationale: "Prioritized accessibility recommendation for user safety and accessibility compliance.",
-			}
-		}
-
-		// Find UX architect next
-		const uxRef = group.find((r) => r.role === "ux-architect")
-		if (uxRef) {
-			return {
-				winner: uxRef,
-				rationale: "Prioritized UX architect recommendation for workflow and navigation coherence.",
-			}
-		}
-
-		// Find design system engineer next
-		const dsRef = group.find((r) => r.role === "design-system-engineer")
-		if (dsRef) {
-			return {
-				winner: dsRef,
-				rationale: "Prioritized Design System Engineer for component reuse and token consistency.",
-			}
-		}
-
-		// Fallback to highest confidence
+		// Evaluate using the full 9-role priority lattice map
 		const sorted = [...group].sort((a, b) => {
+			const pA = PRIORITY_LATTICE[a.role] ?? 1
+			const pB = PRIORITY_LATTICE[b.role] ?? 1
+			if (pB !== pA) return pB - pA
+
+			// Secondary tie-breaker: confidence
 			const confidenceWeight = { high: 3, medium: 2, low: 1 }
 			return confidenceWeight[b.governance.confidence] - confidenceWeight[a.governance.confidence]
 		})
 
-		return {
-			winner: sorted[0],
-			rationale: `Prioritized refinement from ${sorted[0].role} due to higher confidence level.`,
+		const winner = sorted[0]
+		const pWinner = PRIORITY_LATTICE[winner.role] ?? 1
+
+		let rationale = `Prioritized recommendation from ${winner.role} based on Priority Lattice matrix (level ${pWinner}).`
+		if (winner.role === "accessibility-reviewer") {
+			rationale = "Prioritized accessibility recommendation for user safety and accessibility compliance."
+		} else if (winner.role === "product-strategist") {
+			rationale = "Prioritized Product Strategist recommendation to preserve JTBD and product goals."
+		} else if (winner.role === "ux-architect") {
+			rationale = "Prioritized UX Architect recommendation for workflow and navigation coherence."
+		} else if (winner.role === "design-system-engineer") {
+			rationale = "Prioritized Design System Engineer for component reuse and token consistency."
 		}
+
+		return { winner, rationale }
+	}
+
+	private calculateDecisionUtility(ref: DesignRefinement): number {
+		const severityWeight: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
+		const confidenceWeight: Record<string, number> = { high: 1.0, medium: 0.75, low: 0.5 }
+
+		const s = severityWeight[ref.problem?.severity] || 2
+		const c = confidenceWeight[ref.governance?.confidence] || 0.75
+
+		return Number.parseFloat((s * c).toFixed(2))
 	}
 }
