@@ -41,6 +41,12 @@ export function getConfiguredProviders(
 	if (!configured.includes("xai-oauth")) {
 		configured.push("xai-oauth")
 	}
+	if (!configured.includes("qwen-token-plan")) {
+		configured.push("qwen-token-plan")
+	}
+	if (!configured.includes("zai")) {
+		configured.push("zai")
+	}
 
 	return configured
 }

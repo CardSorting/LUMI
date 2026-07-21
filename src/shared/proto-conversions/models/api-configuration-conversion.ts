@@ -99,6 +99,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.XAI_OAUTH
 		case "qwen-token-plan":
 			return ProtoApiProvider.QWEN_TOKEN_PLAN
+		case "zai":
+			return ProtoApiProvider.ZAI
 		default:
 			return ProtoApiProvider.OPENROUTER
 	}
@@ -127,6 +129,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "xai-oauth"
 		case ProtoApiProvider.QWEN_TOKEN_PLAN:
 			return "qwen-token-plan"
+		case ProtoApiProvider.ZAI:
+			return "zai"
 		default:
 			return "openrouter"
 	}
@@ -149,6 +153,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		cerebrasApiKey: config.cerebrasApiKey,
 		clineApiKey: config.clineApiKey,
 		qwenTokenPlanApiKey: config.qwenTokenPlanApiKey,
+		zaiApiKey: config.zaiApiKey,
+		zaiApiLine: config.zaiApiLine,
 		embeddingProvider: config.embeddingProvider ? convertApiProviderToProto(config.embeddingProvider) : undefined,
 		embeddingModelId: config.embeddingModelId,
 		embeddingApiKey: config.embeddingApiKey,
@@ -195,6 +201,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		cerebrasApiKey: protoConfig.cerebrasApiKey,
 		clineApiKey: protoConfig.clineApiKey,
 		qwenTokenPlanApiKey: protoConfig.qwenTokenPlanApiKey,
+		zaiApiKey: protoConfig.zaiApiKey,
+		zaiApiLine: protoConfig.zaiApiLine,
 		embeddingProvider:
 			protoConfig.embeddingProvider !== undefined ? convertProtoToApiProvider(protoConfig.embeddingProvider) : undefined,
 		embeddingModelId: protoConfig.embeddingModelId,

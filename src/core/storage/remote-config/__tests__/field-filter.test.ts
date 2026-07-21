@@ -11,4 +11,14 @@ describe("remote-config provider filtering", () => {
 			]),
 		).to.deep.equal({ planModeApiProvider: "xai-oauth", actModeApiProvider: "xai-oauth" })
 	})
+
+	it("allows qwen-token-plan and zai even when an organization allow-list only contains OpenRouter", () => {
+		expect(isProviderAllowed("qwen-token-plan", ["openrouter"])).to.equal(true)
+		expect(isProviderAllowed("zai", ["openrouter"])).to.equal(true)
+		expect(
+			filterAllowedRemoteConfigFields({ planModeApiProvider: "qwen-token-plan", actModeApiProvider: "zai" }, [
+				"openrouter",
+			]),
+		).to.deep.equal({ planModeApiProvider: "qwen-token-plan", actModeApiProvider: "zai" })
+	})
 })

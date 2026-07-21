@@ -166,8 +166,8 @@ export function normalizeApiConfiguration(
 			}
 		default:
 			return {
-				selectedProvider: "openrouter" as ApiProvider,
-				selectedModelId: openRouterDefaultModelId,
+				selectedProvider: (provider as ApiProvider) || "openrouter",
+				selectedModelId: modelId || openRouterDefaultModelId,
 				selectedModelInfo: openRouterDefaultModelInfo,
 			}
 	}

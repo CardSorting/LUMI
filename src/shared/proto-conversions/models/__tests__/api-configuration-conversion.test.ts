@@ -68,4 +68,31 @@ describe("API configuration protobuf conversion", () => {
 			cerebrasApiKey: "csk-test",
 		})
 	})
+
+	it("round-trips the Zai and Qwen Token Plan providers and credentials", () => {
+		const proto = convertApiConfigurationToProto({
+			planModeApiProvider: "zai",
+			actModeApiProvider: "qwen-token-plan",
+			zaiApiKey: "zai-key-123",
+			zaiApiLine: "china",
+			qwenTokenPlanApiKey: "qwen-key-456",
+		})
+
+		expect(proto.planModeApiProvider).to.equal(ProtoApiProvider.ZAI)
+		expect(proto.actModeApiProvider).to.equal(ProtoApiProvider.QWEN_TOKEN_PLAN)
+		expect(proto.zaiApiKey).to.equal("zai-key-123")
+		expect(proto.zaiApiLine).to.equal("china")
+		expect(proto.qwenTokenPlanApiKey).to.equal("qwen-key-456")
+
+		const wireRoundTrip = ModelsApiConfiguration.fromJSON(ModelsApiConfiguration.toJSON(proto))
+		const restored = convertProtoToApiConfiguration(wireRoundTrip)
+
+		expect(restored).to.include({
+			planModeApiProvider: "zai",
+			actModeApiProvider: "qwen-token-plan",
+			zaiApiKey: "zai-key-123",
+			zaiApiLine: "china",
+			qwenTokenPlanApiKey: "qwen-key-456",
+		})
+	})
 })

@@ -18,7 +18,13 @@ import { ApiProvider } from "@/shared/api"
  * provider allow-list. An empty/undefined allow-list permits all providers.
  */
 export function isProviderAllowed(provider?: ApiProvider, remoteConfiguredProviders?: ApiProvider[]): boolean {
-	if (provider === "xai-oauth" || provider === "openai-codex" || provider === "cline-pass") {
+	if (
+		provider === "xai-oauth" ||
+		provider === "openai-codex" ||
+		provider === "cline-pass" ||
+		provider === "qwen-token-plan" ||
+		provider === "zai"
+	) {
 		return true
 	}
 	if (!remoteConfiguredProviders || !remoteConfiguredProviders.length) {

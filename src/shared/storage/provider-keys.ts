@@ -14,6 +14,7 @@ import {
 	huaweiCloudMaasDefaultModelId,
 	huggingFaceDefaultModelId,
 	internationalQwenDefaultModelId,
+	internationalZAiDefaultModelId,
 	liteLlmDefaultModelId,
 	minimaxDefaultModelId,
 	moonshotDefaultModelId,
@@ -123,6 +124,7 @@ const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
 	qwen: internationalQwenDefaultModelId,
 	deepseek: deepSeekDefaultModelId,
 	"qwen-token-plan": qwenTokenPlanDefaultModelId,
+	zai: internationalZAiDefaultModelId,
 } as const
 
 /**

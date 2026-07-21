@@ -39,6 +39,16 @@ export function validateApiConfiguration(currentMode: Mode, apiConfiguration?: A
 				return "You must provide a valid Cline API key."
 			}
 			break
+		case "qwen-token-plan":
+			if (!apiConfiguration.qwenTokenPlanApiKey) {
+				return "You must provide a valid Qwen Token Plan API key."
+			}
+			break
+		case "zai":
+			if (!apiConfiguration.zaiApiKey) {
+				return "You must provide a valid Z AI API key."
+			}
+			break
 	}
 
 	return undefined

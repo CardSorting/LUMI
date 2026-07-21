@@ -65,7 +65,9 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 					remoteProviders.includes(option.value) ||
 					option.value === "xai-oauth" ||
 					option.value === "openai-codex" ||
-					option.value === "cline-pass",
+					option.value === "cline-pass" ||
+					option.value === "qwen-token-plan" ||
+					option.value === "zai",
 			)
 		}
 
