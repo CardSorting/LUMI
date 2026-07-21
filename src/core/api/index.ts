@@ -11,6 +11,7 @@ import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
 import { QwenTokenPlanHandler } from "./providers/qwen-token-plan"
 import { XAIOauthHandler } from "./providers/xai-oauth"
+import { ZAiHandler } from "./providers/zai"
 import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
 
 // Re-export the API handler contract for backward compatibility.
@@ -86,6 +87,13 @@ function createHandlerForProvider(
 			return new QwenTokenPlanHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				qwenTokenPlanApiKey: options.qwenTokenPlanApiKey,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+			})
+		case "zai":
+			return new ZAiHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				zaiApiKey: options.zaiApiKey,
+				zaiApiLine: options.zaiApiLine,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 			})
 		default:

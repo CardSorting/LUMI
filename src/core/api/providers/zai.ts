@@ -1,4 +1,7 @@
 import {
+	codingZAiDefaultModelId,
+	codingZAiModelId,
+	codingZAiModels,
 	internationalZAiDefaultModelId,
 	internationalZAiModelId,
 	internationalZAiModels,
@@ -23,6 +26,7 @@ interface ZAiHandlerOptions extends CommonApiHandlerOptions {
 	zaiApiLine?: string
 	zaiApiKey?: string
 	apiModelId?: string
+	customModelInfo?: ModelInfo
 }
 
 export class ZAiHandler implements ApiHandler {
@@ -34,6 +38,10 @@ export class ZAiHandler implements ApiHandler {
 
 	private useChinaApi(): boolean {
 		return this.options.zaiApiLine === "china"
+	}
+
+	private useCodingApi(): boolean {
+		return this.options.zaiApiLine === "coding"
 	}
 
 	private ensureClient(): OpenAI {
@@ -56,15 +64,45 @@ export class ZAiHandler implements ApiHandler {
 						"X-DietCode-Version": extensionVersion,
 					},
 				})
-			} catch (error: any) {
-				throw new Error(`Error creating Z AI client: ${error.message}`)
+			} catch (error: unknown) {
+				const msg = error instanceof Error ? error.message : String(error)
+				throw new Error(`Error creating Z AI client: ${msg}`)
 			}
 		}
 		return this.client
 	}
 
-	getModel(): { id: mainlandZAiModelId | internationalZAiModelId; info: ModelInfo } {
+	getModel(): { id: string; info: ModelInfo } {
 		const modelId = this.options.apiModelId
+
+		if (this.options.customModelInfo && modelId) {
+			return { id: modelId, info: this.options.customModelInfo }
+		}
+
+		if (this.useCodingApi()) {
+			if (modelId && modelId in codingZAiModels) {
+				const id = modelId as codingZAiModelId
+				return { id, info: codingZAiModels[id] }
+			}
+			if (modelId) {
+				// Custom model string passed for coding API line
+				const contextWindow = modelId.includes("glm-5.2") ? 1_000_000 : 200_000
+				return {
+					id: modelId,
+					info: {
+						maxTokens: 128_000,
+						contextWindow,
+						supportsImages: false,
+						supportsPromptCache: true,
+					},
+				}
+			}
+			return {
+				id: codingZAiDefaultModelId,
+				info: codingZAiModels[codingZAiDefaultModelId],
+			}
+		}
+
 		if (this.useChinaApi()) {
 			const id = modelId && modelId in mainlandZAiModels ? (modelId as mainlandZAiModelId) : mainlandZAiDefaultModelId
 			return {
@@ -72,11 +110,28 @@ export class ZAiHandler implements ApiHandler {
 				info: mainlandZAiModels[id],
 			}
 		}
-		const id =
-			modelId && modelId in internationalZAiModels ? (modelId as internationalZAiModelId) : internationalZAiDefaultModelId
+
+		if (modelId && modelId in internationalZAiModels) {
+			const id = modelId as internationalZAiModelId
+			return { id, info: internationalZAiModels[id] }
+		}
+
+		if (modelId) {
+			const contextWindow = modelId.includes("glm-5.2") ? 1_000_000 : 200_000
+			return {
+				id: modelId,
+				info: {
+					maxTokens: 128_000,
+					contextWindow,
+					supportsImages: false,
+					supportsPromptCache: true,
+				},
+			}
+		}
+
 		return {
-			id,
-			info: internationalZAiModels[id],
+			id: internationalZAiDefaultModelId,
+			info: internationalZAiModels[internationalZAiDefaultModelId],
 		}
 	}
 

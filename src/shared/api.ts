@@ -4573,8 +4573,17 @@ export const basetenDefaultModelId = "zai-org/GLM-4.6" satisfies BasetenModelId
 // https://docs.z.ai/guides/llm/glm-5
 // https://docs.z.ai/guides/overview/pricing
 export type internationalZAiModelId = keyof typeof internationalZAiModels
-export const internationalZAiDefaultModelId: internationalZAiModelId = "glm-5"
+export const internationalZAiDefaultModelId: internationalZAiModelId = "glm-5.2"
 export const internationalZAiModels = {
+	"glm-5.2": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		inputPrice: 1.4,
+		outputPrice: 4.4,
+		cacheReadsPrice: 0.28,
+	},
 	"glm-5.1": {
 		maxTokens: 128_000,
 		contextWindow: 200_000,
@@ -4675,6 +4684,48 @@ export const mainlandZAiModels = {
 		cacheReadsPrice: 0.2,
 		inputPrice: 1.0,
 		outputPrice: 3.2,
+	},
+} as const satisfies Record<string, ModelInfo>
+
+// GLM Coding Plan models (Base URL: https://api.z.ai/api/coding/paas/v4)
+export type codingZAiModelId = keyof typeof codingZAiModels
+export const codingZAiDefaultModelId: codingZAiModelId = "glm-5.2"
+export const codingZAiModels = {
+	"glm-5.2": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+	},
+	"glm-5.1": {
+		maxTokens: 128_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+	},
+	"glm-5": {
+		maxTokens: 128_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+	},
+	"glm-4.7": {
+		maxTokens: 131_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+	},
+	"glm-4.6": {
+		maxTokens: 128_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+	},
+	"glm-4.5": {
+		maxTokens: 98_304,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
 	},
 } as const satisfies Record<string, ModelInfo>
 

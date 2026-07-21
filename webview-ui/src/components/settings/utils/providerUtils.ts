@@ -7,13 +7,19 @@ import {
 	clinePassModels,
 	cloudflareDefaultModelId,
 	cloudflareModels,
+	codingZAiModels,
+	internationalZAiDefaultModelId,
+	internationalZAiModels,
 	ModelInfo,
+	mainlandZAiModels,
 	nousResearchDefaultModelId,
 	nousResearchModels,
 	openAiCodexDefaultModelId,
 	openAiCodexModels,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
+	qwenTokenPlanDefaultModelId,
+	qwenTokenPlanModels,
 	xaiDefaultModelId,
 	xaiModels,
 } from "@shared/api"
@@ -46,6 +52,11 @@ export function getModelsForProvider(
 			return clinePassModels
 		case "xai-oauth":
 			return xaiModels
+		case "qwen-token-plan":
+			return qwenTokenPlanModels
+		case "zai":
+			const line = _apiConfiguration?.zaiApiLine || "international"
+			return line === "coding" ? codingZAiModels : line === "china" ? mainlandZAiModels : internationalZAiModels
 		default:
 			return undefined
 	}
@@ -100,6 +111,34 @@ export function normalizeApiConfiguration(
 			return getProviderData(openAiCodexModels, openAiCodexDefaultModelId)
 		case "xai-oauth":
 			return getProviderData(xaiModels, xaiDefaultModelId)
+		case "qwen-token-plan":
+			return getProviderData(qwenTokenPlanModels, qwenTokenPlanDefaultModelId)
+		case "zai": {
+			const zaiLine = apiConfiguration?.zaiApiLine || "international"
+			const zaiModelsMap: Record<string, ModelInfo> =
+				zaiLine === "coding" ? codingZAiModels : zaiLine === "china" ? mainlandZAiModels : internationalZAiModels
+			if (modelId && modelId in zaiModelsMap) {
+				return {
+					selectedProvider: provider as ApiProvider,
+					selectedModelId: modelId,
+					selectedModelInfo: zaiModelsMap[modelId],
+				}
+			}
+			if (modelId) {
+				const contextWindow = modelId.includes("glm-5.2") ? 1_000_000 : 200_000
+				return {
+					selectedProvider: provider as ApiProvider,
+					selectedModelId: modelId,
+					selectedModelInfo: {
+						maxTokens: 128_000,
+						contextWindow,
+						supportsImages: false,
+						supportsPromptCache: true,
+					},
+				}
+			}
+			return getProviderData(zaiModelsMap, internationalZAiDefaultModelId)
+		}
 		case "openrouter":
 			const openRouterModelId =
 				currentMode === "plan" ? apiConfiguration?.planModeOpenRouterModelId : apiConfiguration?.actModeOpenRouterModelId

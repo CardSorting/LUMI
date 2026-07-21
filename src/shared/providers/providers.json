@@ -31,6 +31,10 @@
 		{
 			"value": "qwen-token-plan",
 			"label": "Qwen Token Plan"
+		},
+		{
+			"value": "zai",
+			"label": "Z AI (GLM)"
 		}
 	]
 }
