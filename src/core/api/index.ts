@@ -9,6 +9,7 @@ import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
 import { NousResearchHandler } from "./providers/nousresearch"
 import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
+import { QwenTokenPlanHandler } from "./providers/qwen-token-plan"
 import { XAIOauthHandler } from "./providers/xai-oauth"
 import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
 
@@ -80,6 +81,12 @@ function createHandlerForProvider(
 				onRetryAttempt: options.onRetryAttempt,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+			})
+		case "qwen-token-plan":
+			return new QwenTokenPlanHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				qwenTokenPlanApiKey: options.qwenTokenPlanApiKey,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 			})
 		default:
 			if (isE2ETestMode()) {

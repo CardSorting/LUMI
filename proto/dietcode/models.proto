@@ -201,6 +201,7 @@ message ModelsApiSecrets {
   optional string aihubmix_api_key = 39;
   optional string embedding_api_key = 40;
   optional string cloudflare_api_token = 41;
+  optional string qwen_token_plan_api_key = 42;
 }
 
 // API configuration options (non-secret settings)
@@ -474,6 +475,7 @@ enum ApiProvider {
   GOOGLE_PERSONAL = 42;
   CLINE_PASS = 43;
   XAI_OAUTH = 44;
+  QWEN_TOKEN_PLAN = 45;
 }
 
 enum ApiFormat {
@@ -619,6 +621,7 @@ message ModelsApiConfiguration {
   optional string cloudflare_account_id = 91;
   optional string cloudflare_api_token = 92;
   optional string cline_api_key = 93;
+  optional string qwen_token_plan_api_key = 94;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;

@@ -16,6 +16,7 @@ import { CloudflareProvider } from "./providers/CloudflareProvider"
 import { NousResearchProvider } from "./providers/NousresearchProvider"
 import { OpenAiCodexProvider } from "./providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "./providers/OpenRouterProvider"
+import { QwenTokenPlanProvider } from "./providers/QwenTokenPlanProvider"
 import { XAIOauthProvider } from "./providers/XAIOauthProvider"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
@@ -286,6 +287,10 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 			)}
 			{apiConfiguration && selectedProvider === "xai-oauth" && (
 				<XAIOauthProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+
+			{apiConfiguration && selectedProvider === "qwen-token-plan" && (
+				<QwenTokenPlanProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiErrorMessage && (

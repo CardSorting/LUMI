@@ -44,6 +44,7 @@ export type ApiProvider =
 	| "hicap"
 	| "sapaicore"
 	| "cline-pass"
+	| "qwen-token-plan"
 
 export const DEFAULT_API_PROVIDER = "openrouter" as ApiProvider
 
@@ -4390,6 +4391,37 @@ export const huaweiCloudMaasModels = {
 			maxBudget: 4096,
 			outputPrice: 1.1,
 		},
+	},
+} as const satisfies Record<string, ModelInfo>
+
+// Qwen Token Plan (Team Edition)
+// https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+export type QwenTokenPlanModelId = keyof typeof qwenTokenPlanModels
+export const qwenTokenPlanDefaultModelId: QwenTokenPlanModelId = "qwen3-7b-max"
+export const qwenTokenPlanModels = {
+	"qwen3-7b-max": {
+		maxTokens: 8_192,
+		contextWindow: 131_072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		cacheWritesPrice: 0,
+		cacheReadsPrice: 0,
+		description: "Qwen3 7B Max — Qwen3.8-Max-Preview on Token Plan (Team Edition) compatible-mode endpoint.",
+		supportsReasoning: true,
+	},
+	"Qwen3.8-Max-Preview": {
+		maxTokens: 8_192,
+		contextWindow: 131_072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		cacheWritesPrice: 0,
+		cacheReadsPrice: 0,
+		description: "Qwen3.8-Max-Preview on Token Plan (Team Edition) compatible-mode endpoint.",
+		supportsReasoning: true,
 	},
 } as const satisfies Record<string, ModelInfo>
 

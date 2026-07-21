@@ -20,6 +20,7 @@ import {
 	nousResearchDefaultModelId,
 	openAiNativeDefaultModelId,
 	openRouterDefaultModelId,
+	qwenTokenPlanDefaultModelId,
 	requestyDefaultModelId,
 	sapAiCoreDefaultModelId,
 	xaiDefaultModelId,
@@ -88,6 +89,7 @@ export const ProviderToApiKeyMap: Partial<Record<ApiProvider, keyof Secrets | (k
 	hicap: "hicapApiKey",
 	nousResearch: "nousResearchApiKey",
 	sapaicore: ["sapAiCoreClientId", "sapAiCoreClientSecret"],
+	"qwen-token-plan": "qwenTokenPlanApiKey",
 } as const
 
 const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
@@ -120,6 +122,7 @@ const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
 	moonshot: moonshotDefaultModelId,
 	qwen: internationalQwenDefaultModelId,
 	deepseek: deepSeekDefaultModelId,
+	"qwen-token-plan": qwenTokenPlanDefaultModelId,
 } as const
 
 /**

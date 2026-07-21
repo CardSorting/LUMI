@@ -27,6 +27,10 @@
 		{
 			"value": "xai-oauth",
 			"label": "Grok/X Subscription"
+		},
+		{
+			"value": "qwen-token-plan",
+			"label": "Qwen Token Plan"
 		}
 	]
 }

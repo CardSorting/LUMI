@@ -97,6 +97,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.CLINE_PASS
 		case "xai-oauth":
 			return ProtoApiProvider.XAI_OAUTH
+		case "qwen-token-plan":
+			return ProtoApiProvider.QWEN_TOKEN_PLAN
 		default:
 			return ProtoApiProvider.OPENROUTER
 	}
@@ -123,6 +125,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "cline-pass"
 		case ProtoApiProvider.XAI_OAUTH:
 			return "xai-oauth"
+		case ProtoApiProvider.QWEN_TOKEN_PLAN:
+			return "qwen-token-plan"
 		default:
 			return "openrouter"
 	}
@@ -144,6 +148,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		cloudflareApiToken: config.cloudflareApiToken,
 		cerebrasApiKey: config.cerebrasApiKey,
 		clineApiKey: config.clineApiKey,
+		qwenTokenPlanApiKey: config.qwenTokenPlanApiKey,
 		embeddingProvider: config.embeddingProvider ? convertApiProviderToProto(config.embeddingProvider) : undefined,
 		embeddingModelId: config.embeddingModelId,
 		embeddingApiKey: config.embeddingApiKey,
@@ -189,6 +194,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		cloudflareApiToken: protoConfig.cloudflareApiToken,
 		cerebrasApiKey: protoConfig.cerebrasApiKey,
 		clineApiKey: protoConfig.clineApiKey,
+		qwenTokenPlanApiKey: protoConfig.qwenTokenPlanApiKey,
 		embeddingProvider:
 			protoConfig.embeddingProvider !== undefined ? convertProtoToApiProvider(protoConfig.embeddingProvider) : undefined,
 		embeddingModelId: protoConfig.embeddingModelId,
