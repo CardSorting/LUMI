@@ -2,6 +2,7 @@ import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { LockKeyhole, MessageSquarePlus } from "lucide-react"
 import React, { useMemo, useState } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
+import { ModModeSwitcher } from "@/components/chat/ModModeSwitcher"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
 import { QuoteSelectionBar } from "@/components/chat/QuoteSelectionBar"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -87,6 +88,10 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			{activeQuote && (
 				<QuotedMessagePreview isFocused={isTextAreaFocused} onDismiss={() => setActiveQuote(null)} text={activeQuote} />
 			)}
+
+			<div className="px-3 pb-1">
+				<ModModeSwitcher />
+			</div>
 
 			{composerMode === "disabled" ? (
 				<div className="px-3 pb-2">
