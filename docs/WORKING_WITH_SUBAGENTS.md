@@ -28,6 +28,7 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Task lifecycle authority | `src/core/task/lifecycle/TaskLifecycleFunnel.ts` · [Task lifecycle](task-lifecycle-authority.md) |
 | Lane completion gates | `src/core/task/tools/subagentCompletionGates.ts` |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
+| Mixture of Designers (MoD) | `src/core/orchestration/mod/` · [MoD Architecture](mixture-of-designers.md) |
 
 `ToolExecutorCoordinator` registers static tools from `DietCodeDefaultTool` and **dynamic subagent handlers** loaded at runtime.
 

@@ -149,10 +149,12 @@ export class ConvergenceEngine {
 				const r2 = refinements[j]
 
 				const sameTarget = r1.problem.target === r2.problem.target && r1.problem.target !== "General"
+				const sameDimension = r1.problem.problemId === r2.problem.problemId || r1.role === r2.role
 				const explicitConflict =
 					r1.governance.conflictsWith.includes(r2.id) || r2.governance.conflictsWith.includes(r1.id)
 
-				if (sameTarget || explicitConflict) {
+				// Refinements targeting the same file across DIFFERENT dimensions are complementary, not conflicting
+				if (explicitConflict || (sameTarget && sameDimension)) {
 					conflicts.push({ refinementIds: [r1.id, r2.id] })
 				}
 			}

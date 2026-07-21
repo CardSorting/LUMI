@@ -96,6 +96,7 @@
 							"features/auto-compact",
 							"features/multiroot-workspace",
 							"features/subagents",
+							"mixture-of-designers",
 							"features/roadmap-steering",
 							"features/roadmap-auto-governance-postmortem",
 							"features/background-edit",

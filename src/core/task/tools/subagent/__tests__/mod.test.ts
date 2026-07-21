@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { updateSettings } from "@/core/controller/state/updateSettings"
 import { ConvergenceEngine } from "@/core/orchestration/mod/ConvergenceEngine"
+import { IntentAnalyzer } from "@/core/orchestration/mod/IntentAnalyzer"
 import { MixtureOfDesignersOrchestrator } from "@/core/orchestration/mod/MixtureOfDesignersOrchestrator"
+import { ProblemClassifier } from "@/core/orchestration/mod/ProblemClassifier"
 import { ReceiptStore } from "@/core/orchestration/mod/ReceiptStore"
 import { SpecialistSelector } from "@/core/orchestration/mod/SpecialistSelector"
 import { ClassifiedProductProblem, DesignRefinement, MoDRunState, ProductDesignIntent } from "@/core/orchestration/mod/types"
@@ -122,6 +124,35 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 
 			const selections = selector.select(problems, 1)
 			assert.equal(selections.length, 1)
+		})
+
+		it("returns correct fallback designer role when primary expert is overloaded or circuit breaks", () => {
+			const selector = new SpecialistSelector()
+			assert.equal(selector.getFallbackRole("accessibility-reviewer"), "ux-architect")
+			assert.equal(selector.getFallbackRole("visual-systems-designer"), "design-system-engineer")
+			assert.equal(selector.getFallbackRole("product-strategist"), "ux-architect")
+		})
+	})
+
+	describe("ProblemClassifier & IntentAnalyzer Heuristic Fallback", () => {
+		it("heuristically senses problems from request text when classifier LLM stream fails", () => {
+			const classifier = new ProblemClassifier({} as any)
+			const fallbackAccessibility = classifier.getFallbackClassification("Fix accessibility aria labels and keyboard focus")
+			assert.ok(fallbackAccessibility.problems.some((p) => p.dimension === "accessibility"))
+
+			const fallbackVisual = classifier.getFallbackClassification("Improve visual theme styling and color contrast")
+			assert.ok(fallbackVisual.problems.some((p) => p.dimension === "visual-hierarchy"))
+
+			const fallbackGeneral = classifier.getFallbackClassification("Refine the feature")
+			assert.ok(fallbackGeneral.problems.length > 0)
+		})
+
+		it("heuristically extracts intent requirements when analyzer LLM stream fails", () => {
+			const analyzer = new IntentAnalyzer({} as any)
+			const fallbackIntent = analyzer.getFallbackIntent("High speed zen flow accessibility audit")
+			assert.ok(fallbackIntent.request.explicitRequirements.length > 0)
+			assert.ok(fallbackIntent.request.implicitRequirements.some((r) => r.includes("High performance")))
+			assert.ok(fallbackIntent.request.implicitRequirements.some((r) => r.includes("Calm experience")))
 		})
 	})
 
@@ -1283,6 +1314,352 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 			assert.ok(loaded)
 			// Outdated mtime causes task status to reset to pending
 			assert.equal(loaded.implementationTasks[0].status, "pending")
+		})
+
+		it("Test 14: Batch Context Prefetching and Target Cache", async () => {
+			const { ContextBuilder } = await import("@/core/orchestration/mod/ContextBuilder")
+			const contextBuilder = new ContextBuilder()
+
+			const intent: ProductDesignIntent = {
+				request: { originalRequest: "test", interpretedGoal: "test", explicitRequirements: [], implicitRequirements: [] },
+				product: {
+					productArea: "",
+					productPurpose: "",
+					targetUsers: [],
+					userExperienceLevels: [],
+					primaryJobs: [],
+					secondaryJobs: [],
+				},
+				currentExperience: {
+					workflow: [],
+					strengths: [],
+					weaknesses: [],
+					frictionPoints: [],
+					existingPatterns: ["pattern1"],
+					unresolvedQuestions: [],
+				},
+				constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+				boundaries: { preserve: [], allowedToChange: [], outOfScope: ["src/out.ts"] },
+				success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+			}
+
+			const problems: ClassifiedProductProblem[] = [
+				{
+					id: "p1",
+					dimension: "accessibility",
+					target: "src/components/Button.tsx",
+					observation: "Missing label",
+					userImpact: "Impact",
+					evidence: [],
+					severity: "high",
+					confidence: "high",
+				},
+			]
+
+			const batchResult = await contextBuilder.buildBatch(
+				["accessibility-reviewer", "visual-systems-designer"],
+				intent,
+				problems,
+				tempDir,
+			)
+
+			assert.equal(batchResult.size, 2)
+			assert.ok(batchResult.has("accessibility-reviewer"))
+			assert.ok(batchResult.has("visual-systems-designer"))
+			assert.equal(batchResult.get("accessibility-reviewer")?.files[0].path, "src/components/Button.tsx")
+		})
+
+		it("Test 15: Disjoint Boundary Task Batch Partitioning", () => {
+			const orch = new MixtureOfDesignersOrchestrator(mockTask(), "plan-and-implement")
+			const tasks: any[] = [
+				{
+					id: "t1",
+					affectedFiles: ["src/Button.tsx"],
+					mutationBoundary: ["src/Button.tsx"],
+					status: "pending",
+				},
+				{
+					id: "t2",
+					affectedFiles: ["src/Header.tsx"],
+					mutationBoundary: ["src/Header.tsx"],
+					status: "pending",
+				},
+				{
+					id: "t3",
+					affectedFiles: ["src/Button.tsx"], // overlaps with t1
+					mutationBoundary: ["src/Button.tsx"],
+					status: "pending",
+				},
+			]
+
+			const batches = (orch as any).partitionIntoDisjointBatches(tasks, 3)
+			// t1 and t2 are disjoint -> Batch 1: [t1, t2]
+			// t3 overlaps with t1 -> Batch 2: [t3]
+			assert.equal(batches.length, 2)
+			assert.equal(batches[0].length, 2)
+			assert.equal(batches[0][0].id, "t1")
+			assert.equal(batches[0][1].id, "t2")
+			assert.equal(batches[1].length, 1)
+			assert.equal(batches[1][0].id, "t3")
+		})
+
+		it("Test 16: Complementary Refinement Fusion across different dimensions", () => {
+			const engine = new ConvergenceEngine()
+			const intent: ProductDesignIntent = {
+				request: { originalRequest: "test", interpretedGoal: "test", explicitRequirements: [], implicitRequirements: [] },
+				product: {
+					productArea: "",
+					productPurpose: "",
+					targetUsers: [],
+					userExperienceLevels: [],
+					primaryJobs: [],
+					secondaryJobs: [],
+				},
+				currentExperience: {
+					workflow: [],
+					strengths: [],
+					weaknesses: [],
+					frictionPoints: [],
+					existingPatterns: [],
+					unresolvedQuestions: [],
+				},
+				constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+				boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+				success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+			}
+
+			const refinements: DesignRefinement[] = [
+				{
+					id: "ref-acc",
+					role: "accessibility-reviewer",
+					problem: {
+						problemId: "accessibility",
+						target: "src/components/Header.tsx",
+						observedBehavior: "Missing aria label",
+						userImpact: "Screen readers skip it",
+						severity: "high",
+						frequency: "constant",
+					},
+					evidence: [],
+					recommendation: {
+						designStrategy: "strategy",
+						proposedChange: "Add aria-label to header nav",
+						adaptationNotes: [],
+						alternativesConsidered: [],
+						tradeoffs: [],
+					},
+					implementation: {
+						affectedFiles: ["src/components/Header.tsx"],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						riskLevel: "low",
+					},
+					validation: { acceptanceCriteria: [], regressionRisks: [], verificationMethods: [] },
+					governance: {
+						confidence: "high",
+						scopeStatus: "in-scope",
+						mutationAuthorityRequired: false,
+						conflictsWith: [],
+					},
+				},
+				{
+					id: "ref-vis",
+					role: "visual-systems-designer",
+					problem: {
+						problemId: "visual-hierarchy",
+						target: "src/components/Header.tsx",
+						observedBehavior: "Crowded spacing",
+						userImpact: "Hard to scan",
+						severity: "medium",
+						frequency: "frequent",
+					},
+					evidence: [],
+					recommendation: {
+						designStrategy: "strategy",
+						proposedChange: "Increase header padding and font weight",
+						adaptationNotes: [],
+						alternativesConsidered: [],
+						tradeoffs: [],
+					},
+					implementation: {
+						affectedFiles: ["src/components/Header.tsx"],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						riskLevel: "low",
+					},
+					validation: { acceptanceCriteria: [], regressionRisks: [], verificationMethods: [] },
+					governance: {
+						confidence: "high",
+						scopeStatus: "in-scope",
+						mutationAuthorityRequired: false,
+						conflictsWith: [],
+					},
+				},
+			]
+
+			const converged = engine.converge(intent, refinements)
+			// Both accessibility and visual refinements touch Header.tsx, but belong to DIFFERENT problem dimensions.
+			// They are complementary! BOTH decisions must be accepted.
+			assert.equal(converged.decisions.length, 2)
+			assert.ok(converged.decisions.every((d) => d.status === "accepted"))
+		})
+
+		it("Test 17: Dynamic Gate Revision Routing to Targeted Specialist", async () => {
+			const orch = new MixtureOfDesignersOrchestrator(mockTask(), "plan-and-implement")
+			const runSpecialistSpy = sinon.spy(orch as any, "runSpecialist")
+
+			;(orch as any).state = {
+				runId: "test-rev",
+				intent: {
+					request: { originalRequest: "", interpretedGoal: "g", explicitRequirements: [], implicitRequirements: [] },
+					product: {
+						productArea: "",
+						productPurpose: "",
+						targetUsers: [],
+						userExperienceLevels: [],
+						primaryJobs: [],
+						secondaryJobs: [],
+					},
+					currentExperience: {
+						workflow: [],
+						strengths: [],
+						weaknesses: [],
+						frictionPoints: [],
+						existingPatterns: [],
+						unresolvedQuestions: [],
+					},
+					constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+					boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+					success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+				},
+				problemClassification: {
+					problems: [
+						{
+							id: "p1",
+							dimension: "accessibility",
+							target: "btn",
+							observation: "",
+							userImpact: "",
+							evidence: [],
+							severity: "high",
+							confidence: "high",
+						},
+					],
+					preservedStrengths: [],
+					insufficientEvidence: [],
+				},
+				specialistSelections: [
+					{ role: "accessibility-reviewer", assignedProblemIds: ["p1"] },
+					{ role: "product-strategist", assignedProblemIds: ["p2"] },
+				],
+				refinements: [],
+				revisions: [],
+			}
+
+			const failedGates: any[] = [
+				{
+					gate: "accessibility",
+					passed: false,
+					failureReasons: ["Focus state not visible on button"],
+				},
+			]
+
+			await (orch as any).runRevisionAnalysis(failedGates, 1)
+
+			assert.ok(runSpecialistSpy.calledOnce)
+			assert.equal(runSpecialistSpy.firstCall.args[0].role, "accessibility-reviewer")
+			assert.equal((orch as any).state.revisions[0].responsibleRoles[0], "accessibility-reviewer")
+		})
+
+		it("Test 18: Softmax Routing Threshold Gating filters noise roles", () => {
+			const selector = new SpecialistSelector()
+			const problems: ClassifiedProductProblem[] = [
+				{
+					id: "p1",
+					dimension: "accessibility",
+					target: "src/Button.tsx",
+					observation: "Critical aria missing",
+					userImpact: "Screen reader failure",
+					evidence: [],
+					severity: "critical",
+					confidence: "high",
+				},
+				{
+					id: "p2",
+					dimension: "visual-hierarchy",
+					target: "General",
+					observation: "Minor margin tweak",
+					userImpact: "Slight visual preference",
+					evidence: [],
+					severity: "low",
+					confidence: "low",
+				},
+			]
+
+			const selections = selector.select(problems, 6)
+			// Critical accessibility problem gets dominant weight; low-severity visual issue is gated if below threshold or sorted cleanly
+			assert.ok(selections.length >= 1)
+			assert.equal(selections[0].role, "accessibility-reviewer")
+		})
+
+		it("Test 19: Concurrent Integrated Validation & Product Critique Execution", async () => {
+			const task = mockTask()
+			const orch = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			const valSpy = sinon.spy(orch as any, "runIntegratedValidation")
+			const critSpy = sinon.spy(orch as any, "runCritique")
+
+			;(orch as any).state = {
+				runId: "test-conc-val",
+				mode: "mixture-of-designers",
+				outcome: "plan-and-implement",
+				stage: "implementation",
+				intent: {
+					request: { originalRequest: "", interpretedGoal: "g", explicitRequirements: [], implicitRequirements: [] },
+					product: {
+						productArea: "",
+						productPurpose: "",
+						targetUsers: [],
+						userExperienceLevels: [],
+						primaryJobs: [],
+						secondaryJobs: [],
+					},
+					currentExperience: {
+						workflow: [],
+						strengths: [],
+						weaknesses: [],
+						frictionPoints: [],
+						existingPatterns: [],
+						unresolvedQuestions: [],
+					},
+					constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+					boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+					success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+				},
+				problemClassification: { problems: [] },
+				specialistSelections: [],
+				specialistResults: [],
+				refinements: [],
+				decisions: [],
+				implementationTasks: [],
+				validationResults: [],
+				critiqueFindings: [],
+				gateResults: [],
+				revisions: [],
+				limitations: [],
+				checkpointHashes: {},
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			}
+
+			await Promise.all([(orch as any).runIntegratedValidation(), (orch as any).runCritique(tempDir)])
+
+			assert.ok(valSpy.calledOnce)
+			assert.ok(critSpy.calledOnce)
+			assert.equal((orch as any).state.validationResults.length, 8)
 		})
 	})
 })

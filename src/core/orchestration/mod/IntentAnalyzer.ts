@@ -152,48 +152,59 @@ Codebase Context: ${codebaseContext}`
 		}
 	}
 
-	private getFallbackIntent(requestText: string): ProductDesignIntent {
+	public getFallbackIntent(requestText: string): ProductDesignIntent {
+		const lower = requestText.toLowerCase()
+		const explicitReqs = [requestText]
+		const implicitReqs: string[] = []
+
+		if (lower.includes("fast") || lower.includes("speed") || lower.includes("throughput")) {
+			implicitReqs.push("High performance and low latency throughput")
+		}
+		if (lower.includes("zen") || lower.includes("calm") || lower.includes("clean")) {
+			implicitReqs.push("Calm experience, uncluttered visual hierarchy, and seamless user flow")
+		}
+
 		return {
 			request: {
 				originalRequest: requestText,
-				interpretedGoal: requestText,
-				explicitRequirements: [requestText],
-				implicitRequirements: [],
+				interpretedGoal: `Fulfill design goal: ${requestText.slice(0, 120)}`,
+				explicitRequirements: explicitReqs,
+				implicitRequirements: implicitReqs,
 			},
 			product: {
-				productArea: "Main Area",
-				productPurpose: "Core workflow",
-				targetUsers: ["returning"],
+				productArea: "Core Surface",
+				productPurpose: "Fulfill requested design improvements",
+				targetUsers: ["returning", "advanced"],
 				userExperienceLevels: ["returning"],
-				primaryJobs: ["Use features"],
+				primaryJobs: ["Execute primary design task"],
 				secondaryJobs: [],
 			},
 			currentExperience: {
-				workflow: [],
-				strengths: [],
-				weaknesses: [],
-				frictionPoints: [],
-				existingPatterns: [],
+				workflow: ["User navigates surface"],
+				strengths: ["Existing design component library"],
+				weaknesses: ["Areas requested for refinement"],
+				frictionPoints: ["Identified friction points in request"],
+				existingPatterns: ["Standard UI components"],
 				unresolvedQuestions: [],
 			},
 			constraints: {
-				technical: [],
-				product: [],
+				technical: ["Maintain build system compatibility"],
+				product: ["Preserve core functionality"],
 				brand: [],
-				accessibility: [],
-				performance: [],
+				accessibility: ["Maintain WCAG compliance"],
+				performance: ["Maintain high throughput and zero blocking"],
 				platform: [],
 			},
 			boundaries: {
 				preserve: [],
-				allowedToChange: [],
+				allowedToChange: ["Target feature components"],
 				outOfScope: [],
 			},
 			success: {
-				desiredOutcomes: [],
-				measurableSignals: [],
-				qualitativeSignals: [],
-				failureConditions: [],
+				desiredOutcomes: ["All design refinements applied without breaking changes"],
+				measurableSignals: ["Validation gates pass 100%"],
+				qualitativeSignals: ["Seamless user experience"],
+				failureConditions: ["Broken builds or regression in accessibility"],
 			},
 		}
 	}

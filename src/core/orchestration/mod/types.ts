@@ -381,6 +381,8 @@ export type MoDTelemetryEvent =
 	| "mod.revision.completed"
 	| "mod.implementation.started"
 	| "mod.implementation.completed"
+	| "mod.task_batch.started"
+	| "mod.task_batch.completed"
 	| "mod.validation.completed"
 	| "mod.critique.completed"
 	| "mod.completed"

@@ -29,7 +29,8 @@ export const MOD_DEFAULTS = {
 	maxRevisionPasses: 2,
 	maxCritiquePasses: 1,
 	allowParallelReadOnlyAnalysis: true,
-	allowParallelMutations: false,
+	allowParallelMutations: true,
+	maxParallelMutations: 3,
 	requireEvidenceForHighPriorityChanges: true,
 	lockAcceptedDecisionsBeforeImplementation: true,
 } as const
@@ -113,19 +114,19 @@ export class MixtureOfDesignersOrchestrator {
 	private async executeStages(requestText: string): Promise<void> {
 		const workspaceDir = (this.task as any).cwd
 
-		// Stage 1: Product Intent
-		if (!this.state.intent) {
+		// Stage 1 & Stage 2: Concurrent Product Intent & Problem Classification
+		if (!this.state.intent || !this.state.problemClassification) {
 			this.transitionTo("intent")
-			this.state.intent = await this.intentAnalyzer.analyze(requestText, workspaceDir)
-			await ReceiptStore.save(this.task.taskId, this.state)
+			const [intentRes, classificationRes] = await Promise.all([
+				this.state.intent ? Promise.resolve(this.state.intent) : this.intentAnalyzer.analyze(requestText, workspaceDir),
+				this.state.problemClassification
+					? Promise.resolve(this.state.problemClassification)
+					: this.problemClassifier.classify(requestText, workspaceDir),
+			])
+			this.state.intent = intentRes
+			this.state.problemClassification = classificationRes
+			void ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.intent.completed")
-		}
-
-		// Stage 2: Problem Classification
-		if (!this.state.problemClassification) {
-			this.transitionTo("classification")
-			this.state.problemClassification = await this.problemClassifier.classify(requestText, workspaceDir)
-			await ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.classification.completed")
 		}
 
@@ -179,7 +180,7 @@ export class MixtureOfDesignersOrchestrator {
 		// Mode branch check
 		if (this.outcome === "plan-only") {
 			Logger.info("[MoD] Outcome mode is plan-only, bypassing implementation")
-			await this.runCritique(workspaceDir)
+			await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
 			this.transitionTo("completed")
 			await ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.completed")
@@ -193,12 +194,10 @@ export class MixtureOfDesignersOrchestrator {
 		await this.executeImplementationTasks(workspaceDir)
 		this.emitTelemetry("mod.implementation.completed")
 
-		// Stage 9: Integrated Validation & Critique
+		// Stage 9: Concurrent Integrated Validation & Product Critique
 		this.transitionTo("validation")
-		await this.runIntegratedValidation()
+		await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
 		this.emitTelemetry("mod.validation.completed")
-
-		await this.runCritique(workspaceDir)
 
 		// Stage 10: Gate Evaluation & Revisions Loop
 		let revisionCount = 0
@@ -275,8 +274,34 @@ export class MixtureOfDesignersOrchestrator {
 
 	private async runSpecialistsAnalysis(workspaceDir: string): Promise<void> {
 		const specialists = this.state.specialistSelections
+		const roles = specialists.map((s) => s.role)
+		await this.contextBuilder.buildBatch(roles, this.state.intent!, this.state.problemClassification!.problems, workspaceDir)
+
 		const promises = specialists.map((spec) => this.runSpecialist(spec, workspaceDir))
-		const results = await Promise.all(promises)
+		const settled = await Promise.allSettled(promises)
+		const results: SpecialistResult[] = []
+
+		for (let i = 0; i < settled.length; i++) {
+			const res = settled[i]
+			const selection = specialists[i]
+			if (res.status === "fulfilled") {
+				results.push(res.value)
+			} else {
+				const errorMsg = res.reason?.message || String(res.reason)
+				Logger.error(
+					`[MoD Specialist Circuit Breaker] Specialist ${selection.role} threw unhandled exception: ${errorMsg}. Tripping fallback expert...`,
+				)
+				const fallbackRole = this.specialistSelector.getFallbackRole(selection.role)
+				results.push({
+					role: selection.role,
+					refinements: [],
+					durationMs: 0,
+					success: false,
+					error: `Circuit tripped: ${errorMsg}. Re-routed to fallback ${fallbackRole}`,
+				})
+			}
+		}
+
 		this.state.specialistResults = results
 		this.state.refinements = results.flatMap((r) => r.refinements)
 	}
@@ -453,13 +478,66 @@ Output JSON array only.`
 	}
 
 	private async executeImplementationTasks(workspaceDir: string): Promise<void> {
-		for (const task of this.state.implementationTasks) {
-			if (task.status === "completed" || task.status === "validated") continue
+		const pendingTasks = this.state.implementationTasks.filter((t) => t.status === "pending" || t.status === "in-progress")
+		if (pendingTasks.length === 0) return
 
-			task.status = "in-progress"
-			Logger.info(`[MoD] Executing implementation task ${task.id}: ${task.objective}`)
+		const maxConcurrency = MOD_DEFAULTS.allowParallelMutations ? MOD_DEFAULTS.maxParallelMutations : 1
+		const batches = this.partitionIntoDisjointBatches(pendingTasks, maxConcurrency)
 
-			// Spawn a developer subagent to perform the mutation task
+		for (const batch of batches) {
+			this.emitTelemetry("mod.task_batch.started")
+			if (batch.length === 1) {
+				await this.executeSingleTask(batch[0], workspaceDir)
+			} else {
+				Logger.info(`[MoD Disjoint Concurrency] Executing ${batch.length} non-conflicting mutation tasks concurrently...`)
+				await Promise.allSettled(batch.map((task) => this.executeSingleTask(task, workspaceDir)))
+			}
+			this.emitTelemetry("mod.task_batch.completed")
+			void ReceiptStore.save(this.task.taskId, this.state)
+		}
+	}
+
+	private partitionIntoDisjointBatches(
+		tasks: DesignImplementationTask[],
+		maxConcurrency: number,
+	): DesignImplementationTask[][] {
+		const batches: DesignImplementationTask[][] = []
+
+		for (const task of tasks) {
+			let addedToExistingBatch = false
+			for (const batch of batches) {
+				if (batch.length >= maxConcurrency) continue
+
+				const hasOverlap = batch.some((bTask) => this.hasBoundaryOverlap(task, bTask))
+				if (!hasOverlap) {
+					batch.push(task)
+					addedToExistingBatch = true
+					break
+				}
+			}
+
+			if (!addedToExistingBatch) {
+				batches.push([task])
+			}
+		}
+
+		return batches
+	}
+
+	private hasBoundaryOverlap(t1: DesignImplementationTask, t2: DesignImplementationTask): boolean {
+		const files1 = new Set([...t1.affectedFiles, ...t1.mutationBoundary])
+		const files2 = new Set([...t2.affectedFiles, ...t2.mutationBoundary])
+		for (const f of files1) {
+			if (files2.has(f)) return true
+		}
+		return false
+	}
+
+	private async executeSingleTask(task: DesignImplementationTask, workspaceDir: string): Promise<void> {
+		task.status = "in-progress"
+		Logger.info(`[MoD Task Execution] Executing task ${task.id}: ${task.objective}`)
+
+		try {
 			const baseConfig = await (this.task as any).toolExecutor.asToolConfig()
 			const subagentBuilder = new SubagentBuilder(baseConfig)
 			subagentBuilder.setAllowedTools(SUBAGENT_DEFAULT_ALLOWED_TOOLS)
@@ -474,22 +552,30 @@ Acceptance Criteria: ${JSON.stringify(task.acceptanceCriteria, null, 2)}
 Complete the code modifications carefully. Verify it works correctly and run attempt_completion once completed.`
 
 			const result = await runner.run(prompt, (progress: any) => {
-				Logger.info(`[MoD] Implementation progress: ${progress.progressPercent}%`)
+				Logger.info(`[MoD Task Progress] Task ${task.id}: ${progress.progressPercent}%`)
 			})
 
 			if (result.status === "completed") {
 				task.status = "completed"
 			} else {
 				task.status = "failed"
-				Logger.error(`[MoD] Implementation task ${task.id} failed: ${result.error}`)
+				Logger.error(`[MoD Task Execution] Task ${task.id} failed: ${result.error}`)
 			}
-
-			await ReceiptStore.save(this.task.taskId, this.state)
+		} catch (error: any) {
+			task.status = "failed"
+			Logger.error(`[MoD Task Execution Error] Task ${task.id} threw error:`, error)
 		}
 	}
 
 	private async runIntegratedValidation(): Promise<void> {
 		Logger.info("[MoD] Validating the integrated product modifications...")
+		const failedTasks = this.state.implementationTasks.filter((t) => t.status === "failed")
+		const implStatus = failedTasks.length > 0 ? "failed" : "passed"
+		const implEvidence =
+			failedTasks.length > 0
+				? failedTasks.map((t) => `Task ${t.id} failed objective: ${t.objective}`)
+				: ["All implementation tasks completed successfully and builds passed."]
+
 		const validationResults: DesignValidationResult[] = [
 			{
 				dimension: "product",
@@ -549,9 +635,9 @@ Complete the code modifications carefully. Verify it works correctly and run att
 			},
 			{
 				dimension: "implementation",
-				status: "passed",
-				evidence: ["All tests pass and code builds successfully."],
-				failedCriteria: [],
+				status: implStatus,
+				evidence: implEvidence,
+				failedCriteria: failedTasks.map((t) => `Implementation task ${t.id} failed`),
 				limitations: [],
 				requiredFollowUp: [],
 			},
@@ -574,14 +660,27 @@ Complete the code modifications carefully. Verify it works correctly and run att
 	private async runRevisionAnalysis(failedGates: DesignGateResult[], passNumber: number): Promise<void> {
 		this.emitTelemetry("mod.revision.started")
 
+		const gateRoleMap: Record<string, DesignerRole> = {
+			accessibility: "accessibility-reviewer",
+			"visual-system": "visual-systems-designer",
+			"ux-architecture": "ux-architect",
+			"interaction-state": "interaction-designer",
+			"cross-surface-consistency": "responsive-design-reviewer",
+			"implementation-fidelity": "frontend-implementation-designer",
+			"product-intent": "product-strategist",
+			"final-product-critique": "product-strategist",
+		}
+
+		const responsibleRoles = Array.from(new Set(failedGates.map((g) => gateRoleMap[g.gate] || "product-strategist")))
+
 		const revisionReq: DesignRevisionRequest = {
 			failedGate: failedGates[0].gate,
-			failureReasons: failedGates[0].failureReasons,
+			failureReasons: failedGates.flatMap((g) => g.failureReasons),
 			evidence: [],
-			responsibleRoles: ["product-strategist"],
+			responsibleRoles,
 			affectedDecisionIds: [],
 			lockedDecisionIds: [],
-			requiredCorrections: ["Correct design inconsistencies"],
+			requiredCorrections: ["Correct design inconsistencies for failed gates"],
 			requiredEvidence: [],
 			revisionNumber: passNumber,
 			finalAllowedRevision: passNumber >= MOD_DEFAULTS.maxRevisionPasses,
@@ -589,14 +688,17 @@ Complete the code modifications carefully. Verify it works correctly and run att
 
 		this.state.revisions.push(revisionReq)
 
-		// Re-run the strategist to correct refinements
-		const strategists = this.state.specialistSelections.filter((s) => s.role === "product-strategist")
-		if (strategists.length > 0) {
-			const result = await this.runSpecialist(strategists[0], (this.task as any).cwd)
-			// Replace strategists refinements
-			this.state.refinements = this.state.refinements.filter((r) => r.role !== "product-strategist")
-			this.state.refinements.push(...result.refinements)
-		}
+		// Re-run all responsible specialists concurrently for targeted precision repair
+		const targetSelections = this.state.specialistSelections.filter((s) => responsibleRoles.includes(s.role))
+		const rolesToRun = targetSelections.length > 0 ? targetSelections : [{ role: responsibleRoles[0] } as any]
+
+		await Promise.all(
+			rolesToRun.map(async (selection) => {
+				const result = await this.runSpecialist(selection, (this.task as any).cwd)
+				this.state.refinements = this.state.refinements.filter((r) => r.role !== selection.role)
+				this.state.refinements.push(...result.refinements)
+			}),
+		)
 
 		this.emitTelemetry("mod.revision.completed")
 	}

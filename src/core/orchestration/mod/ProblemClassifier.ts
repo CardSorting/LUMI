@@ -55,7 +55,7 @@ Codebase Context: ${codebaseContext}`
 			return this.sanitizeClassification(json)
 		} catch (error) {
 			Logger.warn("[MoD] Failed to classify problems, using fallback", error)
-			return this.getFallbackClassification()
+			return this.getFallbackClassification(requestText)
 		}
 	}
 
@@ -108,10 +108,83 @@ Codebase Context: ${codebaseContext}`
 		}
 	}
 
-	private getFallbackClassification(): ProductProblemClassification {
+	public getFallbackClassification(requestText = ""): ProductProblemClassification {
+		const lower = requestText.toLowerCase()
+		const problems: ProductProblemClassification["problems"] = []
+
+		if (
+			lower.includes("accessibility") ||
+			lower.includes("aria") ||
+			lower.includes("screen reader") ||
+			lower.includes("keyboard")
+		) {
+			problems.push({
+				id: "prob-fallback-1",
+				dimension: "accessibility",
+				target: "General UI",
+				observation: "Accessibility or screen reader compliance requires auditing",
+				userImpact: "Assisted tech users experience barriers",
+				evidence: [requestText],
+				severity: "high",
+				confidence: "medium",
+			})
+		}
+
+		if (
+			lower.includes("visual") ||
+			lower.includes("style") ||
+			lower.includes("color") ||
+			lower.includes("theme") ||
+			lower.includes("layout")
+		) {
+			problems.push({
+				id: "prob-fallback-2",
+				dimension: "visual-hierarchy",
+				target: "General UI",
+				observation: "Visual structure, spacing, or visual hierarchy needs refinement",
+				userImpact: "Visual scanning efficiency is impaired",
+				evidence: [requestText],
+				severity: "medium",
+				confidence: "medium",
+			})
+		}
+
+		if (
+			lower.includes("click") ||
+			lower.includes("hover") ||
+			lower.includes("state") ||
+			lower.includes("modal") ||
+			lower.includes("button")
+		) {
+			problems.push({
+				id: "prob-fallback-3",
+				dimension: "interaction",
+				target: "Interactive Components",
+				observation: "Interaction state feedback or control response needs auditing",
+				userImpact: "User action feedback is ambiguous",
+				evidence: [requestText],
+				severity: "medium",
+				confidence: "medium",
+			})
+		}
+
+		// Default baseline problem if no keyword matched
+		if (problems.length === 0) {
+			problems.push({
+				id: "prob-fallback-0",
+				dimension: "workflow",
+				target: "General Area",
+				observation: "Overall experience workflow structure needs optimization",
+				userImpact: "Workflow clarity and efficiency can be improved",
+				evidence: [requestText],
+				severity: "medium",
+				confidence: "medium",
+			})
+		}
+
 		return {
-			problems: [],
-			preservedStrengths: [],
+			problems,
+			preservedStrengths: ["Existing design system foundation"],
 			insufficientEvidence: [],
 		}
 	}

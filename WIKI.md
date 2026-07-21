@@ -32,6 +32,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Providers | `src/core/api/`, `src/shared/providers/providers.json` | Five active provider keys in current code/UI |
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
 | Context/rules/skills | `src/core/context/`, `.dietcoderules/`, `.agents/skills/` | User/project instructions and optional skills |
+| Mixture of Designers (MoD) | `src/core/orchestration/mod/` | MoE Top-K Softmax routing, circuit breakers, BFT consensus, zero-stall heuristic fallbacks |
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
 | Protocol | `proto/`, `src/generated/` | Protobuf/gRPC contracts; generated outputs should not be hand-edited |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` | Steering, gates, roadmap lifecycle |

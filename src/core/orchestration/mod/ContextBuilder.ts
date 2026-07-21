@@ -2,6 +2,49 @@ import { Logger } from "@/shared/services/Logger"
 import { ClassifiedProductProblem, DesignerContextPackage, DesignerRole, ProductDesignIntent } from "./types"
 
 export class ContextBuilder {
+	private readonly targetCache = new Map<
+		string,
+		{ path: string; relevance: string; access: "read-only" | "proposed-mutation" }[]
+	>()
+	private readonly contentCache = new Map<string, { content: string; cachedAt: number }>()
+	private readonly TTL_MS = 60_000 // 1 minute context cache TTL
+
+	public clearCache(): void {
+		this.targetCache.clear()
+		this.contentCache.clear()
+	}
+
+	public setCachedFileContent(path: string, content: string): void {
+		this.contentCache.set(path, { content, cachedAt: Date.now() })
+	}
+
+	public getCachedFileContent(path: string): string | undefined {
+		const cached = this.contentCache.get(path)
+		if (!cached) return undefined
+		if (Date.now() - cached.cachedAt > this.TTL_MS) {
+			this.contentCache.delete(path)
+			return undefined
+		}
+		return cached.content
+	}
+
+	public async buildBatch(
+		roles: DesignerRole[],
+		intent: ProductDesignIntent,
+		problems: ClassifiedProductProblem[],
+		workspaceDir: string,
+	): Promise<Map<DesignerRole, DesignerContextPackage>> {
+		Logger.info(`[MoD Batch Context] Prefetching and building context packages for ${roles.length} roles concurrently...`)
+		const results = new Map<DesignerRole, DesignerContextPackage>()
+		await Promise.all(
+			roles.map(async (role) => {
+				const packageCtx = await this.build(role, intent, problems, workspaceDir)
+				results.set(role, packageCtx)
+			}),
+		)
+		return results
+	}
+
 	public async build(
 		role: DesignerRole,
 		intent: ProductDesignIntent,
@@ -32,16 +75,21 @@ export class ContextBuilder {
 			)
 		})
 
-		const files: Array<{ path: string; relevance: string; access: "read-only" | "proposed-mutation" }> = []
+		const cacheKey = problems.map((p) => `${p.id}:${p.target}`).join("|")
+		let files = this.targetCache.get(cacheKey)
 
-		for (const prob of problems) {
-			if (prob.target && prob.target !== "General" && prob.target.includes("/")) {
-				files.push({
-					path: prob.target,
-					relevance: `Target of problem ${prob.id}: ${prob.observation}`,
-					access: "read-only",
-				})
+		if (!files) {
+			files = []
+			for (const prob of problems) {
+				if (prob.target && prob.target !== "General" && prob.target.includes("/")) {
+					files.push({
+						path: prob.target,
+						relevance: `Target of problem ${prob.id}: ${prob.observation}`,
+						access: "read-only",
+					})
+				}
 			}
+			this.targetCache.set(cacheKey, files)
 		}
 
 		return {
