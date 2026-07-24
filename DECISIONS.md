@@ -199,4 +199,20 @@ Last audited: 2026-07-18
 
 **Consequences:** Restart delivery is idempotent, same-outcome duplicates are suppressed, competing outcomes conflict visibly, and stale owners cannot terminalize.
 
+## ADR-014: SQLite Storage Retention & Memory Lifecycle Hardening
+
+**Status:** Accepted
+
+**Context:** Continuous long-running subagent execution without storage retention caps leads to exponential database file bloat, disk erosion, checkpoint binary bloat, native `sqlite3_stmt` handle leaks, and V8 array allocation memory leaks.
+
+**Decision:** Enforce a multi-layered SQLite retention and memory architecture:
+1. **Universal Retention Sweeps**: Complete retention policies covering all system tables (`nodes`, `trees`, `stashes`, `agent_streams`, `agent_tasks`, legacy `tasks`, `agent_cognitive_snapshots`, `telemetry`, `task_lifecycle_events`, `task_lifecycle_records`, `task_completions`, `task_rejections`, `completion_attempts`, expired `branches`, and unreferenced `swarm_lock_generations`) with automatic orphan CAS file and edge garbage collection.
+2. **Auto-Vacuum PRAGMA Ordering & Reclaiming**: Ensure `PRAGMA auto_vacuum = INCREMENTAL;` executes BEFORE `PRAGMA journal_mode = WAL;` during DB initialization, running an automatic `VACUUM;` header migration if a DB was initialized in non-autovacuum mode. Freelist vacuuming loop returns freed pages to OS (`incremental_vacuum` until `freelist_count === 0`).
+3. **Resilient WAL Checkpointing**: Enforce automated WAL truncation (`wal_checkpoint(TRUNCATE)`) with exponential backoff retries when WAL logs exceed 32 MB or busy readers block checkpoints.
+4. **Native Prepared Statement Handle Disposal**: Prepared statement caching via `_rawStmtCache` (LRU eviction and connection `destroyDb()` teardown) explicitly calls `.dispose()` on `better-sqlite3` statements to eliminate native C++ memory handle leaks. Hot-path persistence layers (`TaskLifecyclePersistence`, `SwarmMutexService`, `CompletionFunnel`) consume `getCachedStatement`.
+5. **Buffer Pooling & Garbage Collection**: Parameter-bounded chunking in `BufferedDbPool` (dynamically capped to parameter buffer bounds), with bounded ring-buffer latency tracking to eliminate array allocation pressure.
+6. **Binary Exclusion**: Binary database exclusion in `CheckpointExclusions.ts` (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite3`) to prevent Git checkpoint bloat.
+
+**Consequences:** Prevents unbounded disk growth, eliminates native statement handle and V8 array allocation memory leaks, prevents lock timeouts (`busy_timeout = 5000`), and keeps SQLite query latencies sub-millisecond.
+
 

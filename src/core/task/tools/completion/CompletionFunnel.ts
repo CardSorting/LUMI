@@ -47,7 +47,7 @@ import { Logger } from "@shared/services/Logger"
 import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAuthority"
 import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
 import { createTaskLifecycleIntentId, getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
-import { getCoordinationRawDb } from "@/infrastructure/db/Config"
+import { getCachedStatement, getCoordinationRawDb } from "@/infrastructure/db/Config"
 import {
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
@@ -952,7 +952,7 @@ export async function durableGetTaskCompletion(taskId: string): Promise<TaskComp
 			error,
 		)
 	}
-	const row = rawDb.prepare("SELECT * FROM task_completions WHERE taskId = ?").get(taskId)
+	const row = getCachedStatement(rawDb, "SELECT * FROM task_completions WHERE taskId = ?").get(taskId)
 	return row ? parseCompletionRecord(row) : undefined
 }
 
@@ -973,7 +973,7 @@ export function commitTaskCompletionTransaction(
 ): CommitTaskCompletionResult {
 	rawDb.exec("BEGIN IMMEDIATE")
 	try {
-		const lease = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(input.resourceKey) as
+		const lease = getCachedStatement(rawDb, "SELECT * FROM swarm_locks WHERE resource = ?").get(input.resourceKey) as
 			| Record<string, unknown>
 			| undefined
 		if (
@@ -991,9 +991,10 @@ export function commitTaskCompletionTransaction(
 				"abort_owner",
 			)
 		}
-		const generation = rawDb
-			.prepare("SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?")
-			.get(input.resourceKey) as Record<string, unknown> | undefined
+		const generation = getCachedStatement(
+			rawDb,
+			"SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?",
+		).get(input.resourceKey) as Record<string, unknown> | undefined
 		if (
 			!generation ||
 			generation.highestLeaseEpoch !== input.record.leaseEpoch ||
@@ -1013,7 +1014,7 @@ export function commitTaskCompletionTransaction(
 			)
 		}
 
-		const existingRaw = rawDb.prepare("SELECT * FROM task_completions WHERE taskId = ?").get(input.record.taskId)
+		const existingRaw = getCachedStatement(rawDb, "SELECT * FROM task_completions WHERE taskId = ?").get(input.record.taskId)
 		if (existingRaw) {
 			const existing = parseCompletionRecord(existingRaw)
 			if (existing.decisionId === input.record.decisionId) {
@@ -1042,25 +1043,24 @@ export function commitTaskCompletionTransaction(
 			)
 		}
 
-		rawDb
-			.prepare(
-				`INSERT INTO task_completions (
+		getCachedStatement(
+			rawDb,
+			`INSERT INTO task_completions (
 					taskId, decisionId, status, evaluatedStateVersion, evaluatedCheckpointJson,
 					decisionJson, ownerId, leaseEpoch, fencingToken, committedAt
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			)
-			.run(
-				input.record.taskId,
-				input.record.decisionId,
-				input.record.status,
-				input.record.evaluatedStateVersion,
-				input.record.evaluatedCheckpointJson,
-				input.record.decisionJson,
-				input.record.ownerId,
-				input.record.leaseEpoch,
-				input.record.fencingToken,
-				input.record.committedAt,
-			)
+		).run(
+			input.record.taskId,
+			input.record.decisionId,
+			input.record.status,
+			input.record.evaluatedStateVersion,
+			input.record.evaluatedCheckpointJson,
+			input.record.decisionJson,
+			input.record.ownerId,
+			input.record.leaseEpoch,
+			input.record.fencingToken,
+			input.record.committedAt,
+		)
 		rawDb.exec("COMMIT")
 		return { kind: "committed", record: input.record }
 	} catch (error) {
@@ -1382,9 +1382,9 @@ export interface CompletionAttemptRecord {
 export async function getCompletionAttempt(completionAttemptId: string): Promise<CompletionAttemptRecord | undefined> {
 	try {
 		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-		return rawDb.prepare("SELECT * FROM completion_attempts WHERE completionAttemptId = ?").get(completionAttemptId) as
-			| CompletionAttemptRecord
-			| undefined
+		return getCachedStatement(rawDb, "SELECT * FROM completion_attempts WHERE completionAttemptId = ?").get(
+			completionAttemptId,
+		) as CompletionAttemptRecord | undefined
 	} catch (error) {
 		Logger.error(`[CompletionFunnel] Failed to get completion attempt ${completionAttemptId}:`, error)
 		return undefined
@@ -1394,34 +1394,33 @@ export async function getCompletionAttempt(completionAttemptId: string): Promise
 export async function insertCompletionAttempt(record: CompletionAttemptRecord): Promise<void> {
 	try {
 		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-		rawDb
-			.prepare(
-				`INSERT INTO completion_attempts (
+		getCachedStatement(
+			rawDb,
+			`INSERT INTO completion_attempts (
 					completionAttemptId, taskId, generationId, originatingInvocationId,
 					phase, evidenceRequestId, evidenceInvocationId, evidenceExecutionEventId,
 					commandIntentJson, commandDigest, expectedLifecycleRevision, evaluatedStateVersion,
 					proposalEventId, decisionId, version, createdAt, updatedAt
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			)
-			.run(
-				record.completionAttemptId,
-				record.taskId,
-				record.generationId,
-				record.originatingInvocationId,
-				record.phase,
-				record.evidenceRequestId,
-				record.evidenceInvocationId,
-				record.evidenceExecutionEventId,
-				record.commandIntentJson,
-				record.commandDigest,
-				record.expectedLifecycleRevision,
-				record.evaluatedStateVersion,
-				record.proposalEventId,
-				record.decisionId,
-				record.version,
-				record.createdAt,
-				record.updatedAt,
-			)
+		).run(
+			record.completionAttemptId,
+			record.taskId,
+			record.generationId,
+			record.originatingInvocationId,
+			record.phase,
+			record.evidenceRequestId,
+			record.evidenceInvocationId,
+			record.evidenceExecutionEventId,
+			record.commandIntentJson,
+			record.commandDigest,
+			record.expectedLifecycleRevision,
+			record.evaluatedStateVersion,
+			record.proposalEventId,
+			record.decisionId,
+			record.version,
+			record.createdAt,
+			record.updatedAt,
+		)
 	} catch (error) {
 		Logger.error(`[CompletionFunnel] Failed to insert completion attempt:`, error)
 		throw error
@@ -1438,7 +1437,7 @@ export async function updateCompletionAttemptCAS(
 		const setClause = keys.map((k) => `${k} = ?`).join(", ")
 		const values = keys.map((k) => (record as any)[k])
 		const query = `UPDATE completion_attempts SET ${setClause}, version = version + 1, updatedAt = ? WHERE completionAttemptId = ? AND version = ?`
-		const result = rawDb.prepare(query).run(...values, Date.now(), record.completionAttemptId, expectedVersion)
+		const result = getCachedStatement(rawDb, query).run(...values, Date.now(), record.completionAttemptId, expectedVersion)
 		return result.changes > 0
 	} catch (error) {
 		Logger.error(`[CompletionFunnel] Failed to update completion attempt CAS:`, error)
@@ -2107,7 +2106,9 @@ export type CompletionFunnelAttemptResult =
 export async function loadTerminalExecutionEvent(eventId: string): Promise<ExecutionFunnelEvent | undefined> {
 	try {
 		const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-		const eventRow = rawDb.prepare("SELECT data FROM audit_events WHERE id = ?").get(eventId) as { data: string } | undefined
+		const eventRow = getCachedStatement(rawDb, "SELECT data FROM audit_events WHERE id = ?").get(eventId) as
+			| { data: string }
+			| undefined
 		if (!eventRow) return undefined
 		const eventObj = JSON.parse(eventRow.data) as ExecutionFunnelEvent
 		if (eventObj.terminal) return eventObj

@@ -2,7 +2,7 @@ import { createHash } from "crypto"
 import { nanoid } from "nanoid"
 import { Logger } from "@/shared/services/Logger"
 import { BufferedDbPool, dbPool, type WriteOp } from "../../infrastructure/db/BufferedDbPool"
-import { getDb, type Schema } from "../../infrastructure/db/Config"
+import { getDb, registerDbPathChangeListener, type Schema } from "../../infrastructure/db/Config"
 
 export interface EmbeddingHandler {
 	embedText(text: string): Promise<number[] | null>
@@ -40,10 +40,12 @@ export class KnowledgeGraphService {
 	private embeddingHandler: EmbeddingHandler
 	private cleanupInterval: NodeJS.Timeout | null = null
 	private isEmbeddingDisabled = false
+	private unregisterDbListener: (() => void) | null = null
 
 	private constructor(embeddingHandler: EmbeddingHandler) {
 		this.embeddingHandler = embeddingHandler
 		this.startCleanupLoop()
+		this.unregisterDbListener = registerDbPathChangeListener(() => KnowledgeGraphService.resetInstance())
 	}
 
 	public static async getInstance(embeddingHandler: EmbeddingHandler): Promise<KnowledgeGraphService> {
@@ -51,6 +53,20 @@ export class KnowledgeGraphService {
 			KnowledgeGraphService.instance = new KnowledgeGraphService(embeddingHandler)
 		}
 		return KnowledgeGraphService.instance
+	}
+
+	public static resetInstance(): void {
+		if (KnowledgeGraphService.instance) {
+			if (KnowledgeGraphService.instance.cleanupInterval) {
+				clearInterval(KnowledgeGraphService.instance.cleanupInterval)
+				KnowledgeGraphService.instance.cleanupInterval = null
+			}
+			if (KnowledgeGraphService.instance.unregisterDbListener) {
+				KnowledgeGraphService.instance.unregisterDbListener()
+				KnowledgeGraphService.instance.unregisterDbListener = null
+			}
+			KnowledgeGraphService.instance = null
+		}
 	}
 
 	private async _push(op: WriteOp, agentId?: string) {
@@ -69,6 +85,7 @@ export class KnowledgeGraphService {
 	private startCleanupLoop() {
 		if (this.cleanupInterval) return
 		this.cleanupInterval = setInterval(() => this.cleanupGhostTasks(), 15 * 60 * 1000) // 15 mins
+		this.cleanupInterval.unref?.()
 	}
 
 	async cleanupGhostTasks() {
@@ -216,7 +233,11 @@ export class KnowledgeGraphService {
 			.where("key", "=", key)
 			.executeTakeFirst()
 
-		const newValue = existing ? `${existing.value}\n---\n${memory}` : memory
+		let newValue = existing ? `${existing.value}\n---\n${memory}` : memory
+		const MAX_MEMORY_VALUE_LENGTH = 50000
+		if (newValue.length > MAX_MEMORY_VALUE_LENGTH) {
+			newValue = newValue.slice(newValue.length - MAX_MEMORY_VALUE_LENGTH)
+		}
 
 		await this._push({
 			type: existing ? "update" : "insert",
@@ -426,11 +447,14 @@ export class KnowledgeGraphService {
 			})
 		}
 
-		// If no embedding available, fall back to keyword search
+		// If no embedding available, fall back to keyword search with SQL limit
 		if (!queryEmbedding) {
-			queryBuilder = queryBuilder.where((eb) =>
-				eb.or([eb("content", "like", `%${query}%`), eb("tags", "like", `%${query}%`)]),
-			)
+			queryBuilder = queryBuilder
+				.where((eb) => eb.or([eb("content", "like", `%${query}%`), eb("tags", "like", `%${query}%`)]))
+				.limit(limit * 5)
+		} else {
+			// Bound fetched candidates to 200 most recent items to avoid RAM bloat
+			queryBuilder = queryBuilder.orderBy("createdAt", "desc").limit(200)
 		}
 
 		const nodes = await queryBuilder.execute()
@@ -629,7 +653,7 @@ export class KnowledgeGraphService {
 	/**
 	 * Decay confidence of nodes older than a certain date.
 	 */
-	async decayConfidence(factor: number, olderThanMs: number): Promise<{ decayedCount: number }> {
+	async decayConfidence(factor: number, olderThanMs: number): Promise<{ decayedCount: number; prunedDeadNodes: number }> {
 		const db = await getDb()
 		const rows = await db
 			.selectFrom("agent_knowledge")
@@ -638,13 +662,19 @@ export class KnowledgeGraphService {
 			.execute()
 
 		let decayedCount = 0
+		let prunedDeadNodes = 0
 		for (const row of rows) {
 			const newConfidence = Math.max(0, Number(row.confidence) * factor)
-			await db.updateTable("agent_knowledge").set({ confidence: newConfidence }).where("id", "=", row.id).execute()
+			if (newConfidence <= 0.01) {
+				await this.deleteKnowledge(row.id)
+				prunedDeadNodes++
+			} else {
+				await db.updateTable("agent_knowledge").set({ confidence: newConfidence }).where("id", "=", row.id).execute()
+			}
 			decayedCount++
 		}
 
-		return { decayedCount }
+		return { decayedCount, prunedDeadNodes }
 	}
 
 	/**

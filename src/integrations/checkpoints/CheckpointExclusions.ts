@@ -239,6 +239,12 @@ function getDatabaseFilePatterns(): string[] {
 		"*.pdb",
 		"*.rdb",
 		"*.sqlite",
+		"*.sqlite3",
+		"*.sqlite-wal",
+		"*.sqlite-shm",
+		"*.db",
+		"*.db-wal",
+		"*.db-shm",
 	]
 }
 

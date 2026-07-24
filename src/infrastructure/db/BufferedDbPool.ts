@@ -3,6 +3,7 @@ import type Database from "better-sqlite3"
 import { type Kysely, sql, type Transaction } from "kysely"
 import { Logger } from "@/shared/services/Logger"
 import { destroyDb, getDb, getRawDb, registerDbPathChangeListener, type Schema } from "./Config"
+import { sqliteMaintenanceEngine } from "./SQLiteMaintenanceEngine"
 import { disableSqlitePersistence, isNativeModuleVersionMismatch, isSqlitePersistenceBypassed } from "./sqlitePersistence"
 
 // Production-grade Mutex implementation
@@ -106,6 +107,8 @@ export class BufferedDbPool {
 	private activeIndex = new Map<keyof Schema, Map<string, Set<WriteOp>>>()
 	private inFlightIndex = new Map<keyof Schema, Map<string, Set<WriteOp>>>()
 	private warmedIndices = new Set<string>() // Level 9: Authoritative Memory Indices
+	private opsFlushedSinceMaintenance = 0
+	private readonly MAINTENANCE_OPS_THRESHOLD = 10000
 	private started = false
 	private stopped = false
 
@@ -115,6 +118,11 @@ export class BufferedDbPool {
 		registerDbPathChangeListener(() => {
 			this.db = null
 			this.rawDb = null
+			for (const stmt of this.stmtCache.values()) {
+				try {
+					;(stmt as { dispose?: () => void })?.dispose?.()
+				} catch {}
+			}
 			this.stmtCache.clear()
 		})
 	}
@@ -171,6 +179,7 @@ export class BufferedDbPool {
 		this.cleanupInterval = setInterval(() => this.cleanupShadows(), 30000)
 		this.flushInterval.unref?.()
 		this.cleanupInterval.unref?.()
+		sqliteMaintenanceEngine.start()
 	}
 
 	private ensureStarted() {
@@ -216,13 +225,16 @@ export class BufferedDbPool {
 	private async ensureDb(): Promise<Kysely<Schema>> {
 		if (!this.db) {
 			const db = await getDb()
-			await sql`PRAGMA cache_size = -128000;`.execute(db)
+			await sql`PRAGMA cache_size = -16000;`.execute(db)
 			await sql`PRAGMA temp_store = MEMORY;`.execute(db)
+			await sql`PRAGMA auto_vacuum = INCREMENTAL;`.execute(db)
 			await sql`PRAGMA journal_mode = WAL;`.execute(db)
 			await sql`PRAGMA synchronous = NORMAL;`.execute(db)
-			await sql`PRAGMA mmap_size = 2147483648;`.execute(db)
+			await sql`PRAGMA mmap_size = 268435456;`.execute(db)
 			await sql`PRAGMA threads = 4;`.execute(db)
-			await sql`PRAGMA auto_vacuum = NONE;`.execute(db)
+			await sql`PRAGMA busy_timeout = 5000;`.execute(db)
+			await sql`PRAGMA wal_autocheckpoint = 1000;`.execute(db)
+			await sql`PRAGMA journal_size_limit = 67108864;`.execute(db)
 			this.db = db
 			this.rawDb = await getRawDb()
 		}
@@ -235,7 +247,13 @@ export class BufferedDbPool {
 			stmt = this.rawDb.prepare(sqlStr)
 			if (this.stmtCache.size >= this.MAX_STMT_CACHE_SIZE) {
 				const oldestKey = this.stmtCache.keys().next().value
-				if (oldestKey !== undefined) this.stmtCache.delete(oldestKey)
+				if (oldestKey !== undefined) {
+					const oldStmt = this.stmtCache.get(oldestKey)
+					try {
+						;(oldStmt as { dispose?: () => void })?.dispose?.()
+					} catch {}
+					this.stmtCache.delete(oldestKey)
+				}
 			}
 			this.stmtCache.set(sqlStr, stmt)
 		}
@@ -252,13 +270,16 @@ export class BufferedDbPool {
 	private recordLatency(target: number[], value: number) {
 		target.push(value)
 		if (target.length > this.MAX_METRICS_SAMPLES) {
-			target.shift()
+			target.splice(0, target.length - this.MAX_METRICS_SAMPLES)
 		}
 	}
 
 	private calculatePercentile(samples: number[], percentile: number): number {
 		if (samples.length === 0) return 0
-		const sorted = [...samples].sort((a, b) => a - b)
+		const len = samples.length
+		if (len === 1) return samples[0] ?? 0
+		const dataset = len > 500 ? samples.slice(len - 500) : samples
+		const sorted = dataset.slice().sort((a, b) => a - b)
 		const index = Math.ceil((percentile / 100) * sorted.length) - 1
 		return sorted[index] ?? 0
 	}
@@ -323,10 +344,10 @@ export class BufferedDbPool {
 			shadow.lastUpdated = Date.now()
 
 			// V150: Update Shadow Checksum (Rolling Hash)
-			const opString = JSON.stringify(ops)
+			const opSummary = `${ops.length}:${ops[0]?.type}:${ops[0]?.table}`
 			shadow.checksum = crypto
 				.createHash("sha256")
-				.update(shadow.checksum + opString)
+				.update(shadow.checksum + opSummary)
 				.digest("hex")
 		} else {
 			if (ops.length > 0) {
@@ -500,6 +521,14 @@ export class BufferedDbPool {
 				)
 			}
 
+			this.opsFlushedSinceMaintenance += totalFlushed
+			if (this.opsFlushedSinceMaintenance >= this.MAINTENANCE_OPS_THRESHOLD) {
+				this.opsFlushedSinceMaintenance = 0
+				sqliteMaintenanceEngine.runMaintenance().catch((err) => {
+					Logger.warn(`[DbPool] Volume-triggered maintenance failed: ${err}`)
+				})
+			}
+
 			const releaseStateClear = await this.stateMutex.acquire()
 			try {
 				this.inFlightOps.clear()
@@ -620,11 +649,16 @@ export class BufferedDbPool {
 				const statusCond = conditions.find(
 					(c) => (c.column === "status" || c.column === "type") && (c.operator === "=" || !c.operator),
 				)
-				const indexKey = statusCond ? `${table as string}:${statusCond.column}:${statusCond.value}` : null
-				const isWarmed = indexKey && this.warmedIndices.has(indexKey)
+				const statusKey = statusCond ? `${statusCond.column}:${statusCond.value}` : null
+				const indexKey = statusCond ? `${table as string}:${statusKey}` : null
+				const isWarmed = Boolean(indexKey && this.warmedIndices.has(indexKey))
+				const hasMemoryIndexData = Boolean(
+					statusKey && (this.activeIndex.get(table)?.has(statusKey) || this.inFlightIndex.get(table)?.has(statusKey)),
+				)
+				const isWarmedAndActive = isWarmed && hasMemoryIndexData
 
 				let diskResults: Schema[T][] = []
-				if (!isWarmed) {
+				if (!isWarmedAndActive) {
 					let query = db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery
 					for (const cond of conditions) {
 						const opStr: QueryOperator = cond.operator || "="
@@ -870,7 +904,8 @@ export class BufferedDbPool {
 		if (!firstOp?.values) return 0
 
 		const columns = Object.keys(firstOp.values)
-		const CHUNK_SIZE = 100 // Optimal for SQLite param limits and SQL length
+		const columnCount = Math.max(1, columns.length)
+		const CHUNK_SIZE = Math.min(100, Math.max(1, Math.floor(this.parameterBuffer.length / columnCount)))
 
 		let totalFlushed = 0
 		for (let i = 0; i < group.length; i += CHUNK_SIZE) {
@@ -892,7 +927,12 @@ export class BufferedDbPool {
 			}
 
 			const params = this.parameterBuffer.slice(0, pIdx)
-			stmt.run(...params)
+			try {
+				stmt.run(...params)
+			} finally {
+				// Memory leak prevention: Dereference inserted objects so V8 GC can collect them
+				this.parameterBuffer.fill(undefined, 0, pIdx)
+			}
 			totalFlushed += chunk.length
 		}
 
@@ -1104,6 +1144,10 @@ export class BufferedDbPool {
 	public async stop() {
 		if (this.stopped) return
 		this.stopped = true
+		sqliteMaintenanceEngine.stop()
+		try {
+			await sqliteMaintenanceEngine.runMaintenance({ forceTruncateWal: true })
+		} catch {}
 		if (this.flushInterval) clearInterval(this.flushInterval)
 		if (this.cleanupInterval) clearInterval(this.cleanupInterval)
 		if (this.flushTimeout) clearTimeout(this.flushTimeout)
@@ -1119,7 +1163,13 @@ export class BufferedDbPool {
 		this.activeIndex.clear()
 		this.inFlightIndex.clear()
 		this.warmedIndices.clear()
+		for (const stmt of this.stmtCache.values()) {
+			try {
+				;(stmt as { dispose?: () => void })?.dispose?.()
+			} catch {}
+		}
 		this.stmtCache.clear()
+		this.parameterBuffer.fill(undefined)
 		this.enqueueLatencies = []
 		this.processingLatencies = []
 		this.activeBufferSize = 0

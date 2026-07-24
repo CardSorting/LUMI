@@ -5,7 +5,7 @@ import {
 	type TaskLifecycleRecord,
 	type TaskParentLink,
 } from "@shared/lifecycle/taskLifecycleEvent"
-import { getCoordinationRawDb } from "@/infrastructure/db/Config"
+import { getCachedStatement, getCoordinationRawDb } from "@/infrastructure/db/Config"
 
 export interface LifecycleCommitExpectation {
 	generationId?: string
@@ -267,19 +267,18 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 	async load(taskId: string): Promise<TaskLifecycleRecord | undefined> {
 		const db = await this.database()
 		return parseRecordRow(
-			db
-				.prepare(
-					`SELECT taskId, generationId, lifecycleRevision, recordJson
+			getCachedStatement(
+				db,
+				`SELECT taskId, generationId, lifecycleRevision, recordJson
 					 FROM task_lifecycle_records
 					 WHERE taskId = ?`,
-				)
-				.get(taskId),
+			).get(taskId),
 		)
 	}
 
 	async loadEvent(eventId: string): Promise<TaskLifecycleEvent | undefined> {
 		const db = await this.database()
-		const row = db.prepare("SELECT eventJson FROM task_lifecycle_events WHERE eventId = ?").get(eventId) as
+		const row = getCachedStatement(db, "SELECT eventJson FROM task_lifecycle_events WHERE eventId = ?").get(eventId) as
 			| LifecycleEventRow
 			| undefined
 		if (!row) return undefined
@@ -298,18 +297,17 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 		const db = await this.database()
 		db.exec("BEGIN IMMEDIATE")
 		try {
-			const duplicateRow = db
-				.prepare("SELECT eventJson FROM task_lifecycle_events WHERE intentId = ?")
-				.get(event.intentId) as LifecycleEventRow | undefined
+			const duplicateRow = getCachedStatement(db, "SELECT eventJson FROM task_lifecycle_events WHERE intentId = ?").get(
+				event.intentId,
+			) as LifecycleEventRow | undefined
 			if (duplicateRow) {
 				const duplicateEvent = JSON.parse(duplicateRow.eventJson) as unknown
 				if (!isTaskLifecycleEvent(duplicateEvent)) throw new Error("Malformed duplicate lifecycle event.")
 				const current = parseRecordRow(
-					db
-						.prepare(
-							"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
-						)
-						.get(duplicateEvent.taskId),
+					getCachedStatement(
+						db,
+						"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
+					).get(duplicateEvent.taskId),
 				)
 				db.exec("COMMIT")
 				if (!current) return { kind: "compare_and_swap_failed" }
@@ -317,11 +315,10 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			}
 
 			const current = parseRecordRow(
-				db
-					.prepare(
-						"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
-					)
-					.get(record.taskId),
+				getCachedStatement(
+					db,
+					"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
+				).get(record.taskId),
 			)
 			const matches =
 				expectation.absent === true
@@ -335,11 +332,10 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			}
 			if (event.transition === "register_generation" && record.parent?.governance === "attached") {
 				const parent = parseRecordRow(
-					db
-						.prepare(
-							"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
-						)
-						.get(record.parent.taskId),
+					getCachedStatement(
+						db,
+						"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
+					).get(record.parent.taskId),
 				)
 				if (
 					!parent ||
@@ -358,11 +354,10 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			const attachedParent =
 				record.parent?.governance === "attached"
 					? parseRecordRow(
-							db
-								.prepare(
-									"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
-								)
-								.get(record.parent.taskId),
+							getCachedStatement(
+								db,
+								"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
+							).get(record.parent.taskId),
 						)
 					: undefined
 			const parentConstraint = attachedParentConstraint(record, event, attachedParent)
@@ -372,11 +367,10 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			}
 			if (event.transition === "settle_completion" && record.parent?.governance === "attached") {
 				const parent = parseRecordRow(
-					db
-						.prepare(
-							"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
-						)
-						.get(record.parent.taskId),
+					getCachedStatement(
+						db,
+						"SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records WHERE taskId = ?",
+					).get(record.parent.taskId),
 				)
 				if (
 					!parent ||
@@ -395,8 +389,7 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			if (event.transition === "settle_completion" || event.transition === "replace_generation") {
 				const governedGeneration =
 					event.transition === "replace_generation" ? event.previous?.generationId : record.generationId
-				const activeChild = db
-					.prepare("SELECT recordJson FROM task_lifecycle_records WHERE taskId != ?")
+				const activeChild = getCachedStatement(db, "SELECT recordJson FROM task_lifecycle_records WHERE taskId != ?")
 					.all(record.taskId)
 					.map((row) => JSON.parse((row as { recordJson: string }).recordJson) as TaskLifecycleRecord)
 					.find(
@@ -416,8 +409,8 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 				}
 			}
 
-			db.prepare("UPDATE task_lifecycle_sequence SET value = value + 1 WHERE id = 1").run()
-			const sequenceRow = db.prepare("SELECT value FROM task_lifecycle_sequence WHERE id = 1").get() as
+			getCachedStatement(db, "UPDATE task_lifecycle_sequence SET value = value + 1 WHERE id = 1").run()
+			const sequenceRow = getCachedStatement(db, "SELECT value FROM task_lifecycle_sequence WHERE id = 1").get() as
 				| { value: number }
 				| undefined
 			if (!sequenceRow || !Number.isSafeInteger(sequenceRow.value)) {
@@ -428,46 +421,45 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 			const eventJson = JSON.stringify(committed.event)
 
 			if (current) {
-				const updated = db
-					.prepare(
-						`UPDATE task_lifecycle_records
+				const updated = getCachedStatement(
+					db,
+					`UPDATE task_lifecycle_records
 						 SET generationId = ?, lifecycleRevision = ?, recordJson = ?, updatedAt = ?
 						 WHERE taskId = ? AND generationId = ? AND lifecycleRevision = ?`,
-					)
-					.run(
-						committed.record.generationId,
-						committed.record.lifecycleRevision,
-						recordJson,
-						committed.record.committedAt,
-						committed.record.taskId,
-						expectation.generationId,
-						expectation.lifecycleRevision,
-					)
+				).run(
+					committed.record.generationId,
+					committed.record.lifecycleRevision,
+					recordJson,
+					committed.record.committedAt,
+					committed.record.taskId,
+					expectation.generationId,
+					expectation.lifecycleRevision,
+				)
 				if (updated.changes !== 1) {
 					db.exec("ROLLBACK")
 					return { kind: "compare_and_swap_failed", current }
 				}
 			} else {
-				const inserted = db
-					.prepare(
-						`INSERT INTO task_lifecycle_records
+				const inserted = getCachedStatement(
+					db,
+					`INSERT INTO task_lifecycle_records
 							(taskId, generationId, lifecycleRevision, recordJson, updatedAt)
 						 VALUES (?, ?, ?, ?, ?)`,
-					)
-					.run(
-						committed.record.taskId,
-						committed.record.generationId,
-						committed.record.lifecycleRevision,
-						recordJson,
-						committed.record.committedAt,
-					)
+				).run(
+					committed.record.taskId,
+					committed.record.generationId,
+					committed.record.lifecycleRevision,
+					recordJson,
+					committed.record.committedAt,
+				)
 				if (inserted.changes !== 1) {
 					db.exec("ROLLBACK")
 					return { kind: "compare_and_swap_failed" }
 				}
 			}
 
-			db.prepare(
+			getCachedStatement(
+				db,
 				`INSERT INTO task_lifecycle_events
 					(monotonicSequence, eventId, intentId, taskId, generationId, lifecycleRevision, eventJson, committedAt)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -495,8 +487,7 @@ export class SqliteTaskLifecyclePersistence implements TaskLifecyclePersistence 
 
 	async listAttachedChildren(parent: TaskParentLink): Promise<TaskLifecycleRecord[]> {
 		const db = await this.database()
-		return db
-			.prepare("SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records")
+		return getCachedStatement(db, "SELECT taskId, generationId, lifecycleRevision, recordJson FROM task_lifecycle_records")
 			.all()
 			.map(parseRecordRow)
 			.filter((record): record is TaskLifecycleRecord => Boolean(record))

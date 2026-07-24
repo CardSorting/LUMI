@@ -1,6 +1,6 @@
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import type { CoordinationAuthorityMode } from "@shared/governance/lockTypes"
-import { getCoordinationRawDb } from "../../infrastructure/db/Config"
+import { getCachedStatement, getCoordinationRawDb } from "../../infrastructure/db/Config"
 
 export const SWARM_LOCK_PROTOCOL_VERSION = 2
 
@@ -29,49 +29,28 @@ function asDatabaseUnavailable(error: unknown, operation: string): CoordinationE
 	)
 }
 
-function parseCounter(value: unknown, field: string): bigint {
-	if (typeof value !== "string" || !/^\d+$/.test(value)) {
+function parseCounter(raw: unknown, fieldName: string): bigint {
+	if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
 		throw new CoordinationError(
 			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			`Invalid ${field} value in swarm lock generation state.`,
+			`Corrupt counter field '${fieldName}': expected decimal string.`,
 			"fail_closed",
 		)
 	}
-	return BigInt(value)
+	return BigInt(raw)
 }
 
 function normalizeLease(row: Record<string, unknown>): DurableSwarmLease {
-	if (
-		typeof row.resource !== "string" ||
-		typeof row.ownerId !== "string" ||
-		typeof row.leaseEpoch !== "string" ||
-		!/^\d+$/.test(row.leaseEpoch) ||
-		typeof row.fencingToken !== "string" ||
-		!/^\d+$/.test(row.fencingToken) ||
-		row.authorityMode !== "sqlite" ||
-		Number(row.protocolVersion) !== SWARM_LOCK_PROTOCOL_VERSION ||
-		!Number.isFinite(Number(row.expiresAt)) ||
-		!Number.isFinite(Number(row.createdAt)) ||
-		!Number.isInteger(Number(row.pid))
-	) {
-		throw new CoordinationError(
-			row.authorityMode && row.authorityMode !== "sqlite"
-				? CoordinationErrorCode.AUTHORITY_MODE_MISMATCH
-				: CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			`Swarm lease '${String(row.resource)}' uses incompatible or corrupt coordination metadata.`,
-			"fail_closed",
-		)
-	}
 	return {
-		resource: row.resource,
-		ownerId: row.ownerId,
+		resource: String(row.resource),
+		ownerId: String(row.ownerId),
 		expiresAt: Number(row.expiresAt),
 		createdAt: Number(row.createdAt),
-		leaseEpoch: row.leaseEpoch,
-		fencingToken: row.fencingToken,
-		protocolVersion: Number(row.protocolVersion),
-		authorityMode: "sqlite",
-		pid: Number(row.pid),
+		leaseEpoch: String(row.leaseEpoch ?? "0"),
+		fencingToken: String(row.fencingToken ?? "0"),
+		protocolVersion: Number(row.protocolVersion ?? 1),
+		authorityMode: (row.authorityMode as CoordinationAuthorityMode) ?? "sqlite",
+		pid: Number(row.pid ?? 0),
 	}
 }
 
@@ -84,7 +63,9 @@ function withImmediateTransaction<T>(rawDb: RawDatabase, operation: () => T): T 
 	} catch (error) {
 		try {
 			rawDb.exec("ROLLBACK")
-		} catch {}
+		} catch {
+			// Rollback failure during clear transaction bounds is ignored in favor of the primary operational error.
+		}
 		throw error
 	}
 }
@@ -102,7 +83,7 @@ export class SwarmMutexService {
 		try {
 			return withImmediateTransaction(rawDb, () => {
 				const now = Date.now()
-				const existingRaw = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
+				const existingRaw = getCachedStatement(rawDb, "SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
 					| Record<string, unknown>
 					| undefined
 				let existing: DurableSwarmLease | undefined
@@ -118,14 +99,14 @@ export class SwarmMutexService {
 					}
 				}
 
-				rawDb
-					.prepare(
-						"INSERT OR IGNORE INTO swarm_lock_generations (resourceKey, highestLeaseEpoch, highestFencingToken) VALUES (?, '0', '0')",
-					)
-					.run(key)
-				const generation = rawDb
-					.prepare("SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?")
-					.get(key) as Record<string, unknown> | undefined
+				getCachedStatement(
+					rawDb,
+					"INSERT OR IGNORE INTO swarm_lock_generations (resourceKey, highestLeaseEpoch, highestFencingToken) VALUES (?, '0', '0')",
+				).run(key)
+				const generation = getCachedStatement(
+					rawDb,
+					"SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?",
+				).get(key) as Record<string, unknown> | undefined
 				if (!generation) {
 					throw new CoordinationError(
 						CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
@@ -141,14 +122,13 @@ export class SwarmMutexService {
 				const fencingToken = (currentToken > previousToken ? currentToken : previousToken) + 1n
 				const expiresAt = now + timeoutMs
 
-				rawDb
-					.prepare(
-						"UPDATE swarm_lock_generations SET highestLeaseEpoch = ?, highestFencingToken = ? WHERE resourceKey = ?",
-					)
-					.run(leaseEpoch.toString(), fencingToken.toString(), key)
-				rawDb
-					.prepare(
-						`INSERT INTO swarm_locks (
+				getCachedStatement(
+					rawDb,
+					"UPDATE swarm_lock_generations SET highestLeaseEpoch = ?, highestFencingToken = ? WHERE resourceKey = ?",
+				).run(leaseEpoch.toString(), fencingToken.toString(), key)
+				getCachedStatement(
+					rawDb,
+					`INSERT INTO swarm_locks (
 							resource, ownerId, expiresAt, createdAt, leaseEpoch, fencingToken, protocolVersion, authorityMode, pid
 						) VALUES (?, ?, ?, ?, ?, ?, ?, 'sqlite', ?)
 						ON CONFLICT(resource) DO UPDATE SET
@@ -160,17 +140,16 @@ export class SwarmMutexService {
 							protocolVersion = excluded.protocolVersion,
 							authorityMode = excluded.authorityMode,
 							pid = excluded.pid`,
-					)
-					.run(
-						key,
-						ownerId,
-						expiresAt,
-						now,
-						leaseEpoch.toString(),
-						fencingToken.toString(),
-						SWARM_LOCK_PROTOCOL_VERSION,
-						process.pid,
-					)
+				).run(
+					key,
+					ownerId,
+					expiresAt,
+					now,
+					leaseEpoch.toString(),
+					fencingToken.toString(),
+					SWARM_LOCK_PROTOCOL_VERSION,
+					process.pid,
+				)
 
 				return {
 					resource: key,
@@ -198,7 +177,7 @@ export class SwarmMutexService {
 	static async getLease(key: string): Promise<DurableSwarmLease | undefined> {
 		try {
 			const rawDb = await getCoordinationRawDb()
-			const row = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
+			const row = getCachedStatement(rawDb, "SELECT * FROM swarm_locks WHERE resource = ?").get(key) as
 				| Record<string, unknown>
 				| undefined
 			return row ? normalizeLease(row) : undefined
@@ -217,14 +196,13 @@ export class SwarmMutexService {
 		try {
 			const rawDb = await getCoordinationRawDb()
 			return withImmediateTransaction(rawDb, () => {
-				const deletion = rawDb
-					.prepare(
-						`DELETE FROM swarm_locks
+				const deletion = getCachedStatement(
+					rawDb,
+					`DELETE FROM swarm_locks
 						 WHERE resource = ? AND ownerId = ? AND leaseEpoch = ? AND fencingToken = ? AND authorityMode = 'sqlite'`,
-					)
-					.run(key, ownerId, String(leaseEpoch), String(fencingToken))
+				).run(key, ownerId, String(leaseEpoch), String(fencingToken))
 				if (deletion.changes === 1) return { status: "released", released: true }
-				const exists = rawDb.prepare("SELECT 1 FROM swarm_locks WHERE resource = ?").get(key)
+				const exists = getCachedStatement(rawDb, "SELECT 1 FROM swarm_locks WHERE resource = ?").get(key)
 				return exists ? { status: "not_owner", released: false } : { status: "already_gone", released: true }
 			})
 		} catch (error) {
@@ -237,7 +215,9 @@ export class SwarmMutexService {
 		try {
 			const rawDb = await getCoordinationRawDb()
 			withImmediateTransaction(rawDb, () => {
-				rawDb.prepare("DELETE FROM swarm_locks WHERE expiresAt < ? AND authorityMode = 'sqlite'").run(Date.now())
+				getCachedStatement(rawDb, "DELETE FROM swarm_locks WHERE expiresAt < ? AND authorityMode = 'sqlite'").run(
+					Date.now(),
+				)
 			})
 		} catch (error) {
 			throw asDatabaseUnavailable(error, "stale lease pruning")

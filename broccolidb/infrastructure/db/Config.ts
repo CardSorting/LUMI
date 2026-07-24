@@ -362,9 +362,12 @@ export async function getDb(): Promise<Kysely<Schema>> {
 
       const execute = (q: string) => newDb.executeQuery(CompiledQuery.raw(q));
 
-      // Performance Tweaks (WAL Mode)
+      // Performance & Disk Storage Management (WAL Mode & Incremental Vacuum)
       await execute('PRAGMA journal_mode = WAL;');
       await execute('PRAGMA synchronous = NORMAL;');
+      await execute('PRAGMA auto_vacuum = INCREMENTAL;');
+      await execute('PRAGMA wal_autocheckpoint = 1000;');
+      await execute('PRAGMA journal_size_limit = 67108864;');
       await execute('PRAGMA foreign_keys = ON;');
 
       // Schema Initialization
@@ -755,6 +758,16 @@ export async function getRawDb(): Promise<Database.Database> {
 
 export async function destroyDb(): Promise<void> {
   _dbPromise = null;
+  if (_rawDb) {
+    try {
+      try {
+        _rawDb.pragma('wal_checkpoint(TRUNCATE)');
+      } catch {}
+      _rawDb.close();
+    } finally {
+      _rawDb = null;
+    }
+  }
   if (_db) {
     try {
       await _db.destroy();
@@ -762,11 +775,56 @@ export async function destroyDb(): Promise<void> {
       _db = null;
     }
   }
-  if (_rawDb) {
-    try {
-      _rawDb.close();
-    } finally {
-      _rawDb = null;
+}
+
+export interface DbStorageMetrics {
+  dbPath: string;
+  fileSizeBytes: number;
+  walSizeBytes: number;
+  pageSize: number;
+  pageCount: number;
+  freelistCount: number;
+  freeSizeBytes: number;
+}
+
+export async function getDbStorageMetrics(): Promise<DbStorageMetrics> {
+  const rawDb = await getRawDb();
+  const dbPath = getDbPath();
+  let fileSizeBytes = 0;
+  let walSizeBytes = 0;
+
+  try {
+    if (fs.existsSync(dbPath)) {
+      fileSizeBytes = fs.statSync(dbPath).size;
+      const walPath = `${dbPath}-wal`;
+      if (fs.existsSync(walPath)) {
+        walSizeBytes = fs.statSync(walPath).size;
+      }
     }
-  }
+  } catch {}
+
+  let pageSize = 4096;
+  let pageCount = 0;
+  let freelistCount = 0;
+
+  try {
+    const pageSizeRow = rawDb.pragma('page_size', { simple: true }) as number | undefined;
+    if (typeof pageSizeRow === 'number') pageSize = pageSizeRow;
+
+    const pageCountRow = rawDb.pragma('page_count', { simple: true }) as number | undefined;
+    if (typeof pageCountRow === 'number') pageCount = pageCountRow;
+
+    const freelistRow = rawDb.pragma('freelist_count', { simple: true }) as number | undefined;
+    if (typeof freelistRow === 'number') freelistCount = freelistRow;
+  } catch {}
+
+  return {
+    dbPath,
+    fileSizeBytes,
+    walSizeBytes,
+    pageSize,
+    pageCount,
+    freelistCount,
+    freeSizeBytes: freelistCount * pageSize,
+  };
 }

@@ -344,12 +344,15 @@ let _rawDb: Database.Database | null = null
 let _dbIsPersistent = false
 let _coordinationDbHealthy = false
 let _dbPath: string | null = null
-let _onDbPathChanged: (() => void) | null = null
+const _dbPathChangeListeners = new Set<() => void>()
 let _lifecyclePromise: Promise<unknown> = Promise.resolve()
 let _dbPromise: Promise<Kysely<Schema>> | null = null
 
-export function registerDbPathChangeListener(listener: () => void) {
-	_onDbPathChanged = listener
+export function registerDbPathChangeListener(listener: () => void): () => void {
+	_dbPathChangeListeners.add(listener)
+	return () => {
+		_dbPathChangeListeners.delete(listener)
+	}
 }
 
 export function setDbPath(dbPath: string) {
@@ -360,8 +363,12 @@ export function setDbPath(dbPath: string) {
 	_lifecyclePromise = _lifecyclePromise
 		.then(async () => {
 			await destroyDb()
-			if (_onDbPathChanged) {
-				_onDbPathChanged()
+			for (const listener of Array.from(_dbPathChangeListeners)) {
+				try {
+					listener()
+				} catch (err) {
+					Logger.error("[Config] Error in database path change transition listener:", err)
+				}
 			}
 		})
 		.catch((err) => {
@@ -454,10 +461,23 @@ export async function getDb(): Promise<Kysely<Schema>> {
 
 			const execute = (q: string) => newDb.executeQuery(CompiledQuery.raw(q))
 
-			// Performance Tweaks (WAL Mode)
+			// Performance & Disk Storage Management (WAL Mode & Incremental Vacuum)
+			// NOTE: auto_vacuum MUST be set BEFORE journal_mode = WAL, or SQLite ignores auto_vacuum mode changes.
+			await execute("PRAGMA auto_vacuum = INCREMENTAL;")
 			await execute("PRAGMA journal_mode = WAL;")
 			await execute("PRAGMA synchronous = NORMAL;")
+			await execute("PRAGMA wal_autocheckpoint = 1000;")
+			await execute("PRAGMA journal_size_limit = 67108864;")
+			await execute("PRAGMA max_page_count = 1073741824;")
 			await execute("PRAGMA foreign_keys = ON;")
+
+			// Auto-vacuum mode migration check: if db was created in NONE mode (0), run VACUUM once to enable INCREMENTAL mode.
+			try {
+				const autoVacRow = rawDb.pragma("auto_vacuum", { simple: true })
+				if (autoVacRow === 0) {
+					rawDb.exec("VACUUM")
+				}
+			} catch {}
 
 			// Schema Initialization
 			await execute(`CREATE TABLE IF NOT EXISTS users (
@@ -1028,12 +1048,52 @@ export async function getCoordinationRawDb(): Promise<Database.Database> {
 	return _rawDb
 }
 
+const _rawStmtCache = new WeakMap<object, Map<string, Database.Statement>>()
+
+export function getCachedStatement(db: { prepare(sql: string): Database.Statement } | any, sqlStr: string): Database.Statement {
+	let dbCache = _rawStmtCache.get(db)
+	if (!dbCache) {
+		dbCache = new Map<string, Database.Statement>()
+		_rawStmtCache.set(db, dbCache)
+	}
+	let stmt = dbCache.get(sqlStr)
+	if (!stmt) {
+		const newStmt = db.prepare(sqlStr) as Database.Statement
+		if (dbCache.size >= 100) {
+			const firstKey = dbCache.keys().next().value
+			if (firstKey !== undefined) {
+				const oldStmt = dbCache.get(firstKey)
+				try {
+					;(oldStmt as { dispose?: () => void })?.dispose?.()
+				} catch {}
+				dbCache.delete(firstKey)
+			}
+		}
+		dbCache.set(sqlStr, newStmt)
+		stmt = newStmt
+	}
+	return stmt
+}
+
 export async function destroyDb(): Promise<void> {
 	_dbPromise = null
 	_dbIsPersistent = false
 	_coordinationDbHealthy = false
 	if (_rawDb) {
 		try {
+			const dbCache = _rawStmtCache.get(_rawDb)
+			if (dbCache) {
+				for (const stmt of dbCache.values()) {
+					try {
+						;(stmt as { dispose?: () => void })?.dispose?.()
+					} catch {}
+				}
+				dbCache.clear()
+				_rawStmtCache.delete(_rawDb)
+			}
+			try {
+				_rawDb.pragma("wal_checkpoint(TRUNCATE)")
+			} catch {}
 			_rawDb.close()
 		} finally {
 			_rawDb = null
@@ -1046,5 +1106,59 @@ export async function destroyDb(): Promise<void> {
 		} finally {
 			_db = null
 		}
+	}
+}
+
+export interface DbStorageMetrics {
+	dbPath: string
+	fileSizeBytes: number
+	walSizeBytes: number
+	pageSize: number
+	pageCount: number
+	freelistCount: number
+	freeSizeBytes: number
+	isPersistent: boolean
+}
+
+export async function getDbStorageMetrics(): Promise<DbStorageMetrics> {
+	const rawDb = await getRawDb()
+	const dbPath = getDbPath()
+	let fileSizeBytes = 0
+	let walSizeBytes = 0
+
+	try {
+		if (_dbIsPersistent && fs.existsSync(dbPath)) {
+			fileSizeBytes = fs.statSync(dbPath).size
+			const walPath = `${dbPath}-wal`
+			if (fs.existsSync(walPath)) {
+				walSizeBytes = fs.statSync(walPath).size
+			}
+		}
+	} catch {}
+
+	let pageSize = 4096
+	let pageCount = 0
+	let freelistCount = 0
+
+	try {
+		const pageSizeRow = rawDb.pragma("page_size", { simple: true }) as number | undefined
+		if (typeof pageSizeRow === "number") pageSize = pageSizeRow
+
+		const pageCountRow = rawDb.pragma("page_count", { simple: true }) as number | undefined
+		if (typeof pageCountRow === "number") pageCount = pageCountRow
+
+		const freelistRow = rawDb.pragma("freelist_count", { simple: true }) as number | undefined
+		if (typeof freelistRow === "number") freelistCount = freelistRow
+	} catch {}
+
+	return {
+		dbPath,
+		fileSizeBytes,
+		walSizeBytes,
+		pageSize,
+		pageCount,
+		freelistCount,
+		freeSizeBytes: freelistCount * pageSize,
+		isPersistent: _dbIsPersistent,
 	}
 }

@@ -10,7 +10,7 @@ Last audited: 2026-07-18
 
 | Area | State | Evidence |
 |---|---|---|
-| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `6.0.0` |
+| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `9.0.0` |
 | Workspaces | Root package plus `broccolidb` | `package.json` workspaces: `.`, `broccolidb` |
 | UI | React/Vite webview | `webview-ui/package.json` |
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
@@ -36,6 +36,7 @@ The active work now includes production authority and terminalization hardening:
 - `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts` ensures resume safety by requiring a valid, sealed governed lane receipt and matching checksum before reusing previous agent results.
 - `src/core/task/tools/subagent/SubagentRunner.ts` implements repetition detection to break tool repetition loops with self-correction nudges and signal toxic hotspots.
 - `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts` writes JSONL logs atomically using temporary files to prevent corruption, and supports deferred write-behind scheduling.
+- `src/infrastructure/db/Config.ts` & `SQLiteMaintenanceEngine.ts`: Re-ordered PRAGMAs (`auto_vacuum = INCREMENTAL` before WAL mode) and automated `VACUUM` header migration; multi-table retention policies covering all 35 system tables (`task_lifecycle_records`, ephemeral `branches`, `swarm_lock_generations`, CAS `files`, `telemetry`, `audit_events`); prepared statement handle `.dispose()` lifecycle and LRU caching; and exponential backoff retry loop for 32MB WAL truncation.
 
 ## First 10 Minutes For A New Agent
 
@@ -87,7 +88,9 @@ The active work now includes production authority and terminalization hardening:
 | `src/core/governance/AdministrativeLockCleaner.ts` | Isolated manual/panic cleanup with an override reason. |
 | `src/core/swarm/SwarmMutexService.ts` | Transactional lease generation and precision-safe fencing. |
 | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` | Typed wait-for graph and escape-aware SCC detection. |
-| `src/core/task/tools/handlers/AttemptCompletionHandler.ts` | Canonical decision digest and durable terminal CAS. |
+| `src/infrastructure/db/Config.ts` | SQLite PRAGMA order fix (`auto_vacuum = INCREMENTAL`), `VACUUM` header migration, and native statement `.dispose()` LRU handle lifecycle. |
+| `src/infrastructure/db/SQLiteMaintenanceEngine.ts` | Multi-table retention sweeps (`task_lifecycle_records`, ephemeral `branches`, `swarm_lock_generations`, CAS `files`), and backoff WAL checkpointing. |
+| `src/infrastructure/db/BufferedDbPool.ts` | Statement handle disposal on connection transition and bounded ring-buffer latency metrics. |
 | `src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts` | Tests for transcript durability, retry, integrity, and replay contract. |
 
 ## Files To Avoid Touching Casually

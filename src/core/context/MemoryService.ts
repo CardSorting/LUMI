@@ -84,15 +84,23 @@ export class MemoryService {
 				.selectFrom("agent_cognitive_snapshots")
 				.selectAll()
 				.where("streamId", "=", streamId)
+				.orderBy("createdAt", "desc")
+				.limit(100)
 				.execute()
 
 			const rankedSnapshots = snapshots
-				.map((s) => ({
-					...s,
-					embedding: JSON.parse(s.embedding) as number[],
-					metadata: s.metadata ? JSON.parse(s.metadata) : null,
-					similarity: this.cosineSimilarity(queryEmbedding, JSON.parse(s.embedding)),
-				}))
+				.map((s) => {
+					let parsedEmbedding: number[] = []
+					try {
+						parsedEmbedding = (JSON.parse(s.embedding) as number[]) || []
+					} catch {}
+					return {
+						...s,
+						embedding: parsedEmbedding,
+						metadata: s.metadata ? JSON.parse(s.metadata) : null,
+						similarity: this.cosineSimilarity(queryEmbedding, parsedEmbedding),
+					}
+				})
 				.sort((a, b) => b.similarity - a.similarity)
 				.slice(0, limit)
 

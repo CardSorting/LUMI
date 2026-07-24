@@ -76,7 +76,7 @@ Key files:
 
 Rule: handlers adapt and execute; the decision engine decides; the action guard enforces. Do not add new completion eligibility logic in a handler. A successful decision becomes terminal only after `AttemptCompletionHandler` commits the lease/state CAS row in `task_completions`.
 
-## Coordination And Liveness Contract
+## Coordination And Storage Contract
 
 - Production uses immutable `sqlite` coordination authority. `local_test` is explicit and never a database-outage fallback.
 - `SwarmMutexService` allocates lease epochs and fencing tokens as arbitrary-precision decimal strings under `BEGIN IMMEDIATE`.
@@ -84,6 +84,11 @@ Rule: handlers adapt and execute; the decision engine decides; the action guard 
 - `AdministrativeLockCleaner` is the isolated ownership-override path; normal runtime cannot force-release a swarm.
 - `TarjanDeadlockDetector` evaluates typed wait edges from an immutable scheduler snapshot and applies recovery only if scheduler/lane versions are unchanged.
 - `task_completions` is the durable terminal-result source of truth across restart and multi-process delivery.
+- **SQLite Storage & Memory Hardening (ADR-014)**:
+  - `PRAGMA auto_vacuum = INCREMENTAL;` executes *before* `PRAGMA journal_mode = WAL;` during DB initialization, and performs an automated `VACUUM;` header migration if initialized in non-autovacuum mode.
+  - Multi-table retention policies cover all system tables (`task_lifecycle_records`, `task_lifecycle_events`, `task_completions`, `completion_attempts`, expired `branches`, unreferenced `swarm_lock_generations`, legacy `tasks`, CAS `files`, `telemetry`, `audit_events`, `agent_streams`, `agent_tasks`).
+  - Prepared statement caching (`_rawStmtCache`) explicitly invokes `.dispose()` on evicted `better-sqlite3` handles to prevent native C++ memory leaks.
+  - WAL checkpoints (`wal_checkpoint(TRUNCATE)`) run with exponential backoff retries when logs exceed 32MB or busy readers block truncation.
 
 ## Workspace Intelligence Engine
 

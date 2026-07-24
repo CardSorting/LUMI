@@ -175,7 +175,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
-- **Restart-safe completion** — terminal outcomes commit through an ownership- and state-checked SQLite transaction
+- **Restart-safe completion & storage hardening** — terminal outcomes commit through an ownership- and state-checked SQLite transaction; multi-table retention sweeps, auto-vacuum page reclaiming, native statement handle disposal, and backoff WAL truncation prevent disk erosion and memory leaks
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
 - **Six providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass, Grok/X Subscription
 
@@ -249,6 +249,7 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [MoD whitepaper](.wiki/mod-whitepaper.md) | Mathematical formalization, gating network, and Hoare-logic mutation governance |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
+| [SQLite storage & memory architecture](docs/architecture/sqlite-storage-and-memory-lifecycle.md) | Multi-table retention, auto-vacuum PRAGMA sequence, statement handle disposal, and WAL checkpoint guardrails |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
 | [Task lifecycle authority](docs/task-lifecycle-authority.md) | Transactional generation, cancellation, resume, and terminal state |
 | [Completion funnel](docs/completion-lifecycle-decision-engine.md) | Semantic completion and durable lifecycle handoff |
@@ -309,7 +310,7 @@ Low or unknown confidence never invalidates a valid lane. Advisory findings rema
 
 | Boundary | Guarantee |
 |----------|-----------|
-| **Lease authority** | SQLite is the sole production authority; database failure retries or fails closed instead of falling back to memory or files |
+| **Lease & storage authority** | SQLite is the sole production authority; multi-table retention sweeps, auto-vacuum page reclaiming, native statement handle `.dispose()` lifecycle, and backoff WAL checkpoints prevent disk erosion and memory leaks |
 | **Fencing identity** | Lease epochs and fencing tokens remain arbitrary-precision decimal strings and are released only by the exact owner/epoch/token tuple |
 | **Filesystem projections** | Governed lock and Broccoli fence files are verified projections; malformed records are preserved for reconciliation rather than deleted automatically |
 | **Deadlock recovery** | Typed wait-for edges are analyzed from an immutable scheduler snapshot; timers, expiring leases, outside owners, and capacity escapes prevent false deadlock recovery |

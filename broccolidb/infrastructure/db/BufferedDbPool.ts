@@ -265,7 +265,9 @@ export class BufferedDbPool {
       await sql`PRAGMA synchronous = NORMAL;`.execute(this.db);
       await sql`PRAGMA mmap_size = 2147483648;`.execute(this.db);
       await sql`PRAGMA threads = 4;`.execute(this.db);
-      await sql`PRAGMA auto_vacuum = NONE;`.execute(this.db);
+      await sql`PRAGMA auto_vacuum = INCREMENTAL;`.execute(this.db);
+      await sql`PRAGMA wal_autocheckpoint = 1000;`.execute(this.db);
+      await sql`PRAGMA journal_size_limit = 67108864;`.execute(this.db);
       await this.verifySchemaVersion();
 
       registerDbPathChangeListener(() => {
@@ -389,10 +391,17 @@ export class BufferedDbPool {
     }, delay);
   }
 
+  private cleanupInterval: NodeJS.Timeout | null = null;
+
   private startFlushLoop() {
     if (this.flushInterval) return;
     this.scheduleFlush(1000);
     this.flushInterval = setInterval(() => this.scheduleFlush(1000), 1000);
+    this.cleanupInterval = setInterval(() => {
+      this.pruneExpiredShadows().catch(() => {});
+    }, 30000);
+    this.flushInterval.unref?.();
+    this.cleanupInterval.unref?.();
   }
 
   public async pruneExpiredShadows(maxAgeMs = 5 * 60 * 1000): Promise<number> {
@@ -494,10 +503,22 @@ export class BufferedDbPool {
     return this.requireDb('ensureDb');
   }
 
+  private readonly MAX_STMT_CACHE_SIZE = 250;
+
   private getStatement(sqlStr: string): Database.Statement {
     let stmt = this.stmtCache.get(sqlStr);
     if (!stmt && this.rawDb) {
       stmt = this.rawDb.prepare(sqlStr);
+      if (this.stmtCache.size >= this.MAX_STMT_CACHE_SIZE) {
+        const oldestKey = this.stmtCache.keys().next().value;
+        if (oldestKey !== undefined) {
+          const oldStmt = this.stmtCache.get(oldestKey);
+          try {
+            (oldStmt as { dispose?: () => void })?.dispose?.();
+          } catch {}
+          this.stmtCache.delete(oldestKey);
+        }
+      }
       this.stmtCache.set(sqlStr, stmt);
     }
     return stmt!;
@@ -1262,7 +1283,11 @@ export class BufferedDbPool {
       }
 
       const params = this.parameterBuffer.slice(0, pIdx);
-      stmt.run(...params);
+      try {
+        stmt.run(...params);
+      } finally {
+        this.parameterBuffer.fill(undefined, 0, pIdx);
+      }
       totalFlushed += chunk.length;
     }
 
@@ -1641,6 +1666,10 @@ export class BufferedDbPool {
       clearInterval(this.flushInterval);
       this.flushInterval = null;
     }
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
     if (this.flushTimeout) {
       clearTimeout(this.flushTimeout);
       this.flushTimeout = null;
@@ -1650,7 +1679,13 @@ export class BufferedDbPool {
     try {
       await this.drainBufferedWrites();
     } finally {
+      for (const stmt of this.stmtCache.values()) {
+        try {
+          (stmt as { dispose?: () => void })?.dispose?.();
+        } catch {}
+      }
       this.stmtCache.clear();
+      this.parameterBuffer.fill(undefined);
       this.db = null;
       this.rawDb = null;
       this.activeFlushPromise = null;

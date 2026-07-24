@@ -1,5 +1,15 @@
 # Changelog V3
 
+## [9.0.0] - 2026-07-24
+
+### 🛡️ SQLite Storage Retention, WAL Control & Native Memory Hardening
+World-class infrastructure upgrade for SQLite persistence, eliminating exponential disk growth, WAL log bloat, and native C++ prepared statement handle memory leaks.
+
+- **Auto-Vacuum PRAGMA Re-ordering**: `PRAGMA auto_vacuum = INCREMENTAL;` executes *before* `PRAGMA journal_mode = WAL;` during DB initialization, with automated `VACUUM;` header migration for databases initialized in non-autovacuum mode.
+- **Universal Multi-Table Retention Sweeps**: Pruning policies covering all 35 system tables (`task_lifecycle_records`, `task_lifecycle_events`, `task_completions`, `task_rejections`, `completion_attempts`, expired `branches`, unreferenced `swarm_lock_generations`, legacy `tasks`, CAS `files`, `telemetry`, `audit_events`, `agent_streams`, `agent_tasks`).
+- **Native Prepared Statement Handle Disposal**: Evicted statements in the 100-item LRU cache and statements cleared during `destroyDb()` or DB path transitions explicitly call `.dispose()`, instantly releasing native C++ memory handles.
+- **Resilient WAL Checkpoints**: `wal_checkpoint(TRUNCATE)` executes with exponential backoff retries (up to 3 attempts with 50ms pauses if busy readers are encountered) to bound WAL log files under 32MB.
+
 ## [5.10.15] - 2026-04-22
 
 ### 🚀 Integrated Moonshot Kimi K2.6 & NousResearch Hardening

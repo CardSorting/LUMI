@@ -33,6 +33,8 @@ The working tree also contains earlier user changes across policy, audit, roadma
 
 Only the surfaces that describe this strategy were changed:
 
+- `docs/architecture/sqlite-storage-and-memory-lifecycle.md`
+- `DECISIONS.md` (ADR-014: SQLite Storage Retention & Memory Lifecycle Hardening)
 - `docs/governed-execution-authority.md`
 - `docs/governed-execution-schema.md`
 - `docs/governed-execution-decisions.md`
@@ -57,7 +59,7 @@ Provider, feature, BroccoliDB, and unrelated user documentation was intentionall
 | `npm run rebuild:electron:better-sqlite3` | Passed; Electron-native module restored after Node DB tests |
 | Agent-doc links and branding | Passed |
 | Docs README and root README links | Passed |
-| Root README metadata, metrics, and links | Passed after updating release identity to `5.5.2` |
+| Root README metadata, metrics, and links | Passed after updating release identity to `9.0.0` |
 | Aggregate docs check | README checks pass; blocked only by the existing Mintlify broken-link backlog |
 | Mintlify broken links | Reports 145 pre-existing links in 37 unrelated files; none of the changed governed-execution docs were listed |
 
