@@ -57,6 +57,9 @@ Mixture of Designers (MoD) v2.0 is a high-throughput, fault-tolerant orchestrati
 ## 2. Key Business & Engineering Benefits
 
 - **Zero-Stall Resilient Flow**: Employs **Specialist Execution Circuit Breakers** (`Promise.allSettled`) and **Keyword-Driven Heuristic Problem Sensing**. If an individual specialist or LLM stream fails, the pipeline automatically re-routes to fallback experts (`FALLBACK_ROLE_MAP`) without crashing or stalling.
+- **Resilient Output Parsing & Fallback Synthesis**: Strips markdown codeblocks automatically and synthesizes structured fallback refinements if an LLM returns unformatted text output.
+- **Universal Implementation Task Mapping**: Maps all accepted design decisions directly into disjoint implementation tasks, eliminating decision-dropping string filters.
+- **Complementary Property Fusion**: Merges non-conflicting visual tokens, typography notes, and acceptance criteria across superseded refinements during conflict resolution.
 - **UX & Branding Consistency**: Guarantees that UI code changes match design system guidelines and reuse existing primitives, eliminating style leakage.
 - **Strict Accessibility Compliance**: Enforces keyboard accessibility, ARIA compliance, and contrast ratios by routing A11y problems through a dedicated reviewer with priority veto power.
 - **High-Throughput Compute Efficiency**: Uses Softmax Top-K MoE routing combined with an **In-Memory TTL Context Cache** to eliminate duplicate disk reads across prefetching passes.

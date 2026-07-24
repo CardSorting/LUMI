@@ -46,6 +46,8 @@ interface SubagentRowData {
 	artifactPath?: string
 	invariantViolations?: string[]
 	governedReceipt?: GovernedReceiptSummary
+	modStage?: string
+	modProgress?: number
 }
 
 interface SubagentPromptTextProps {
@@ -140,7 +142,45 @@ function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null 
 			}
 		}
 
-		const parsed = JSON.parse(message.text) as DietCodeSaySubagentStatus
+		const parsed = JSON.parse(message.text)
+		if (parsed && typeof parsed === "object" && parsed.stage && (parsed.runId || parsed.progress !== undefined)) {
+			const stageStr = String(parsed.stage)
+			const progressNum = typeof parsed.progress === "number" ? parsed.progress : 0
+			const rowStatus: SubagentRowStatus =
+				stageStr === "completed" ? "completed" : stageStr === "failed" ? "failed" : "running"
+			const items: SubagentStatusItem[] =
+				Array.isArray(parsed.items) && parsed.items.length > 0
+					? parsed.items
+					: [
+							{
+								id: parsed.runId || "mod-stage",
+								name: "Mixture of Designers",
+								index: 1,
+								prompt: `MoD Stage: ${stageStr} (${progressNum}%)`,
+								status: rowStatus === "completed" ? "completed" : rowStatus === "failed" ? "failed" : "running",
+								toolCalls: 0,
+								inputTokens: 0,
+								outputTokens: 0,
+								totalCost: 0,
+								contextTokens: 0,
+								contextWindow: 0,
+								contextUsagePercentage: 0,
+							},
+						]
+
+			return {
+				status: rowStatus,
+				items,
+				swarmId: parsed.swarmId,
+				continuityMarker: parsed.continuityMarker,
+				artifactPath: parsed.artifactPath,
+				invariantViolations: parsed.invariantViolations,
+				governedReceipt: parsed.governedReceipt,
+				modStage: stageStr,
+				modProgress: progressNum,
+			}
+		}
+
 		if (!Array.isArray(parsed.items)) {
 			return null
 		}
@@ -271,6 +311,12 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 				<NetworkIcon className="size-2 text-foreground" />
 				<span className="font-medium text-foreground">{title}</span>
 				<ParentAuditGateBadge />
+				{data.modStage && (
+					<ExecutionStateBadge
+						className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/25"
+						label={`MoD ${data.modStage} (${data.modProgress ?? 0}%)`}
+					/>
+				)}
 				{data.continuityMarker && (
 					<ExecutionStateBadge
 						className="bg-foreground/10 text-foreground/80 border-foreground/20"

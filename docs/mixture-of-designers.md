@@ -108,12 +108,37 @@ If the `ProblemClassifier` or `IntentAnalyzer` LLM streams fail:
 `ConvergenceEngine` processes specialist recommendations using a 3-stage filter:
 1. **BFT Syntactic Isolation**: Drops malformed refinements missing required targets or recommendations.
 2. **Semantic Boundary Verification**: Drops refinements touching out-of-scope files.
-3. **Priority Lattice Conflict Resolution**: Resolves conflicting recommendations on identical targets based on role hierarchy:
+3. **Priority Lattice Conflict Resolution & Complementary Fusion**: Resolves conflicting recommendations on identical targets based on role hierarchy while fusing non-conflicting visual tokens and acceptance criteria:
    ```text
    product-strategist (5) > accessibility-reviewer (4) > ux-architect (3) > design-system-engineer (2) > others (1)
    ```
 4. **Decision Utility Calculation**:
    $$\text{Utility} = \text{Severity Weight} \times \text{Confidence Weight}$$
+
+---
+
+## Hardening & Architectural Enhancements (v1.3)
+
+Recent production audits resolved critical pipeline failure modes and added high-reliability execution guarantees:
+
+1. **Subagent UI Status Envelope Serialization**:
+   - `SubagentStatusRow.tsx` natively parses MoD stage progress notifications (`runId`, `stage`, `progress`).
+   - `transitionTo()` broadcasts `status` and `items` fields so the chat UI displays live progress badges (`MoD convergence (54%)`) without error fallbacks.
+
+2. **Complementary Property Fusion**:
+   - `ConvergenceEngine` fuses non-conflicting visual evidence, adaptation notes, tradeoffs, and acceptance criteria into winning design decisions during priority conflict resolution, preserving valuable insights from lower-priority specialists.
+
+3. **Resilient LLM Response Parsing**:
+   - `parseRefinements()` strips markdown codeblocks (`replace(/```json/gi, "")`) and invokes `getFallbackRefinement()` fallback synthesis if an LLM returns unformatted text, preventing silent drop of refinements.
+
+4. **Universal Implementation Task Mapping**:
+   - `generateImplementationTasks()` maps **all accepted design decisions** directly into implementation tasks, removing narrow hardcoded category string filters.
+
+5. **Fallback Core Specialist Council Assignment**:
+   - `SpecialistSelector` automatically assigns core default specialists (`product-strategist`, `ux-architect`, `visual-systems-designer`) if problem classification returns empty or unmapped problem sets.
+
+6. **Executive Summary Design Reporting**:
+   - `reportFinalResult()` outputs a structured executive summary detailing locked decisions, rationales, implementation task completion rates, and quality gate audit results.
 
 ---
 

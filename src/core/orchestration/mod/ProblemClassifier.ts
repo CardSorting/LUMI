@@ -80,11 +80,12 @@ Codebase Context: ${codebaseContext}`
 	}
 
 	private parseJsonFromResponse(text: string): any {
-		const match = text.match(/\{[\s\S]*\}/)
-		if (match) {
-			return JSON.parse(match[0])
-		}
-		return JSON.parse(text)
+		const cleaned = text
+			.replace(/```json/gi, "")
+			.replace(/```/g, "")
+			.trim()
+		const match = cleaned.match(/\{[\s\S]*\}/)
+		return JSON.parse(match ? match[0] : cleaned)
 	}
 
 	private sanitizeClassification(json: any): ProductProblemClassification {

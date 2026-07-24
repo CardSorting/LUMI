@@ -41,15 +41,15 @@ export class ReceiptStore {
 
 				if (savedMtime !== currentMtime) {
 					Logger.warn(`[MoD DAG Invalidation] File ${relPath} changed out-of-band. Invalidating downstream tasks.`)
-					for (const task of state.implementationTasks) {
-						if (task.affectedFiles.includes(relPath) || task.mutationBoundary.includes(relPath)) {
+					for (const task of state.implementationTasks || []) {
+						if ((task.affectedFiles || []).includes(relPath) || (task.mutationBoundary || []).includes(relPath)) {
 							task.status = "pending"
 						}
 					}
 				}
 			} catch {
-				for (const task of state.implementationTasks) {
-					if (task.affectedFiles.includes(relPath) || task.mutationBoundary.includes(relPath)) {
+				for (const task of state.implementationTasks || []) {
+					if ((task.affectedFiles || []).includes(relPath) || (task.mutationBoundary || []).includes(relPath)) {
 						task.status = "pending"
 					}
 				}

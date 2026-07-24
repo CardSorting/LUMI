@@ -61,6 +61,11 @@ export class ConvergenceEngine {
 			for (const ref of groupRefinements) {
 				if (ref.id !== winner.id) {
 					supersededRefinementIds.add(ref.id)
+					// Absorb complementary non-conflicting insights into winner
+					winner.evidence.push(...ref.evidence)
+					winner.recommendation.tradeoffs.push(...ref.recommendation.tradeoffs)
+					winner.recommendation.adaptationNotes.push(...ref.recommendation.adaptationNotes)
+					winner.validation.acceptanceCriteria.push(...ref.validation.acceptanceCriteria)
 				}
 			}
 		}

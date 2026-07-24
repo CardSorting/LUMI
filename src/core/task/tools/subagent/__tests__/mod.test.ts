@@ -1661,5 +1661,135 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 			assert.ok(critSpy.calledOnce)
 			assert.equal((orch as any).state.validationResults.length, 8)
 		})
+
+		it("Test 20: Fallback core specialist assignment when problem classification is empty", () => {
+			const selector = new SpecialistSelector()
+			const selections = selector.select([], 6)
+			assert.ok(selections.length > 0)
+			const roles = selections.map((s) => s.role)
+			assert.ok(roles.includes("product-strategist"))
+			assert.ok(roles.includes("ux-architect"))
+			assert.ok(roles.includes("visual-systems-designer"))
+		})
+
+		it("Test 21: Implementation task generation creates tasks for all accepted decisions", () => {
+			const task = mockTask()
+			const orch = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			;(orch as any).state = {
+				runId: "test-task-gen",
+				mode: "mixture-of-designers",
+				outcome: "plan-and-implement",
+				stage: "decision-lock",
+				intent: {
+					request: {
+						originalRequest: "test",
+						interpretedGoal: "test goal",
+						explicitRequirements: [],
+						implicitRequirements: [],
+					},
+					product: {
+						productArea: "",
+						productPurpose: "",
+						targetUsers: [],
+						userExperienceLevels: [],
+						primaryJobs: [],
+						secondaryJobs: [],
+					},
+					currentExperience: {
+						workflow: [],
+						strengths: [],
+						weaknesses: [],
+						frictionPoints: [],
+						existingPatterns: [],
+						unresolvedQuestions: [],
+					},
+					constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+					boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+					success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+				},
+				problemClassification: { problems: [] },
+				specialistSelections: [],
+				specialistResults: [],
+				refinements: [
+					{
+						id: "ref-custom-1",
+						role: "ux-architect",
+						problem: {
+							problemId: "prob-1",
+							target: "src/Custom.tsx",
+							observedBehavior: "o",
+							userImpact: "i",
+							severity: "high",
+							frequency: "frequent",
+						},
+						evidence: [],
+						recommendation: {
+							designStrategy: "strategy",
+							proposedChange: "change 1",
+							adaptationNotes: [],
+							alternativesConsidered: [],
+							tradeoffs: [],
+						},
+						implementation: {
+							affectedFiles: ["src/Custom.tsx"],
+							affectedComponents: [],
+							affectedStates: [],
+							instructions: [],
+							dependencies: [],
+							riskLevel: "low",
+						},
+						validation: { acceptanceCriteria: ["AC 1"], regressionRisks: [], verificationMethods: [] },
+						governance: {
+							confidence: "high",
+							scopeStatus: "in-scope",
+							mutationAuthorityRequired: false,
+							conflictsWith: [],
+						},
+					},
+				],
+				decisions: [
+					{
+						id: "dec-ref-custom-1",
+						status: "accepted",
+						sourceRefinementIds: ["ref-custom-1"],
+						problemIds: ["prob-1"],
+						decision: "change 1",
+						rationale: "strategy",
+						evidence: [],
+						tradeoffs: [],
+						affectedAreas: ["src/Custom.tsx"],
+						acceptanceCriteria: ["AC 1"],
+						locked: true,
+						reopenConditions: [],
+					},
+				],
+				implementationTasks: [],
+				validationResults: [],
+				critiqueFindings: [],
+				gateResults: [],
+				revisions: [],
+				limitations: [],
+				checkpointHashes: {},
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			}
+
+			const tasks = (orch as any).generateImplementationTasks()
+			assert.equal(tasks.length, 1)
+			assert.equal(tasks[0].decisionIds[0], "dec-ref-custom-1")
+			assert.equal(tasks[0].objective, "Implement design decision: change 1")
+		})
+
+		it("Test 22: Specialist analysis parseRefinements fallback handles malformed JSON text without breaking", () => {
+			const task = mockTask()
+			const orch = new MixtureOfDesignersOrchestrator(task, "plan-only")
+			const malformedText = "Here is my advice: Make sure the layout is responsive and modern with high contrast buttons."
+			const refs = (orch as any).parseRefinements(malformedText, "ux-architect")
+
+			assert.equal(refs.length, 1)
+			assert.equal(refs[0].role, "ux-architect")
+			assert.equal(refs[0].id, "ref-ux-architect-fallback")
+			assert.ok(refs[0].recommendation.proposedChange.length > 0)
+		})
 	})
 })

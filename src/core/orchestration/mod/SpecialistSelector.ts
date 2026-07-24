@@ -138,6 +138,21 @@ export class SpecialistSelector {
 		// Always ensure Product Critic is NOT in the initial mixture (he runs after convergence/implementation)
 		selections = selections.filter((s) => s.role !== "product-critic")
 
+		if (selections.length === 0) {
+			Logger.info("[MoD] No specialists mapped from problems, assigning default core specialist mixture")
+			const defaultRoles: DesignerRole[] = ["product-strategist", "ux-architect", "visual-systems-designer"]
+			selections = defaultRoles.map((role) => ({
+				role,
+				reasons: ["Default core specialist assigned for product evaluation"],
+				assignedProblemIds: ["general"],
+				requiredEvidence: [],
+				relevantArtifacts: [],
+				exclusions: [],
+				priority: "recommended",
+				dependsOnRoles: this.getDependencies(role),
+			}))
+		}
+
 		return selections
 	}
 

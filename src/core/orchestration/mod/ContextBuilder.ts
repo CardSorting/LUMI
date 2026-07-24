@@ -81,7 +81,7 @@ export class ContextBuilder {
 		if (!files) {
 			files = []
 			for (const prob of problems) {
-				if (prob.target && prob.target !== "General" && prob.target.includes("/")) {
+				if (prob.target && prob.target !== "General" && (prob.target.includes("/") || prob.target.includes("."))) {
 					files.push({
 						path: prob.target,
 						relevance: `Target of problem ${prob.id}: ${prob.observation}`,
